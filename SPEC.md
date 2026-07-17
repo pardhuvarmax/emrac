@@ -4,8 +4,6 @@
 
 *A source-first package management platform for Arch Linux.*
 
-This document consolidates and completes everything described in `emrac.md`. That file was a design brainstorm — it contained an incomplete grammar, per-command option sheets filled in for only a handful of commands (with a literal "continue this for every command" placeholder), and a growing pile of feature ideas layered on top of each other with some naming collisions. This document resolves those gaps into one internally-consistent reference. Where a judgment call was required to resolve an ambiguity, it's flagged in **Part IX — Editorial Notes**, so nothing is silently changed.
-
 **Contents**
 
 - Part I — Vision & Philosophy
