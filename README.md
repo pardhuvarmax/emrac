@@ -2,7 +2,7 @@
 
 A source-first package management platform for Arch Linux — an orchestration and UX layer over `pacman`, `makepkg`, `libalpm`, PKGBUILD, and the AUR, unifying official repos, the AUR, and local/custom repos behind one CLI and TUI.
 
-Status: **design phase, no code yet.** This repository currently holds the specification only.
+Status: **early implementation.** `search` and `info` work against the official repositories (read-only, via libalpm). Everything else in the spec — AUR, install/remove/upgrade, the TUI, build profiles — is not built yet.
 
 ## Highlights
 
@@ -33,6 +33,20 @@ Status: **design phase, no code yet.** This repository currently holds the speci
 - **Testing:** real install/remove/build flows are exercised in a container or chroot, not against the live host, until the tool has proven itself trustworthy.
 
 See `SPEC.md` Part X for details.
+
+## Building
+
+Requirements:
+
+- A recent Rust toolchain (`cargo`, `rustc`)
+- `libalpm` development headers (`pacman.pc`/`alpm.h` — already present on any Arch system with `pacman` installed)
+- `clang`/`libclang` — the `alpm` crate generates its FFI bindings at build time (via `bindgen`) against whatever libalpm version is actually installed, rather than shipping bindings pinned to one version
+
+```sh
+cargo build --workspace
+cargo run -p emrac-cli -- search ripgrep
+cargo run -p emrac-cli -- info ripgrep --json
+```
 
 ## License
 

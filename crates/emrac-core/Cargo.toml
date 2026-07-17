@@ -1,0 +1,9 @@
+[package]
+name = "emrac-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+alpm = { version = "5", features = ["generate"] }
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
