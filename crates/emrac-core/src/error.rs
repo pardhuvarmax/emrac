@@ -20,6 +20,15 @@ pub enum Error {
 
     #[error("package '{0}' not found")]
     PackageNotFound(String),
+
+    #[error("package '{0}' not found in official repos or the AUR")]
+    PackageNotFoundAnywhere(String),
+
+    #[error("package '{0}' not found in official repos (AUR not checked: offline)")]
+    PackageNotFoundOffline(String),
+
+    #[error("AUR request failed: {0}")]
+    Aur(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

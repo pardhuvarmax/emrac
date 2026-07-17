@@ -4,7 +4,7 @@ mod output;
 
 use anyhow::Result;
 use clap::Parser;
-use emrac_core::AlpmBackend;
+use emrac_core::Sources;
 
 use cli::{Cli, Commands};
 
@@ -18,12 +18,17 @@ fn main() {
 }
 
 fn run(cli: &Cli) -> Result<()> {
-    let backend = AlpmBackend::init()?;
+    let sources = Sources::init()?;
 
     match &cli.command {
-        Commands::Search { query, limit } => {
-            commands::search::run(&backend, query, *limit, cli.json)
-        }
-        Commands::Info { pkg } => commands::info::run(&backend, pkg, cli.json),
+        Commands::Search {
+            query,
+            limit,
+            official,
+            aur,
+        } => commands::search::run(
+            &sources, query, *limit, *official, *aur, cli.offline, cli.json, cli.quiet,
+        ),
+        Commands::Info { pkg } => commands::info::run(&sources, pkg, cli.offline, cli.json),
     }
 }

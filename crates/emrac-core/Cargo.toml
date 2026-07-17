@@ -7,3 +7,4 @@ edition.workspace = true
 alpm = { version = "5", features = ["generate"] }
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
+ureq = { version = "3", features = ["json"] }

@@ -36,7 +36,23 @@ pub fn print_package_details(pkg: &PackageDetails, json: bool) {
     println!("Licenses        : {}", join_or_dash(&pkg.license));
     println!("Depends On      : {}", join_or_dash(&pkg.depends));
     println!("Provides        : {}", join_or_dash(&pkg.provides));
-    println!("Installed Size  : {}", human_size(pkg.installed_size));
+    println!(
+        "Installed Size  : {}",
+        pkg.installed_size.map(human_size).as_deref().unwrap_or("-")
+    );
+
+    if let Some(maintainer) = &pkg.maintainer {
+        println!("Maintainer      : {maintainer}");
+    }
+    if let Some(votes) = pkg.votes {
+        println!("Votes           : {votes}");
+    }
+    if let Some(popularity) = pkg.popularity {
+        println!("Popularity      : {popularity:.2}");
+    }
+    if pkg.out_of_date.is_some() {
+        println!("Out of Date     : yes");
+    }
 }
 
 fn join_or_dash(items: &[String]) -> String {

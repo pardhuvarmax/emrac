@@ -2,7 +2,7 @@
 
 A source-first package management platform for Arch Linux — an orchestration and UX layer over `pacman`, `makepkg`, `libalpm`, PKGBUILD, and the AUR, unifying official repos, the AUR, and local/custom repos behind one CLI and TUI.
 
-Status: **Slice i1.** `search` and `info` work against the official repositories (read-only, via libalpm). Everything else in the spec — AUR, install/remove/upgrade, the TUI, build profiles — is not built yet. (Emrac uses "Slice i/r/u\<N\>" instead of semver — see `CHANGELOG.md`.)
+Status: **Slice i1.** `search` and `info` work against official repositories (via libalpm) and the AUR (via its RPC API), read-only. Everything else in the spec — install/remove/upgrade, the TUI, build profiles — is not built yet. (Emrac uses "Slice i/r/u\<N\>" instead of semver — see `CHANGELOG.md`.)
 
 ## Highlights
 

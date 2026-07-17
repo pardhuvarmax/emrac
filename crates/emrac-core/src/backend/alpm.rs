@@ -74,7 +74,11 @@ impl AlpmBackend {
                     url: pkg.url().map(str::to_string),
                     depends: pkg.depends().into_iter().map(|d| d.to_string()).collect(),
                     provides: pkg.provides().into_iter().map(|d| d.to_string()).collect(),
-                    installed_size: pkg.isize().max(0) as u64,
+                    installed_size: Some(pkg.isize().max(0) as u64),
+                    maintainer: None,
+                    votes: None,
+                    popularity: None,
+                    out_of_date: None,
                 });
             }
         }
