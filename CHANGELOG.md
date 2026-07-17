@@ -12,7 +12,13 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
-## Slice i1 — 2026-07-17 — `a0bab87` — install/remove for official repos, with transaction preview
+## Slice i1 — 2026-07-17 — `41eeddb` — Clean, actionable not-found errors
+
+Bug found by hand-testing (`emrac install golly --dry-run`): pacman's raw stderr was leaking straight through as `pacman -S golly --print --print-format %n failed: error: target not found: golly` — exposing the underlying shelled-out command instead of saying anything useful.
+
+`PacmanBackend` now recognizes pacman's `error: target not found: <name>` lines during resolution and translates them into dedicated errors: `install` points at the AUR (`package 'golly' not found in official repositories — try 'emrac search golly --aur' to check the AUR`), `remove` says the package just isn't installed. Genuinely unexpected pacman failures still fall back to the raw command/stderr, since that's still useful when it isn't a plain not-found case. Handles multiple missing packages in one command too (`packages not found in official repositories: golly, nonexistent-xyz`).
+
+## Slice i1 — 2026-07-17 — `1cde3ae` — install/remove for official repos, with transaction preview
 
 New `PacmanBackend` (`crates/emrac-core/src/backend/pacman.rs`) — the only place emrac shells out to `pacman`/`sudo pacman`. Dependency resolution (`pacman -S/-R --print`) needs no root and mutates nothing; execution runs under `sudo`, prompting interactively. emrac itself never runs as root, matching `yay`/`paru`.
 
@@ -24,7 +30,7 @@ Added `dev/container/`: a disposable podman container with its own independent p
 
 Still official repos only — AUR building (`makepkg`) and `upgrade` are still deferred to later increments.
 
-## Slice i1 — 2026-07-17 — `832b217` — AUR search/info merged with official repos
+## Slice i1 — 2026-07-17 — `9eec4e7` — AUR search/info merged with official repos
 
 Added `AurBackend` (`crates/emrac-core/src/backend/aur.rs`), querying the aurweb RPC v5 API (`https://aur.archlinux.org/rpc/`) over `ureq` — read-only, no root, no async runtime. Added the `Sources` aggregator (`sources.rs`) as the single entry point the CLI now calls instead of `AlpmBackend` directly: it merges official-repo and AUR results for `search`, and falls back official → AUR for `info`.
 

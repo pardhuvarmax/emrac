@@ -35,6 +35,22 @@ pub enum Error {
 
     #[error("{command} failed: {stderr}")]
     PacmanFailed { command: String, stderr: String },
+
+    #[error(
+        "package '{0}' not found in official repositories — try `emrac search {0} --aur` to check the AUR"
+    )]
+    PackageNotFoundInOfficial(String),
+
+    #[error(
+        "packages not found in official repositories: {0} — try `emrac search <name> --aur` to check the AUR"
+    )]
+    PackagesNotFoundInOfficial(String),
+
+    #[error("package '{0}' is not installed")]
+    PackageNotInstalled(String),
+
+    #[error("packages not installed: {0}")]
+    PackagesNotInstalled(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

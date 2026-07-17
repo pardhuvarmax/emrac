@@ -1,4 +1,4 @@
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 
 use crate::error::{Error, Result};
 
@@ -22,7 +22,18 @@ impl PacmanBackend {
         args.push("--print-format".to_string());
         args.push("%n".to_string());
 
-        self.run_captured("pacman", &args)
+        let output = self.spawn_captured("pacman", &args)?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let missing = not_found_targets(&stderr);
+            if !missing.is_empty() {
+                return Err(not_found_in_official(missing));
+            }
+            return Err(pacman_failed("pacman", &args, &stderr));
+        }
+
+        Ok(parse_names(&output.stdout))
     }
 
     /// Resolved removal target names (explicit packages + cascade/recursive
@@ -46,7 +57,18 @@ impl PacmanBackend {
         args.push("--print-format".to_string());
         args.push("%n".to_string());
 
-        self.run_captured("pacman", &args)
+        let output = self.spawn_captured("pacman", &args)?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let missing = not_found_targets(&stderr);
+            if !missing.is_empty() {
+                return Err(not_installed(missing));
+            }
+            return Err(pacman_failed("pacman", &args, &stderr));
+        }
+
+        Ok(parse_names(&output.stdout))
     }
 
     /// Actually installs. Runs under `sudo`, with stdio inherited so
@@ -74,25 +96,12 @@ impl PacmanBackend {
         self.run_inherited("sudo", &args)
     }
 
-    fn run_captured(&self, program: &str, args: &[String]) -> Result<Vec<String>> {
-        let output = Command::new(program)
+    fn spawn_captured(&self, program: &str, args: &[String]) -> Result<Output> {
+        Command::new(program)
             .args(args)
             .stdin(Stdio::null())
             .output()
-            .map_err(|err| Error::PacmanSpawn(program.to_string(), err))?;
-
-        if !output.status.success() {
-            return Err(Error::PacmanFailed {
-                command: format!("{program} {}", args.join(" ")),
-                stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-            });
-        }
-
-        Ok(String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(|line| line.trim().to_string())
-            .filter(|line| !line.is_empty())
-            .collect())
+            .map_err(|err| Error::PacmanSpawn(program.to_string(), err))
     }
 
     fn run_inherited(&self, program: &str, args: &[String]) -> Result<()> {
@@ -115,5 +124,48 @@ impl PacmanBackend {
 impl Default for PacmanBackend {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+fn parse_names(stdout: &[u8]) -> Vec<String> {
+    String::from_utf8_lossy(stdout)
+        .lines()
+        .map(|line| line.trim().to_string())
+        .filter(|line| !line.is_empty())
+        .collect()
+}
+
+/// Pulls package names out of pacman's `error: target not found: <name>`
+/// lines, one per missing package, so callers can give a clean message
+/// instead of relaying pacman's raw stderr.
+fn not_found_targets(stderr: &str) -> Vec<String> {
+    const PREFIX: &str = "error: target not found: ";
+    stderr
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix(PREFIX))
+        .map(|name| name.trim().to_string())
+        .collect()
+}
+
+fn not_found_in_official(mut missing: Vec<String>) -> Error {
+    if missing.len() == 1 {
+        Error::PackageNotFoundInOfficial(missing.remove(0))
+    } else {
+        Error::PackagesNotFoundInOfficial(missing.join(", "))
+    }
+}
+
+fn not_installed(mut missing: Vec<String>) -> Error {
+    if missing.len() == 1 {
+        Error::PackageNotInstalled(missing.remove(0))
+    } else {
+        Error::PackagesNotInstalled(missing.join(", "))
+    }
+}
+
+fn pacman_failed(program: &str, args: &[String], stderr: &str) -> Error {
+    Error::PacmanFailed {
+        command: format!("{program} {}", args.join(" ")),
+        stderr: stderr.trim().to_string(),
     }
 }
