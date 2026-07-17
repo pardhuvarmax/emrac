@@ -2,7 +2,9 @@
 
 All notable changes to Emrac are recorded here, newest first. Each entry lists the date, the commit it corresponds to, and what changed and why.
 
-## 2026-07-17 — `86b9ded` — Implement Slice 1: read-only search/info via libalpm
+Emrac releases/updates are named **Slice \<N\>** (Slice 1, Slice 2, ...) rather than semver — each slice is one working, verified vertical increment of the tool (see `SPEC.md` Part X for the milestone philosophy this follows).
+
+## Slice 1 — 2026-07-17 — `86b9ded` — Read-only search/info via libalpm
 
 First working code. Added a Cargo workspace with two crates:
 
