@@ -12,6 +12,16 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice i1 — 2026-07-17 — `6c1d2b2` — AUR building for `install`
+
+`install` now handles the AUR, not just official repos, closing the gap `backend/README.md` had flagged since the install/remove increment. New `AurBuildBackend` (`crates/emrac-core/src/backend/aur_build.rs`) is the only module that shells out to `git`/`makepkg`: each AUR package gets a persistent checkout under `~/.cache/emrac/build/<pkg>`, reused across runs so a rebuild only needs reviewing what changed rather than the whole PKGBUILD again. Building always runs as the invoking user (never root, matching the existing privilege model) via `makepkg -si`, which syncs any missing *official* dependencies itself through `pacman` — an AUR-only transitive dependency isn't resolved automatically and surfaces as a clear build failure instead, a deliberate scope cut for this increment (same philosophy as the deferred conflict/disk-space checks in the install/remove increment).
+
+Since building means running a PKGBUILD's own shell code locally, `install` shows it by default before building: the full file on a first build, or a diff against the last build on a rebuild, each gated behind its own `emrac asks:` confirmation distinct from the overall install confirm — declining aborts the whole install, no partial-install-the-rest. Two opt-outs: `--skip-pkgbuild` (skip the review and its confirm entirely) and `--skip-diff` (show the full new file instead of a diff on rebuilds).
+
+Also renamed `Error::PacmanSpawn`/`Error::PacmanFailed` to `Error::CommandSpawn`/`Error::CommandFailed` — they were already program-name-generic, just misleadingly named for a variant now shared with `git`/`makepkg` failures.
+
+Verified inside the podman container (dev/container/, now with `git`/`base-devel` added): a first build of a real AUR package (`downgrade`) showed the full PKGBUILD, required the dedicated confirm, declined-then-accepted correctly, built and installed via `makepkg -si` (which pulled its own official deps through `pacman` as expected); removing and reinstalling with no upstream changes correctly reported up-to-date and skipped straight to the overall confirm; `--skip-pkgbuild --yes` ran with zero prompts. Host's own (unrelated) `downgrade` installation was confirmed unchanged throughout, and no build cache was ever created on the host.
+
 ## Slice i1 — 2026-07-17 — `fb43285` — Conversational messages, voiced by category
 
 Follow-up to the not-found fix below, after more hand-testing feedback: every user-facing message should read like an actual explanation, not terse technical text, and different message *types* should sound different rather than one generic prefix everywhere.

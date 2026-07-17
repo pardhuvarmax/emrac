@@ -9,7 +9,7 @@
 FROM docker.io/library/archlinux:latest
 
 RUN pacman -Syu --noconfirm && \
-    pacman -S --noconfirm --needed sudo && \
+    pacman -S --noconfirm --needed sudo git base-devel && \
     useradd -m -G wheel tester && \
     echo 'tester ALL=(root) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/tester-pacman && \
     chmod 0440 /etc/sudoers.d/tester-pacman

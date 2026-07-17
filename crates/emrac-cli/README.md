@@ -5,6 +5,7 @@ The `emrac` binary. A thin layer over [`emrac-core`](../emrac-core): parses argu
 **Current commands (Slice i1):**
 - `search` — official repos + AUR, `--official`/`--aur` to scope.
 - `info` — same, with `--offline` to skip the AUR.
-- `install` / `remove` — official repos only. Always show a plan first; `--dry-run` stops there, otherwise confirms (skippable with `-y`/`--yes`) before running the real `sudo pacman` command. See [`../../dev/README.md`](../../dev/README.md) for how these are tested without touching the host.
+- `install` — official repos and the AUR. Always shows a plan first; `--dry-run` stops there. AUR packages additionally show their PKGBUILD (first build) or a diff against the last build (rebuilds), gated behind their own confirmation — skip with `--skip-pkgbuild`, or force the full file instead of a diff with `--skip-diff`. Then the overall confirm (skippable with `-y`/`--yes`) before running the real `sudo pacman`/`makepkg` commands.
+- `remove` — official repos only (removal doesn't distinguish source). Same plan-first, confirm-before-mutating shape. See [`../../dev/README.md`](../../dev/README.md) for how these are tested without touching the host.
 
 See the root [`SPEC.md`](../../SPEC.md) Part V and Part VIII for the full planned command surface.

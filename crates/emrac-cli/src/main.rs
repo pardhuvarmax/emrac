@@ -30,9 +30,20 @@ fn run(cli: &Cli) -> Result<()> {
             &sources, query, *limit, *official, *aur, cli.offline, cli.json, cli.quiet,
         ),
         Commands::Info { pkg } => commands::info::run(&sources, pkg, cli.offline, cli.json),
-        Commands::Install { pkgs } => {
-            commands::install::run(&sources, pkgs, cli.dry_run, cli.yes, cli.json)
-        }
+        Commands::Install {
+            pkgs,
+            skip_pkgbuild,
+            skip_diff,
+        } => commands::install::run(
+            &sources,
+            pkgs,
+            cli.dry_run,
+            cli.yes,
+            cli.offline,
+            *skip_pkgbuild,
+            *skip_diff,
+            cli.json,
+        ),
         Commands::Remove {
             pkgs,
             cascade,

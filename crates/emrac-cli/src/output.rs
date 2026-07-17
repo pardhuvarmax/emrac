@@ -107,6 +107,16 @@ pub fn print_plan(plan: &Plan, json: bool) {
     println!("{label} : {}", human_size(size));
 }
 
+pub fn print_pkgbuild(pkg: &str, content: &str) {
+    println!("emrac notes: PKGBUILD for '{pkg}' (first build):\n");
+    println!("{content}");
+}
+
+pub fn print_pkgbuild_diff(pkg: &str, diff: &str) {
+    println!("emrac notes: PKGBUILD changes for '{pkg}' since your last build:\n");
+    println!("{diff}");
+}
+
 fn plural(n: usize, singular: &str) -> String {
     if n == 1 {
         format!("{n} {singular}")

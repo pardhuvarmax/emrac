@@ -33,10 +33,10 @@ pub enum Error {
     Aur(String),
 
     #[error("couldn't run `{0}`: {1}")]
-    PacmanSpawn(String, #[source] io::Error),
+    CommandSpawn(String, #[source] io::Error),
 
     #[error("something went wrong running `{command}`: {stderr}")]
-    PacmanFailed { command: String, stderr: String },
+    CommandFailed { command: String, stderr: String },
 
     #[error(
         "couldn't find '{0}' in the official repositories — want to try `emrac search {0} --aur` to check the AUR?"
@@ -53,6 +53,18 @@ pub enum Error {
 
     #[error("none of these are installed, so there's nothing to remove: {0}")]
     PackagesNotInstalled(String),
+
+    #[error("{context}: {source}")]
+    Io {
+        context: String,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error(
+        "couldn't determine your home directory (`$HOME` isn't set) — needed to cache AUR builds under `~/.cache/emrac/build`"
+    )]
+    NoHomeDir,
 }
 
 impl Error {
@@ -74,8 +86,10 @@ impl Error {
             | Error::AlpmInit(_)
             | Error::RegisterSyncDb { .. }
             | Error::Aur(_)
-            | Error::PacmanSpawn(_, _)
-            | Error::PacmanFailed { .. } => "says",
+            | Error::CommandSpawn(_, _)
+            | Error::CommandFailed { .. }
+            | Error::Io { .. }
+            | Error::NoHomeDir => "says",
         }
     }
 }

@@ -101,17 +101,17 @@ impl PacmanBackend {
             .args(args)
             .stdin(Stdio::null())
             .output()
-            .map_err(|err| Error::PacmanSpawn(program.to_string(), err))
+            .map_err(|err| Error::CommandSpawn(program.to_string(), err))
     }
 
     fn run_inherited(&self, program: &str, args: &[String]) -> Result<()> {
         let status = Command::new(program)
             .args(args)
             .status()
-            .map_err(|err| Error::PacmanSpawn(program.to_string(), err))?;
+            .map_err(|err| Error::CommandSpawn(program.to_string(), err))?;
 
         if !status.success() {
-            return Err(Error::PacmanFailed {
+            return Err(Error::CommandFailed {
                 command: format!("{program} {}", args.join(" ")),
                 stderr: format!("exited with {status}"),
             });
@@ -164,7 +164,7 @@ fn not_installed(mut missing: Vec<String>) -> Error {
 }
 
 fn pacman_failed(program: &str, args: &[String], stderr: &str) -> Error {
-    Error::PacmanFailed {
+    Error::CommandFailed {
         command: format!("{program} {}", args.join(" ")),
         stderr: stderr.trim().to_string(),
     }

@@ -57,10 +57,20 @@ pub enum Commands {
     /// Show detailed metadata for a package, official repos or the AUR
     Info { pkg: String },
 
-    /// Install one or more packages from official repositories
+    /// Install one or more packages from official repositories or the AUR
     Install {
         #[arg(required = true)]
         pkgs: Vec<String>,
+
+        /// Never show an AUR package's PKGBUILD/diff, or ask the extra
+        /// review confirmation — just go straight to the install confirm
+        #[arg(long)]
+        skip_pkgbuild: bool,
+
+        /// On a rebuild, show the full new PKGBUILD instead of a diff
+        /// against what was reviewed last time
+        #[arg(long)]
+        skip_diff: bool,
     },
 
     /// Remove one or more installed packages

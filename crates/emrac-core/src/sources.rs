@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use crate::backend::{AlpmBackend, AurBackend, PacmanBackend, ResolvedPackage};
+use crate::backend::{
+    AlpmBackend, AurBackend, AurBuildBackend, AurSyncOutcome, PacmanBackend, ResolvedPackage,
+};
 use crate::error::{Error, Result};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::plan::{Plan, PlanAction, PlannedPackage};
@@ -34,6 +36,7 @@ pub struct SearchResults {
 pub struct Sources {
     alpm: AlpmBackend,
     aur: AurBackend,
+    aur_build: AurBuildBackend,
     pacman: PacmanBackend,
 }
 
@@ -42,6 +45,7 @@ impl Sources {
         Ok(Self {
             alpm: AlpmBackend::init()?,
             aur: AurBackend::new(),
+            aur_build: AurBuildBackend::new(),
             pacman: PacmanBackend::new(),
         })
     }
@@ -94,18 +98,102 @@ impl Sources {
         }
     }
 
-    /// Resolves what `install` would do, official repos only. No root,
-    /// nothing is mutated.
-    pub fn plan_install(&self, pkgs: &[String]) -> Result<Plan> {
-        let names = self.pacman.resolve_install(pkgs)?;
-        let resolved = self.alpm.sync_resolved(&names);
-        Ok(build_plan(PlanAction::Install, pkgs, resolved, 1))
+    /// Splits `pkgs` into what's available in the official repos vs. the
+    /// AUR, so install can take a different path for each. Not found
+    /// anywhere (respecting `offline`) is an error, same as `info`.
+    pub fn classify_install(
+        &self,
+        pkgs: &[String],
+        offline: bool,
+    ) -> Result<(Vec<String>, Vec<PackageDetails>)> {
+        let mut official = Vec::new();
+        let mut aur = Vec::new();
+
+        for pkg in pkgs {
+            match self.alpm.info(pkg) {
+                Ok(_) => official.push(pkg.clone()),
+                Err(Error::PackageNotFound(_)) => {
+                    if offline {
+                        return Err(Error::PackageNotFoundOffline(pkg.clone()));
+                    }
+                    match self.aur.info(pkg)? {
+                        Some(details) => aur.push(details),
+                        None => return Err(Error::PackageNotFoundAnywhere(pkg.clone())),
+                    }
+                }
+                Err(other) => return Err(other),
+            }
+        }
+
+        Ok((official, aur))
     }
 
-    /// Actually installs `pkgs` via `sudo pacman -S`. Prompts for a
-    /// password interactively if needed.
-    pub fn install(&self, pkgs: &[String]) -> Result<()> {
-        self.pacman.execute_install(pkgs)
+    /// Resolves what `install` would do, official repos and the AUR alike.
+    /// No root, and no filesystem/build side effects — AUR entries are
+    /// previewed from AUR metadata alone, not by cloning yet.
+    pub fn plan_install(&self, pkgs: &[String], offline: bool) -> Result<Plan> {
+        let (official, aur) = self.classify_install(pkgs, offline)?;
+
+        let mut packages = Vec::new();
+        let mut total_download_size = 0u64;
+        let mut total_installed_size_delta = 0i64;
+
+        if !official.is_empty() {
+            let names = self.pacman.resolve_install(&official)?;
+            let resolved = self.alpm.sync_resolved(&names);
+            let mut official_plan = build_plan(PlanAction::Install, &official, resolved, 1);
+            total_download_size += official_plan.total_download_size;
+            total_installed_size_delta += official_plan.total_installed_size_delta;
+            packages.append(&mut official_plan.packages);
+        }
+
+        for details in aur {
+            packages.push(PlannedPackage {
+                name: details.name,
+                version: details.version,
+                repo: "aur".to_string(),
+                explicit: true,
+            });
+        }
+
+        Ok(Plan {
+            action: PlanAction::Install,
+            packages,
+            total_download_size,
+            total_installed_size_delta,
+        })
+    }
+
+    /// Actually installs `names` (official repos only) via `sudo pacman
+    /// -S`. Prompts for a password interactively if needed.
+    pub fn install_official(&self, names: &[String]) -> Result<()> {
+        self.pacman.execute_install(names)
+    }
+
+    /// Clones (first time) or fetches (repeat) the AUR package's git
+    /// checkout, reporting whether there's anything new to review. Doesn't
+    /// advance an existing checkout — call `aur_advance` after the caller
+    /// confirms a `Changed` diff.
+    pub fn aur_sync(&self, name: &str) -> Result<AurSyncOutcome> {
+        self.aur_build.sync(name)
+    }
+
+    /// Fast-forwards the cached checkout to what `aur_sync` last fetched.
+    pub fn aur_advance(&self, name: &str) -> Result<()> {
+        self.aur_build.advance(name)
+    }
+
+    /// Reads the PKGBUILD off the current checkout (the first-build case,
+    /// where there's no previous version to diff against).
+    pub fn read_pkgbuild(&self, name: &str) -> Result<String> {
+        self.aur_build.read_pkgbuild(name)
+    }
+
+    /// Builds and installs an AUR package via `makepkg -si`. Prompts
+    /// interactively (build output, dependency sync, sudo password) same
+    /// as a real terminal session with `makepkg` would.
+    pub fn build_aur(&self, name: &str) -> Result<()> {
+        self.aur_build.build_and_install(name)
     }
 
     /// Resolves what `remove` would do. No root, nothing is mutated.
