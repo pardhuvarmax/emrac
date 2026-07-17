@@ -2140,10 +2140,12 @@ This section is *how Emrac is being built*, not *what it is* — kept separate f
 - **System integration: hybrid.** `libalpm` via FFI is used for read-only queries, metadata, and indexing, where speed matters most. Anything that mutates system state — installs, removals, builds — shells out to the real `pacman` and `makepkg` binaries, so pacman's own conflict/safety logic stays authoritative instead of being reimplemented.
 - **First milestone: core CLI loop only.** `search` / `info` / `install` / `remove` / `upgrade` against official repos and the AUR, wrapping pacman and makepkg, with a basic transaction preview (Part IV #1, minimal version). Everything else in Part IV, the TUI (Part III §18), build profiles (§10), and the integrated editor are explicitly deferred past this milestone.
 - **Testing safety.** Real install/remove/build flows are exercised inside a disposable container or pacstrap chroot during development — not against the live host system — until the tool has proven itself trustworthy.
-- **Release naming: "Slice" in three tiers, not semver.**
-  - **Slice i\<N\>** — initial builds: early, foundational implementation work before there's a releasable version (e.g. Slice i1 = read-only `search`/`info` against official repos).
-  - **Slice r\<N\>** — release cycle versions.
+- **Release naming: "Slice" in three tiers, not semver, cycling per release.**
+  - **Slice i\<N\>** — incubation for release `r<N>`: work-in-progress leading up to that release. Not limited to code — can be documentation, planning, or refactoring too. E.g. Slice i1 = read-only `search`/`info` against official repos, leading up to `r1`.
+  - **Slice r\<N\>** — major release versions (`r1`, `r2`, ...).
   - **Slice u\<N\>** — update cycle versions within a release; the counter resets to `u1` at the start of each new `r<N>`.
+  - The cycle repeats indefinitely: `i1 → r1 → u1 → u2 → ... → i2 → r2 → u1 → u2 → ... → i3 → r3 → ...` — each release gets its own incubation phase, not just the first.
+  - **`i1 → r1` transition:** `r1` ships once the "First milestone: core CLI loop only" bullet above is complete and verified — `search`/`info`/`install`/`remove`/`upgrade` against official repos and the AUR. Later `i<N> → r<N>` transitions aren't defined yet; that's a per-release judgment call when the time comes.
   See `CHANGELOG.md` for the running list.
 
 ---

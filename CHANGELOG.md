@@ -2,11 +2,13 @@
 
 All notable changes to Emrac are recorded here, newest first. Each entry lists the date, the commit it corresponds to, and what changed and why.
 
-Emrac uses **Slices** instead of semver, in three tiers:
+Emrac uses **Slices** instead of semver, in three tiers that cycle per release:
 
-- **Slice i\<N\>** — initial builds: early, foundational implementation work before there's a releasable version.
-- **Slice r\<N\>** — release cycle versions.
+- **Slice i\<N\>** — incubation for release `r<N>`: work-in-progress leading up to that release (code, docs, planning — not code-only).
+- **Slice r\<N\>** — major release versions (`r1`, `r2`, ...).
 - **Slice u\<N\>** — update cycle versions within a release; resets to `u1` at the start of each new `r<N>`.
+
+The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 → u1 → u2 → ... → i3 → r3 → ...`. `i1 → r1` ships once the core CLI loop MVP (`search`/`info`/`install`/`remove`/`upgrade` against official repos + AUR, per `SPEC.md` Part X) is complete and verified; later `i<N> → r<N>` transitions are a per-release judgment call.
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
