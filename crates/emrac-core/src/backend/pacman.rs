@@ -71,12 +71,52 @@ impl PacmanBackend {
         Ok(parse_names(&output.stdout))
     }
 
+    /// Resolved full-upgrade target names, via `pacman -Su --print`
+    /// (deliberately no `-y`/`--refresh`: verified live that pacman still
+    /// enforces the root check for `-y` even under `--print`, unlike `-S
+    /// <pkg> --print`, which `man pacman` suggested but which doesn't hold
+    /// in practice for the refresh step specifically). No root, but works
+    /// off whatever's already in the local sync db cache rather than a
+    /// truly fresh one — same "may be a little stale" caveat previews
+    /// already carry elsewhere. The real upgrade (`execute_full_upgrade`)
+    /// still does a genuine `-Syu`.
+    pub fn resolve_full_upgrade(&self) -> Result<Vec<String>> {
+        let args = vec![
+            "-Su".to_string(),
+            "--print".to_string(),
+            "--print-format".to_string(),
+            "%n".to_string(),
+        ];
+
+        let output = self.spawn_captured("pacman", &args)?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(pacman_failed("pacman", &args, &stderr));
+        }
+
+        Ok(parse_names(&output.stdout))
+    }
+
     /// Actually installs. Runs under `sudo`, with stdio inherited so
     /// pacman's real progress output goes straight to the terminal.
     pub fn execute_install(&self, pkgs: &[String]) -> Result<()> {
         let mut args = vec!["pacman".to_string(), "-S".to_string()];
         args.extend(pkgs.iter().cloned());
         args.push("--noconfirm".to_string());
+
+        self.run_inherited("sudo", &args)
+    }
+
+    /// Actually syncs and upgrades everything. Runs under `sudo`, with
+    /// stdio inherited — a real, single combined `-Syu` transaction, same
+    /// as `execute_install` lets pacman own conflict/currency logic.
+    pub fn execute_full_upgrade(&self) -> Result<()> {
+        let args = vec![
+            "pacman".to_string(),
+            "-Syu".to_string(),
+            "--noconfirm".to_string(),
+        ];
 
         self.run_inherited("sudo", &args)
     }

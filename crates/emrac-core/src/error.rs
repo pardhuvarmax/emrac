@@ -65,6 +65,9 @@ pub enum Error {
         "couldn't determine your home directory (`$HOME` isn't set) — needed to cache AUR builds under `~/.cache/emrac/build`"
     )]
     NoHomeDir,
+
+    #[error("'{0}' isn't installed, so there's nothing to upgrade — did you mean `emrac install {0}`?")]
+    PackageNotInstalledForUpgrade(String),
 }
 
 impl Error {
@@ -80,7 +83,8 @@ impl Error {
             | Error::PackageNotFoundInOfficial(_)
             | Error::PackagesNotFoundInOfficial(_)
             | Error::PackageNotInstalled(_)
-            | Error::PackagesNotInstalled(_) => "found",
+            | Error::PackagesNotInstalled(_)
+            | Error::PackageNotInstalledForUpgrade(_) => "found",
             Error::PacmanConfSpawn(_)
             | Error::PacmanConfStatus(_)
             | Error::AlpmInit(_)

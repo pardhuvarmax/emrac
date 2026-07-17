@@ -41,25 +41,43 @@ impl AurBackend {
     /// `Ok(None)` means "not in the AUR", distinct from `Err` which means
     /// the request itself failed (network, timeout, malformed response).
     pub fn info(&self, name: &str) -> Result<Option<PackageDetails>> {
-        let response: RpcResponse<AurInfoResult> =
-            self.request(&[("v", "5"), ("type", "info"), ("arg[]", name)])?;
+        Ok(self.info_multi(&[name.to_string()])?.into_iter().next())
+    }
 
-        Ok(response.results.into_iter().next().map(|r| PackageDetails {
-            name: r.name,
-            version: r.version,
-            repo: "aur".to_string(),
-            description: r.description,
-            license: r.license,
-            url: r.url,
-            depends: r.depends,
-            // The v5 RPC schema doesn't expose Provides/Conflicts/Replaces.
-            provides: Vec::new(),
-            installed_size: None,
-            maintainer: r.maintainer,
-            votes: Some(r.num_votes),
-            popularity: Some(r.popularity),
-            out_of_date: r.out_of_date,
-        }))
+    /// Batched `info` lookup — one request, `results` in whatever order the
+    /// AUR returns them (not necessarily matching `names`' order, and
+    /// silently omitting anything not found). Used for checking many
+    /// installed AUR packages' latest versions at once during `upgrade`.
+    pub fn info_multi(&self, names: &[String]) -> Result<Vec<PackageDetails>> {
+        if names.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut params: Vec<(&str, &str)> = vec![("v", "5"), ("type", "info")];
+        params.extend(names.iter().map(|name| ("arg[]", name.as_str())));
+
+        let response: RpcResponse<AurInfoResult> = self.request(&params)?;
+
+        Ok(response
+            .results
+            .into_iter()
+            .map(|r| PackageDetails {
+                name: r.name,
+                version: r.version,
+                repo: "aur".to_string(),
+                description: r.description,
+                license: r.license,
+                url: r.url,
+                depends: r.depends,
+                // The v5 RPC schema doesn't expose Provides/Conflicts/Replaces.
+                provides: Vec::new(),
+                installed_size: None,
+                maintainer: r.maintainer,
+                votes: Some(r.num_votes),
+                popularity: Some(r.popularity),
+                out_of_date: r.out_of_date,
+            })
+            .collect())
     }
 
     fn request<T>(&self, params: &[(&str, &str)]) -> Result<RpcResponse<T>>

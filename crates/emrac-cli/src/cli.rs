@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
@@ -35,6 +35,22 @@ pub struct Cli {
     pub dry_run: bool,
 }
 
+/// Shared by `install` and `upgrade` — anything that builds an AUR package
+/// goes through the same PKGBUILD/diff review, so the opt-out flags are
+/// identical for both.
+#[derive(Args)]
+pub struct AurReviewFlags {
+    /// Never show an AUR package's PKGBUILD/diff, or ask the extra review
+    /// confirmation — just go straight to the overall confirm
+    #[arg(long)]
+    pub skip_pkgbuild: bool,
+
+    /// On a rebuild, show the full new PKGBUILD instead of a diff against
+    /// what was reviewed last time
+    #[arg(long)]
+    pub skip_diff: bool,
+}
+
 #[derive(Subcommand)]
 pub enum Commands {
     /// Search official repositories and the AUR by package name or description
@@ -62,15 +78,8 @@ pub enum Commands {
         #[arg(required = true)]
         pkgs: Vec<String>,
 
-        /// Never show an AUR package's PKGBUILD/diff, or ask the extra
-        /// review confirmation — just go straight to the install confirm
-        #[arg(long)]
-        skip_pkgbuild: bool,
-
-        /// On a rebuild, show the full new PKGBUILD instead of a diff
-        /// against what was reviewed last time
-        #[arg(long)]
-        skip_diff: bool,
+        #[command(flatten)]
+        review: AurReviewFlags,
     },
 
     /// Remove one or more installed packages
@@ -85,5 +94,14 @@ pub enum Commands {
         /// Also remove dependencies that become orphaned as a result
         #[arg(long)]
         recursive: bool,
+    },
+
+    /// Upgrade installed packages, official repos and the AUR alike
+    Upgrade {
+        /// Packages to upgrade; omitted = everything that's out of date
+        pkgs: Vec<String>,
+
+        #[command(flatten)]
+        review: AurReviewFlags,
     },
 }

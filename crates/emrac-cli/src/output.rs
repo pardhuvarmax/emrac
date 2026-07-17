@@ -72,6 +72,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
         let note = match plan.action {
             PlanAction::Install => "nothing to install — you're already up to date.",
             PlanAction::Remove => "nothing to remove.",
+            PlanAction::Upgrade => "nothing to upgrade — you're already up to date.",
         };
         println!("emrac notes: {note}");
         return;
@@ -80,6 +81,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
     let verb = match plan.action {
         PlanAction::Install => "install",
         PlanAction::Remove => "remove",
+        PlanAction::Upgrade => "upgrade",
     };
 
     println!(

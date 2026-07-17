@@ -5,6 +5,7 @@ use serde::Serialize;
 pub enum PlanAction {
     Install,
     Remove,
+    Upgrade,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use crate::backend::{
-    AlpmBackend, AurBackend, AurBuildBackend, AurSyncOutcome, PacmanBackend, ResolvedPackage,
+    AlpmBackend, AurBackend, AurBuildBackend, AurSyncOutcome, InstalledSource, PacmanBackend,
+    ResolvedPackage, version_is_newer,
 };
 use crate::error::{Error, Result};
 use crate::package::{PackageDetails, PackageSummary};
@@ -27,6 +28,16 @@ pub struct SearchResults {
     pub packages: Vec<PackageSummary>,
     /// Set when the AUR was in scope but couldn't be reached. Official
     /// results are still returned in that case rather than failing outright.
+    pub aur_warning: Option<String>,
+}
+
+pub struct UpgradePlan {
+    pub plan: Plan,
+    /// Set on a full upgrade (no explicit targets) when the AUR couldn't be
+    /// reached while checking for upgradable foreign packages — official
+    /// upgrades are still returned in that case. A targeted AUR upgrade
+    /// treats the same failure as a hard error instead, same distinction
+    /// `search` vs. `info` already draw.
     pub aur_warning: Option<String>,
 }
 
@@ -194,6 +205,160 @@ impl Sources {
     /// as a real terminal session with `makepkg` would.
     pub fn build_aur(&self, name: &str) -> Result<()> {
         self.aur_build.build_and_install(name)
+    }
+
+    /// Splits explicitly-named upgrade targets into official vs. AUR.
+    /// Unlike `classify_install`, every name must already be installed —
+    /// `upgrade` isn't `install`.
+    pub fn classify_upgrade(&self, pkgs: &[String]) -> Result<(Vec<String>, Vec<String>)> {
+        let mut official = Vec::new();
+        let mut aur = Vec::new();
+
+        for pkg in pkgs {
+            match self.alpm.installed_source(pkg) {
+                Some(InstalledSource::Official) => official.push(pkg.clone()),
+                Some(InstalledSource::Foreign) => aur.push(pkg.clone()),
+                None => return Err(Error::PackageNotInstalledForUpgrade(pkg.clone())),
+            }
+        }
+
+        Ok((official, aur))
+    }
+
+    /// Resolves what `upgrade` would do — everything (`pkgs` empty) or just
+    /// the named targets. No root, and (same as `plan_install`) no
+    /// filesystem/build side effects for AUR entries.
+    pub fn plan_upgrade(&self, pkgs: &[String], offline: bool) -> Result<UpgradePlan> {
+        if pkgs.is_empty() {
+            self.plan_full_upgrade(offline)
+        } else {
+            self.plan_targeted_upgrade(pkgs)
+        }
+    }
+
+    fn plan_full_upgrade(&self, offline: bool) -> Result<UpgradePlan> {
+        let names = self.pacman.resolve_full_upgrade()?;
+        let (mut packages, total_download_size, total_installed_size_delta) =
+            self.official_upgrade_packages(&names);
+
+        let mut aur_warning = None;
+
+        if !offline {
+            let foreign_names = self.alpm.foreign_package_names();
+            if !foreign_names.is_empty() {
+                match self.aur.info_multi(&foreign_names) {
+                    Ok(aur_details) => {
+                        let installed = self.alpm.local_resolved(&foreign_names);
+                        for details in aur_details {
+                            let Some(current) =
+                                installed.iter().find(|r| r.name == details.name)
+                            else {
+                                continue;
+                            };
+                            if version_is_newer(&current.version, &details.version) {
+                                packages.push(PlannedPackage {
+                                    name: details.name,
+                                    version: details.version,
+                                    repo: "aur".to_string(),
+                                    explicit: true,
+                                });
+                            }
+                        }
+                    }
+                    Err(err) => aur_warning = Some(err.to_string()),
+                }
+            }
+        }
+
+        Ok(UpgradePlan {
+            plan: Plan {
+                action: PlanAction::Upgrade,
+                packages,
+                total_download_size,
+                total_installed_size_delta,
+            },
+            aur_warning,
+        })
+    }
+
+    fn plan_targeted_upgrade(&self, pkgs: &[String]) -> Result<UpgradePlan> {
+        let (official, aur) = self.classify_upgrade(pkgs)?;
+
+        let names = if official.is_empty() {
+            Vec::new()
+        } else {
+            self.pacman.resolve_install(&official)?
+        };
+        let (mut packages, total_download_size, total_installed_size_delta) =
+            self.official_upgrade_packages(&names);
+
+        for name in &aur {
+            let details = self
+                .aur
+                .info(name)?
+                .ok_or_else(|| Error::PackageNotFoundAnywhere(name.clone()))?;
+            packages.push(PlannedPackage {
+                name: details.name,
+                version: details.version,
+                repo: "aur".to_string(),
+                explicit: true,
+            });
+        }
+
+        Ok(UpgradePlan {
+            plan: Plan {
+                action: PlanAction::Upgrade,
+                packages,
+                total_download_size,
+                total_installed_size_delta,
+            },
+            aur_warning: None,
+        })
+    }
+
+    /// Actually upgrades official packages: everything (`pkgs` empty) via a
+    /// real combined `sudo pacman -Syu`, or just the named targets via the
+    /// same path `install_official` already uses (`pacman -S` on an
+    /// installed package upgrades it).
+    pub fn upgrade_official(&self, pkgs: &[String]) -> Result<()> {
+        if pkgs.is_empty() {
+            self.pacman.execute_full_upgrade()
+        } else {
+            self.pacman.execute_install(pkgs)
+        }
+    }
+
+    /// Shared by `plan_full_upgrade`/`plan_targeted_upgrade`: turns
+    /// resolved official target names into `PlannedPackage`s with the *net*
+    /// size delta (new installed size − old), unlike `build_plan`'s flat
+    /// `size_sign` (install/remove never have both an old and new size).
+    fn official_upgrade_packages(&self, names: &[String]) -> (Vec<PlannedPackage>, u64, i64) {
+        let new = self.alpm.sync_resolved(names);
+        let old = self.alpm.local_resolved(names);
+
+        let mut packages = Vec::new();
+        let mut total_download_size = 0u64;
+        let mut total_installed_size_delta = 0i64;
+
+        for pkg in new {
+            let old_size = old
+                .iter()
+                .find(|r| r.name == pkg.name)
+                .map(|r| r.installed_size)
+                .unwrap_or(0);
+
+            total_download_size += pkg.download_size;
+            total_installed_size_delta += pkg.installed_size as i64 - old_size as i64;
+
+            packages.push(PlannedPackage {
+                explicit: true,
+                name: pkg.name,
+                version: pkg.version,
+                repo: pkg.repo,
+            });
+        }
+
+        (packages, total_download_size, total_installed_size_delta)
     }
 
     /// Resolves what `remove` would do. No root, nothing is mutated.

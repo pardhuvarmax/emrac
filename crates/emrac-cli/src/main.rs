@@ -30,18 +30,14 @@ fn run(cli: &Cli) -> Result<()> {
             &sources, query, *limit, *official, *aur, cli.offline, cli.json, cli.quiet,
         ),
         Commands::Info { pkg } => commands::info::run(&sources, pkg, cli.offline, cli.json),
-        Commands::Install {
-            pkgs,
-            skip_pkgbuild,
-            skip_diff,
-        } => commands::install::run(
+        Commands::Install { pkgs, review } => commands::install::run(
             &sources,
             pkgs,
             cli.dry_run,
             cli.yes,
             cli.offline,
-            *skip_pkgbuild,
-            *skip_diff,
+            review.skip_pkgbuild,
+            review.skip_diff,
             cli.json,
         ),
         Commands::Remove {
@@ -50,6 +46,17 @@ fn run(cli: &Cli) -> Result<()> {
             recursive,
         } => commands::remove::run(
             &sources, pkgs, *cascade, *recursive, cli.dry_run, cli.yes, cli.json,
+        ),
+        Commands::Upgrade { pkgs, review } => commands::upgrade::run(
+            &sources,
+            pkgs,
+            cli.dry_run,
+            cli.yes,
+            cli.offline,
+            review.skip_pkgbuild,
+            review.skip_diff,
+            cli.json,
+            cli.quiet,
         ),
     }
 }

@@ -124,6 +124,58 @@ impl AlpmBackend {
             })
             .collect()
     }
+
+    /// Names of installed packages that aren't in any sync database — the
+    /// standard definition of a "foreign" package (matches `pacman -Qm`),
+    /// almost always AUR-built. Used to find AUR packages that might need
+    /// upgrading without shelling out.
+    pub fn foreign_package_names(&self) -> Vec<String> {
+        self.handle
+            .localdb()
+            .pkgs()
+            .into_iter()
+            .filter(|pkg| {
+                !self
+                    .handle
+                    .syncdbs()
+                    .into_iter()
+                    .any(|db| db.pkg(pkg.name()).is_ok())
+            })
+            .map(|pkg| pkg.name().to_string())
+            .collect()
+    }
+
+    /// Where an installed package came from, or `None` if it isn't
+    /// installed at all. Used to route a named `upgrade` target to the
+    /// right backend (official vs. AUR).
+    pub fn installed_source(&self, name: &str) -> Option<InstalledSource> {
+        self.handle.localdb().pkg(name).ok()?;
+
+        let is_official = self
+            .handle
+            .syncdbs()
+            .into_iter()
+            .any(|db| db.pkg(name).is_ok());
+
+        Some(if is_official {
+            InstalledSource::Official
+        } else {
+            InstalledSource::Foreign
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstalledSource {
+    Official,
+    Foreign,
+}
+
+/// `true` if `candidate` is a newer version than `current`, using libalpm's
+/// own version-comparison rules (handles epoch/pkgrel correctly, not just
+/// naive string comparison).
+pub fn version_is_newer(current: &str, candidate: &str) -> bool {
+    alpm::vercmp(candidate, current) == std::cmp::Ordering::Greater
 }
 
 pub struct ResolvedPackage {
