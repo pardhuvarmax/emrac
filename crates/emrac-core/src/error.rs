@@ -29,6 +29,12 @@ pub enum Error {
 
     #[error("AUR request failed: {0}")]
     Aur(String),
+
+    #[error("failed to run {0}: {1}")]
+    PacmanSpawn(String, #[source] io::Error),
+
+    #[error("{command} failed: {stderr}")]
+    PacmanFailed { command: String, stderr: String },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

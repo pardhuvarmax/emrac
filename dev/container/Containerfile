@@ -1,0 +1,19 @@
+# Disposable Arch Linux container for testing emrac's mutating commands
+# (install/remove/upgrade/build) without ever touching the host's real
+# pacman state. This image has its own independent, freshly-synced package
+# database — it is never given access to the host's /var/lib/pacman.
+#
+# Build:  podman build -t emrac-test -f dev/container/Containerfile dev/container
+# Run:    dev/container/run.sh
+
+FROM docker.io/library/archlinux:latest
+
+RUN pacman -Syu --noconfirm && \
+    pacman -S --noconfirm --needed sudo && \
+    useradd -m -G wheel tester && \
+    echo 'tester ALL=(root) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/tester-pacman && \
+    chmod 0440 /etc/sudoers.d/tester-pacman
+
+USER tester
+WORKDIR /home/tester
+CMD ["/bin/bash"]

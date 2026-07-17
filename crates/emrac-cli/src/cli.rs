@@ -25,6 +25,14 @@ pub struct Cli {
     /// Don't touch the network — skip the AUR
     #[arg(long, global = true)]
     pub offline: bool,
+
+    /// Automatically answer yes to confirmation prompts
+    #[arg(short = 'y', long, global = true)]
+    pub yes: bool,
+
+    /// Show what would happen without doing it
+    #[arg(long, global = true)]
+    pub dry_run: bool,
 }
 
 #[derive(Subcommand)]
@@ -48,4 +56,24 @@ pub enum Commands {
 
     /// Show detailed metadata for a package, official repos or the AUR
     Info { pkg: String },
+
+    /// Install one or more packages from official repositories
+    Install {
+        #[arg(required = true)]
+        pkgs: Vec<String>,
+    },
+
+    /// Remove one or more installed packages
+    Remove {
+        #[arg(required = true)]
+        pkgs: Vec<String>,
+
+        /// Also remove packages that depend on the given packages
+        #[arg(long)]
+        cascade: bool,
+
+        /// Also remove dependencies that become orphaned as a result
+        #[arg(long)]
+        recursive: bool,
+    },
 }

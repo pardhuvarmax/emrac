@@ -1,4 +1,4 @@
-use emrac_core::{PackageDetails, PackageSummary};
+use emrac_core::{PackageDetails, PackageSummary, Plan, PlanAction};
 
 pub fn print_search_results(results: &[PackageSummary], json: bool) {
     if json {
@@ -53,6 +53,45 @@ pub fn print_package_details(pkg: &PackageDetails, json: bool) {
     if pkg.out_of_date.is_some() {
         println!("Out of Date     : yes");
     }
+}
+
+pub fn print_plan(plan: &Plan, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(plan).unwrap());
+        return;
+    }
+
+    if plan.is_empty() {
+        println!("Nothing to do.");
+        return;
+    }
+
+    let verb = match plan.action {
+        PlanAction::Install => "Install",
+        PlanAction::Remove => "Remove",
+    };
+
+    println!("{verb} Plan\n");
+    println!("Packages ({}):", plan.packages.len());
+    for pkg in &plan.packages {
+        let suffix = if pkg.explicit { "" } else { " (dependency)" };
+        println!("  {}/{} {}{suffix}", pkg.repo, pkg.name, pkg.version);
+    }
+    println!();
+
+    if plan.total_download_size > 0 {
+        println!("Download Size    : {}", human_size(plan.total_download_size));
+    }
+
+    let (label, size) = if plan.total_installed_size_delta >= 0 {
+        ("Installed Size (+)", plan.total_installed_size_delta as u64)
+    } else {
+        (
+            "Installed Size (-)",
+            plan.total_installed_size_delta.unsigned_abs(),
+        )
+    };
+    println!("{label} : {}", human_size(size));
 }
 
 fn join_or_dash(items: &[String]) -> String {

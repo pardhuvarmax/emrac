@@ -12,6 +12,28 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice i1 — 2026-07-17 — `a0bab87` — install/remove for official repos, with transaction preview
+
+New `PacmanBackend` (`crates/emrac-core/src/backend/pacman.rs`) — the only place emrac shells out to `pacman`/`sudo pacman`. Dependency resolution (`pacman -S/-R --print`) needs no root and mutates nothing; execution runs under `sudo`, prompting interactively. emrac itself never runs as root, matching `yay`/`paru`.
+
+`Plan`/`PlannedPackage`/`PlanAction` (`plan.rs`) model the transaction preview shown before anything executes — resolved package list (explicit vs. dependency), total download size, total installed-size delta. Sizes come from `AlpmBackend`'s libalpm FFI (already-synced local metadata), not parsed out of pacman's text output — `pacman --print-format %s` proved unreliable for size fields specifically during testing.
+
+CLI: new `install`/`remove` commands, plus global `-y`/`--yes` and `--dry-run` (both already defined in `SPEC.md` Part VII, unused until now). `remove` supports `--cascade`/`--recursive`, passed straight through to pacman. The plan is always shown first; `--dry-run` stops there, otherwise a plain stdin prompt confirms unless `--yes`.
+
+Added `dev/container/`: a disposable podman container with its own independent pacman database (never given access to the host's `/var/lib/pacman`) for testing install/remove for real, since preview needs no root but execution genuinely mutates system state. Verified a full install → remove cycle inside it, and confirmed the host's own `ripgrep` installation was untouched throughout.
+
+Still official repos only — AUR building (`makepkg`) and `upgrade` are still deferred to later increments.
+
+## Slice i1 — 2026-07-17 — `832b217` — AUR search/info merged with official repos
+
+Added `AurBackend` (`crates/emrac-core/src/backend/aur.rs`), querying the aurweb RPC v5 API (`https://aur.archlinux.org/rpc/`) over `ureq` — read-only, no root, no async runtime. Added the `Sources` aggregator (`sources.rs`) as the single entry point the CLI now calls instead of `AlpmBackend` directly: it merges official-repo and AUR results for `search`, and falls back official → AUR for `info`.
+
+`PackageDetails` gained `maintainer`/`votes`/`popularity`/`out_of_date` (AUR-only, `None` for official packages); `installed_size` became `Option<u64>` (`None` for AUR packages, which carry no such metadata pre-build).
+
+CLI: global `--offline` skips the AUR everywhere; `search` gained `--official`/`--aur` scope flags, with `--aur --offline` rejected via clap's `conflicts_with` rather than silently ignored. AUR failures degrade gracefully during `search` (official results still returned, warning on stderr) but are a hard error during `info` (a network failure means we genuinely can't answer about one specific package).
+
+Verified live against the real AUR endpoint (not a mock): `search yay`/`search yay --official`, `info yay --json` (AUR fields populated), `info neovim --json` (regression check, official-only path unchanged), `info yay --offline` (clean not-found error), `search foo --offline --aur` (clap rejects the contradiction).
+
 ## Slice i1 — 2026-07-17 — `86b9ded` — Read-only search/info via libalpm
 
 First working code. Added a Cargo workspace with two crates:

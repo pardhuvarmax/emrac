@@ -85,6 +85,53 @@ impl AlpmBackend {
 
         Err(Error::PackageNotFound(name.to_string()))
     }
+
+    /// Looks up `names` in the sync databases (official repos) — used to
+    /// enrich an install plan with real repo/version/size data instead of
+    /// parsing it out of pacman's text output.
+    pub fn sync_resolved(&self, names: &[String]) -> Vec<ResolvedPackage> {
+        names
+            .iter()
+            .filter_map(|name| {
+                self.handle.syncdbs().into_iter().find_map(|db| {
+                    db.pkg(name.as_str()).ok().map(|pkg| ResolvedPackage {
+                        name: pkg.name().to_string(),
+                        version: pkg.version().to_string(),
+                        repo: db.name().to_string(),
+                        download_size: pkg.size().max(0) as u64,
+                        installed_size: pkg.isize().max(0) as u64,
+                    })
+                })
+            })
+            .collect()
+    }
+
+    /// Looks up `names` in the local database (currently installed
+    /// packages) — used to enrich a removal plan with the size that will
+    /// actually be freed.
+    pub fn local_resolved(&self, names: &[String]) -> Vec<ResolvedPackage> {
+        let local = self.handle.localdb();
+        names
+            .iter()
+            .filter_map(|name| {
+                local.pkg(name.as_str()).ok().map(|pkg| ResolvedPackage {
+                    name: pkg.name().to_string(),
+                    version: pkg.version().to_string(),
+                    repo: "local".to_string(),
+                    download_size: 0,
+                    installed_size: pkg.isize().max(0) as u64,
+                })
+            })
+            .collect()
+    }
+}
+
+pub struct ResolvedPackage {
+    pub name: String,
+    pub version: String,
+    pub repo: String,
+    pub download_size: u64,
+    pub installed_size: u64,
 }
 
 fn pacman_conf(key: &str) -> Result<String> {
