@@ -1,6 +1,6 @@
 # Emrac
 
-<img align="right" width="300" src="https://github.com/user-attachments/assets/3419b48f-a2c8-4a0f-b4f4-f47f0ec3988e" alt="emrac">
+<img align="right" width="320" src="https://github.com/user-attachments/assets/3419b48f-a2c8-4a0f-b4f4-f47f0ec3988e" alt="emrac">
 
 A source-first package management platform for Arch Linux — an orchestration and UX layer over `pacman`, `makepkg`, `libalpm`, PKGBUILD, and the AUR, unifying official repos, the AUR, and local/custom repos behind one CLI and TUI.
 
@@ -9,7 +9,7 @@ A source-first package management platform for Arch Linux — an orchestration a
 Status: **Slice i1.** `search`/`info`/`install`/`remove`/`upgrade` all work against official repositories (via libalpm/pacman) and the AUR (via its RPC API plus `git`/`makepkg`) — the "core CLI loop" milestone from `SPEC.md` Part X is complete. Every mutating command shows a transaction preview and a confirmation prompt first; AUR builds additionally show the PKGBUILD (or a diff, on rebuilds/upgrades) with their own review step. Still missing: the TUI, build profiles, and everything else in `SPEC.md` Part IV. 
 
 
-> (Emrac uses "Slice i/r/u\<N\>" instead of semver — see `CHANGELOG.md`.)
+> Emrac uses "Slice i/r/u\<N\>" instead of semver — see `CHANGELOG.md`.
 
 ---
 
