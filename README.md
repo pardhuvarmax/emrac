@@ -1,6 +1,6 @@
 # Emrac
 
-<img align="right" width="180" src="https://github.com/user-attachments/assets/3419b48f-a2c8-4a0f-b4f4-f47f0ec3988e" alt="emrac">
+<img align="left" width="250" src="https://github.com/user-attachments/assets/3419b48f-a2c8-4a0f-b4f4-f47f0ec3988e" alt="emrac">
 
 A source-first package management platform for Arch Linux — an orchestration and UX layer over `pacman`, `makepkg`, `libalpm`, PKGBUILD, and the AUR, unifying official repos, the AUR, and local/custom repos behind one CLI and TUI.
 
