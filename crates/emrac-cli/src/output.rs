@@ -7,7 +7,7 @@ pub fn print_search_results(results: &[PackageSummary], json: bool) {
     }
 
     if results.is_empty() {
-        println!("No packages found.");
+        println!("emrac found: no matches for that search.");
         return;
     }
 
@@ -62,7 +62,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
     }
 
     if plan.is_empty() {
-        println!("Nothing to do.");
+        println!("emrac notes: nothing to do.");
         return;
     }
 

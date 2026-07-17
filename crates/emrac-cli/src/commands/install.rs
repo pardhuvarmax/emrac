@@ -19,7 +19,7 @@ pub fn run(
     }
 
     if !yes && !confirm("Proceed with installation?") {
-        println!("Aborted.");
+        println!("emrac notes: aborted.");
         return Ok(());
     }
 

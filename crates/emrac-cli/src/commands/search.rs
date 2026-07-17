@@ -30,7 +30,7 @@ pub fn run(
 
     if let Some(warning) = &results.aur_warning {
         if !quiet {
-            eprintln!("warning: {warning}");
+            eprintln!("emrac warns: {warning}");
         }
     }
 
