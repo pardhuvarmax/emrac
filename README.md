@@ -1,5 +1,7 @@
 # Emrac
 
+<img align="right" width="400" src="https://github.com/user-attachments/assets/3419b48f-a2c8-4a0f-b4f4-f47f0ec3988e" alt="emrac">
+
 A source-first package management platform for Arch Linux — an orchestration and UX layer over `pacman`, `makepkg`, `libalpm`, PKGBUILD, and the AUR, unifying official repos, the AUR, and local/custom repos behind one CLI and TUI.
 
 Status: **Slice i1.** `search`/`info` work against official repositories (via libalpm) and the AUR (via its RPC API). `install` works against both, with a transaction preview, a PKGBUILD/diff review for AUR packages before building, and a confirmation prompt before anything real happens; `remove` works against installed packages regardless of source. Still missing: `upgrade`, the TUI, build profiles. (Emrac uses "Slice i/r/u\<N\>" instead of semver — see `CHANGELOG.md`.)
