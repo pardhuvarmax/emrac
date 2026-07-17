@@ -1,0 +1,39 @@
+# Emrac
+
+A source-first package management platform for Arch Linux — an orchestration and UX layer over `pacman`, `makepkg`, `libalpm`, PKGBUILD, and the AUR, unifying official repos, the AUR, and local/custom repos behind one CLI and TUI.
+
+Status: **design phase, no code yet.** This repository currently holds the specification only.
+
+## Highlights
+
+- **Source-first, not source-only** — builds from PKGBUILD locally when it's worthwhile, installs binaries when it isn't, and tells you why.
+- **Source Suitability Score & ETA engine** — estimates build time, download size, and performance gain per package before you commit, refined by local build history.
+- **One interface, every source** — official repos, AUR, local/custom repos, and locally built packages all searched, inspected, and installed the same way.
+- **CLI and TUI parity** — no capability is exclusive to either interface.
+- **Build profiles with inheritance** — reusable compiler/linker/LTO/PGO/march-mtune configurations instead of long flag lists per install.
+- **Transactional and reversible** — dry-run previews, rollback, and snapshots for every mutating operation.
+- **Integrated modal editor** — edit PKGBUILDs and configs without leaving the TUI, or fall back to `$EDITOR`.
+
+## Documentation
+
+[`SPEC.md`](./SPEC.md) is the complete specification:
+
+- Vision & philosophy
+- Full feature catalog
+- Signature features (Install Planner, Explain, Package Score, Build Diff, Conflict Resolver, etc.)
+- Command catalog, formal grammar (EBNF), and global/per-command option reference
+- Architecture and process flowcharts (Mermaid)
+- Implementation notes (language, integration strategy, milestone scope)
+
+## Architecture (planned)
+
+- **Language:** Rust
+- **System integration:** hybrid — `libalpm` via FFI for fast read-only queries/indexing; shells out to the real `pacman` and `makepkg` binaries for anything that mutates system state, so pacman's own safety logic stays authoritative.
+- **First milestone:** a core CLI loop (`search` / `info` / `install` / `remove` / `upgrade` against official repos + AUR) before the TUI, recommendation engine, build profiles, or integrated editor.
+- **Testing:** real install/remove/build flows are exercised in a container or chroot, not against the live host, until the tool has proven itself trustworthy.
+
+See `SPEC.md` Part X for details.
+
+## License
+
+Not yet decided.
