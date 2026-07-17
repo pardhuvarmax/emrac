@@ -2,9 +2,15 @@
 
 All notable changes to Emrac are recorded here, newest first. Each entry lists the date, the commit it corresponds to, and what changed and why.
 
-Emrac releases/updates are named **Slice \<N\>** (Slice 1, Slice 2, ...) rather than semver — each slice is one working, verified vertical increment of the tool (see `SPEC.md` Part X for the milestone philosophy this follows).
+Emrac uses **Slices** instead of semver, in three tiers:
 
-## Slice 1 — 2026-07-17 — `86b9ded` — Read-only search/info via libalpm
+- **Slice i\<N\>** — initial builds: early, foundational implementation work before there's a releasable version.
+- **Slice r\<N\>** — release cycle versions.
+- **Slice u\<N\>** — update cycle versions within a release; resets to `u1` at the start of each new `r<N>`.
+
+(See `SPEC.md` Part X for the milestone philosophy this follows.)
+
+## Slice i1 — 2026-07-17 — `86b9ded` — Read-only search/info via libalpm
 
 First working code. Added a Cargo workspace with two crates:
 

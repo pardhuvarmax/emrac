@@ -2,7 +2,7 @@
 
 Backend library crate. Owns all interaction with libalpm/pacman/makepkg so that both the CLI and (later) the TUI call into one shared implementation instead of duplicating it.
 
-**Current contents (Slice 1):**
+**Current contents (Slice i1):**
 
 - [`backend/alpm.rs`](./src/backend/alpm.rs) — read-only libalpm queries against the official repo sync databases (`search`, `info`). No network calls, no root required.
 - [`package.rs`](./src/package.rs) — `PackageSummary` / `PackageDetails` data models.
