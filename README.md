@@ -6,7 +6,7 @@ A source-first package management platform for Arch Linux — an orchestration a
 
 ---
 
-Status: **Slice i1.** `search`/`info`/`install`/`remove`/`upgrade` all work against official repositories (via libalpm/pacman) and the AUR (via its RPC API plus `git`/`makepkg`) — the "core CLI loop" milestone from `SPEC.md` Part X is complete. 
+Status: **Slice i1.** `search`/`info`/`install`/`remove`/`upgrade` all work against official repositories (via libalpm/pacman) and the AUR (via its RPC API plus `git`/`makepkg`).
 
 Every mutating command shows a transaction preview and a confirmation prompt first; AUR builds additionally show the PKGBUILD (or a diff, on rebuilds/upgrades) with their own review step. Still missing: the TUI, build profiles, and everything else in `SPEC.md` Part IV. 
 
