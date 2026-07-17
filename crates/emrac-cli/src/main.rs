@@ -3,9 +3,8 @@ mod commands;
 mod output;
 mod prompt;
 
-use anyhow::Result;
 use clap::Parser;
-use emrac_core::Sources;
+use emrac_core::{Result, Sources};
 
 use cli::{Cli, Commands};
 
@@ -13,10 +12,7 @@ fn main() {
     let cli = Cli::parse();
 
     if let Err(err) = run(&cli) {
-        // Every emrac_core::Error already voices itself ("emrac says: ...",
-        // "emrac found: ...") — see crates/emrac-core/src/error.rs. Don't
-        // add another prefix on top of it here.
-        eprintln!("{err:#}");
+        eprintln!("emrac {}: {err}", err.voice());
         std::process::exit(1);
     }
 }

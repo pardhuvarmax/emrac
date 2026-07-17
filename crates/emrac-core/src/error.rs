@@ -1,60 +1,83 @@
 use std::io;
 
-/// Every message emrac shows the user is voiced as "emrac <verb>: ...".
-/// The verb is chosen per error to match what actually happened:
-/// - `says` — something genuinely went wrong (infrastructure/spawn/IO failures)
-/// - `found` — a lookup completed and this is its outcome (including "not found")
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("emrac says: failed to run pacman-conf: {0}")]
+    #[error("couldn't run `pacman-conf` to read your repository configuration: {0}")]
     PacmanConfSpawn(#[source] io::Error),
 
-    #[error("emrac says: pacman-conf exited with a non-zero status: {0}")]
+    #[error("`pacman-conf` didn't run cleanly: {0}")]
     PacmanConfStatus(String),
 
-    #[error("emrac says: failed to initialize libalpm handle: {0}")]
+    #[error("couldn't set up access to your local package database: {0}")]
     AlpmInit(#[source] alpm::Error),
 
-    #[error("emrac says: failed to register sync database '{repo}': {source}")]
+    #[error("couldn't read the '{repo}' repository — is it enabled in pacman.conf? ({source})")]
     RegisterSyncDb {
         repo: String,
         #[source]
         source: alpm::Error,
     },
 
-    #[error("emrac found: package '{0}' not found")]
+    #[error("no package named '{0}' in the official repositories")]
     PackageNotFound(String),
 
-    #[error("emrac found: package '{0}' not found in official repos or the AUR")]
+    #[error("couldn't find '{0}' anywhere — not in the official repositories, not in the AUR")]
     PackageNotFoundAnywhere(String),
 
-    #[error("emrac found: package '{0}' not found in official repos (AUR not checked: offline)")]
+    #[error(
+        "couldn't find '{0}' in the official repositories, and I skipped the AUR since you're offline"
+    )]
     PackageNotFoundOffline(String),
 
-    #[error("emrac says: AUR request failed: {0}")]
+    #[error("the AUR didn't cooperate: {0}")]
     Aur(String),
 
-    #[error("emrac says: failed to run {0}: {1}")]
+    #[error("couldn't run `{0}`: {1}")]
     PacmanSpawn(String, #[source] io::Error),
 
-    #[error("emrac says: {command} failed: {stderr}")]
+    #[error("something went wrong running `{command}`: {stderr}")]
     PacmanFailed { command: String, stderr: String },
 
     #[error(
-        "emrac found: package '{0}' not found in official repositories — try `emrac search {0} --aur` to check the AUR"
+        "couldn't find '{0}' in the official repositories — want to try `emrac search {0} --aur` to check the AUR?"
     )]
     PackageNotFoundInOfficial(String),
 
     #[error(
-        "emrac found: packages not found in official repositories: {0} — try `emrac search <name> --aur` to check the AUR"
+        "couldn't find these in the official repositories: {0} — try `emrac search <name> --aur` to check the AUR"
     )]
     PackagesNotFoundInOfficial(String),
 
-    #[error("emrac found: package '{0}' is not installed")]
+    #[error("'{0}' isn't installed, so there's nothing to remove")]
     PackageNotInstalled(String),
 
-    #[error("emrac found: packages not installed: {0}")]
+    #[error("none of these are installed, so there's nothing to remove: {0}")]
     PackagesNotInstalled(String),
+}
+
+impl Error {
+    /// Which conversational voice the CLI should use to introduce this
+    /// error — see `emrac-cli`'s `main.rs`. Kept here rather than
+    /// duplicated at the presentation layer, since it's a property of what
+    /// the error *is*, not how it's displayed.
+    pub fn voice(&self) -> &'static str {
+        match self {
+            Error::PackageNotFound(_)
+            | Error::PackageNotFoundAnywhere(_)
+            | Error::PackageNotFoundOffline(_)
+            | Error::PackageNotFoundInOfficial(_)
+            | Error::PackagesNotFoundInOfficial(_)
+            | Error::PackageNotInstalled(_)
+            | Error::PackagesNotInstalled(_) => "found",
+            Error::PacmanConfSpawn(_)
+            | Error::PacmanConfStatus(_)
+            | Error::AlpmInit(_)
+            | Error::RegisterSyncDb { .. }
+            | Error::Aur(_)
+            | Error::PacmanSpawn(_, _)
+            | Error::PacmanFailed { .. } => "says",
+        }
+    }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

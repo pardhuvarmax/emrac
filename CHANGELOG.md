@@ -12,11 +12,19 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
-## Slice i1 — 2026-07-17 — `41eeddb` — Clean, actionable not-found errors
+## Slice i1 — 2026-07-17 — `fb43285` — Conversational messages, voiced by category
+
+Follow-up to the not-found fix below, after more hand-testing feedback: every user-facing message should read like an actual explanation, not terse technical text, and different message *types* should sound different rather than one generic prefix everywhere.
+
+Landed in two passes: first a blanket `"emrac says: {err}"` wrapper in `main.rs`, then split into a real per-category voice — `emrac says:` for genuine failures, `emrac found:` for lookup outcomes (including not-found), `emrac warns:` for non-fatal AUR degradation, `emrac notes:` for neutral status (aborted, nothing to do). That second pass introduced a real bug: baking the prefix into each error's own `Display` meant the AUR warning in `search.rs` (which reuses an error's `.to_string()` as its own message) doubled up into `"emrac warns: emrac says: ..."`.
+
+Fixed by moving the voicing decision out of `Display` entirely and into a new `Error::voice()` method (`emrac-core/src/error.rs`), so the same underlying message text can be reused in different contexts without dragging a prefix along. `main.rs` now matches on the concrete error and picks the verb via `err.voice()` — which also meant dropping `anyhow` from `emrac-cli` altogether, since every error the CLI ever produces was already `emrac_core::Error` under the hood and didn't need anyhow's type erasure. Also rewrote the actual message text to read naturally and suggest a next step wherever there's a sensible one (`"couldn't find 'golly' in the official repositories — want to try `emrac search golly --aur` to check the AUR?"`).
+
+## Slice i1 — 2026-07-17 — `8d4fdf9` — Clean, actionable not-found errors
 
 Bug found by hand-testing (`emrac install golly --dry-run`): pacman's raw stderr was leaking straight through as `pacman -S golly --print --print-format %n failed: error: target not found: golly` — exposing the underlying shelled-out command instead of saying anything useful.
 
-`PacmanBackend` now recognizes pacman's `error: target not found: <name>` lines during resolution and translates them into dedicated errors: `install` points at the AUR (`package 'golly' not found in official repositories — try 'emrac search golly --aur' to check the AUR`), `remove` says the package just isn't installed. Genuinely unexpected pacman failures still fall back to the raw command/stderr, since that's still useful when it isn't a plain not-found case. Handles multiple missing packages in one command too (`packages not found in official repositories: golly, nonexistent-xyz`).
+`PacmanBackend` now recognizes pacman's `error: target not found: <name>` lines during resolution and translates them into dedicated errors: `install` points at the AUR, `remove` says the package just isn't installed. Genuinely unexpected pacman failures still fall back to the raw command/stderr, since that's still useful when it isn't a plain not-found case. Handles multiple missing packages in one command too.
 
 ## Slice i1 — 2026-07-17 — `1cde3ae` — install/remove for official repos, with transaction preview
 

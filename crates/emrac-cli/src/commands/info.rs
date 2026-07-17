@@ -1,5 +1,4 @@
-use anyhow::Result;
-use emrac_core::Sources;
+use emrac_core::{Result, Sources};
 
 use crate::output;
 

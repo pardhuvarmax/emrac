@@ -1,5 +1,4 @@
-use anyhow::Result;
-use emrac_core::Sources;
+use emrac_core::{Result, Sources};
 
 use crate::output;
 use crate::prompt::confirm;
@@ -22,7 +21,7 @@ pub fn run(
     }
 
     if !yes && !confirm("Proceed with removal?") {
-        println!("emrac notes: aborted.");
+        println!("emrac notes: okay, nothing removed.");
         return Ok(());
     }
 

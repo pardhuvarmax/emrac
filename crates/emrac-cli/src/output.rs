@@ -7,7 +7,7 @@ pub fn print_search_results(results: &[PackageSummary], json: bool) {
     }
 
     if results.is_empty() {
-        println!("emrac found: no matches for that search.");
+        println!("emrac found: nothing matching that search. Try a shorter or different term.");
         return;
     }
 
@@ -62,7 +62,11 @@ pub fn print_plan(plan: &Plan, json: bool) {
     }
 
     if plan.is_empty() {
-        println!("emrac notes: nothing to do.");
+        let note = match plan.action {
+            PlanAction::Install => "nothing to install — you're already up to date.",
+            PlanAction::Remove => "nothing to remove.",
+        };
+        println!("emrac notes: {note}");
         return;
     }
 
