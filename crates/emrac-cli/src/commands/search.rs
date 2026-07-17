@@ -33,6 +33,6 @@ pub fn run(
         }
     }
 
-    output::print_search_results(&results.packages, json);
+    output::print_search_results(query, &results.packages, json);
     Ok(())
 }

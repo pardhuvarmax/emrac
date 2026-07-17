@@ -1,15 +1,20 @@
 use emrac_core::{PackageDetails, PackageSummary, Plan, PlanAction};
 
-pub fn print_search_results(results: &[PackageSummary], json: bool) {
+pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
     if json {
         println!("{}", serde_json::to_string_pretty(results).unwrap());
         return;
     }
 
     if results.is_empty() {
-        println!("emrac found: nothing matching that search. Try a shorter or different term.");
+        println!("emrac found: nothing matching '{query}'. Try a shorter or different term.");
         return;
     }
+
+    println!(
+        "emrac found: {} matching '{query}'\n",
+        plural(results.len(), "package")
+    );
 
     for pkg in results {
         println!("{}/{} {}", pkg.repo, pkg.name, pkg.version);
@@ -24,6 +29,8 @@ pub fn print_package_details(pkg: &PackageDetails, json: bool) {
         println!("{}", serde_json::to_string_pretty(pkg).unwrap());
         return;
     }
+
+    println!("emrac found: {} in {}\n", pkg.name, pkg.repo);
 
     println!("Name            : {}", pkg.name);
     println!("Version         : {}", pkg.version);
@@ -71,12 +78,14 @@ pub fn print_plan(plan: &Plan, json: bool) {
     }
 
     let verb = match plan.action {
-        PlanAction::Install => "Install",
-        PlanAction::Remove => "Remove",
+        PlanAction::Install => "install",
+        PlanAction::Remove => "remove",
     };
 
-    println!("{verb} Plan\n");
-    println!("Packages ({}):", plan.packages.len());
+    println!(
+        "emrac plans: {verb} {}\n",
+        plural(plan.packages.len(), "package")
+    );
     for pkg in &plan.packages {
         let suffix = if pkg.explicit { "" } else { " (dependency)" };
         println!("  {}/{} {}{suffix}", pkg.repo, pkg.name, pkg.version);
@@ -96,6 +105,14 @@ pub fn print_plan(plan: &Plan, json: bool) {
         )
     };
     println!("{label} : {}", human_size(size));
+}
+
+fn plural(n: usize, singular: &str) -> String {
+    if n == 1 {
+        format!("{n} {singular}")
+    } else {
+        format!("{n} {singular}s")
+    }
 }
 
 fn join_or_dash(items: &[String]) -> String {
