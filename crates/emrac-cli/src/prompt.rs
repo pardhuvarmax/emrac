@@ -4,7 +4,7 @@ use std::io::{self, Write};
 /// pacman's own `[Y/n]` convention). Returns `false` on any read failure
 /// (e.g. no attached terminal) rather than assuming consent.
 pub fn confirm(message: &str) -> bool {
-    print!("{message} [Y/n] ");
+    print!("emrac asks: {message} [Y/n] ");
     if io::stdout().flush().is_err() {
         return false;
     }
