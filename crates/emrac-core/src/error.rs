@@ -68,6 +68,31 @@ pub enum Error {
 
     #[error("'{0}' isn't installed, so there's nothing to upgrade — did you mean `emrac install {0}`?")]
     PackageNotInstalledForUpgrade(String),
+
+    #[error(
+        "couldn't determine your home directory (`$HOME` isn't set) — needed to locate ~/.config/emrac"
+    )]
+    NoConfigDir,
+
+    #[error("your config at {path} doesn't parse: {source}")]
+    ConfigParse {
+        path: String,
+        #[source]
+        source: Box<toml::de::Error>,
+    },
+
+    #[error("couldn't write your config to {path}: {source}")]
+    ConfigWrite {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("'{0}' isn't a config key emrac knows about — see `emrac config show` for the full list")]
+    UnknownConfigKey(String),
+
+    #[error("'{value}' isn't a valid value for '{key}'")]
+    InvalidConfigValue { key: String, value: String },
 }
 
 impl Error {
@@ -84,7 +109,9 @@ impl Error {
             | Error::PackagesNotFoundInOfficial(_)
             | Error::PackageNotInstalled(_)
             | Error::PackagesNotInstalled(_)
-            | Error::PackageNotInstalledForUpgrade(_) => "found",
+            | Error::PackageNotInstalledForUpgrade(_)
+            | Error::UnknownConfigKey(_)
+            | Error::InvalidConfigValue { .. } => "found",
             Error::PacmanConfSpawn(_)
             | Error::PacmanConfStatus(_)
             | Error::AlpmInit(_)
@@ -93,7 +120,10 @@ impl Error {
             | Error::CommandSpawn(_, _)
             | Error::CommandFailed { .. }
             | Error::Io { .. }
-            | Error::NoHomeDir => "says",
+            | Error::NoHomeDir
+            | Error::NoConfigDir
+            | Error::ConfigParse { .. }
+            | Error::ConfigWrite { .. } => "says",
         }
     }
 }

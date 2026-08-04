@@ -4,7 +4,7 @@ mod output;
 mod prompt;
 
 use clap::Parser;
-use emrac_core::{Result, Sources};
+use emrac_core::{Config, Result, Sources};
 
 use cli::{Cli, Commands};
 
@@ -18,6 +18,21 @@ fn main() {
 }
 
 fn run(cli: &Cli) -> Result<()> {
+    // `config` doesn't need a working pacman/alpm setup — handle it before
+    // paying for `Sources::init()`.
+    if let Commands::Config { command } = &cli.command {
+        return commands::config::run(command);
+    }
+
+    let config = Config::load()?;
+    // Config only ever raises the effective default (a flag on the CLI has
+    // no way to turn one of these back off) — see docs/plan/u1-config.md.
+    let offline = cli.offline || config.flags.offline;
+    let yes = cli.yes || config.flags.yes;
+    let dry_run = cli.dry_run || config.flags.dry_run;
+    let json = cli.json || config.flags.json;
+    let quiet = cli.quiet || config.flags.quiet;
+
     let sources = Sources::init()?;
 
     match &cli.command {
@@ -27,36 +42,42 @@ fn run(cli: &Cli) -> Result<()> {
             official,
             aur,
         } => commands::search::run(
-            &sources, query, *limit, *official, *aur, cli.offline, cli.json, cli.quiet,
+            &sources,
+            query,
+            limit.or(config.search.limit),
+            *official || config.search.official,
+            *aur || config.search.aur,
+            offline,
+            json,
+            quiet,
         ),
-        Commands::Info { pkg } => commands::info::run(&sources, pkg, cli.offline, cli.json),
+        Commands::Info { pkg } => commands::info::run(&sources, pkg, offline, json),
         Commands::Install { pkgs, review } => commands::install::run(
             &sources,
             pkgs,
-            cli.dry_run,
-            cli.yes,
-            cli.offline,
-            review.skip_pkgbuild,
-            review.skip_diff,
-            cli.json,
+            dry_run,
+            yes,
+            offline,
+            review.skip_pkgbuild || config.review.skip_pkgbuild,
+            review.skip_diff || config.review.skip_diff,
+            json,
         ),
         Commands::Remove {
             pkgs,
             cascade,
             recursive,
-        } => commands::remove::run(
-            &sources, pkgs, *cascade, *recursive, cli.dry_run, cli.yes, cli.json,
-        ),
+        } => commands::remove::run(&sources, pkgs, *cascade, *recursive, dry_run, yes, json),
         Commands::Upgrade { pkgs, review } => commands::upgrade::run(
             &sources,
             pkgs,
-            cli.dry_run,
-            cli.yes,
-            cli.offline,
-            review.skip_pkgbuild,
-            review.skip_diff,
-            cli.json,
-            cli.quiet,
+            dry_run,
+            yes,
+            offline,
+            review.skip_pkgbuild || config.review.skip_pkgbuild,
+            review.skip_diff || config.review.skip_diff,
+            json,
+            quiet,
         ),
+        Commands::Config { .. } => unreachable!("handled above"),
     }
 }

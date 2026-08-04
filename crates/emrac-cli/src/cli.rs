@@ -104,4 +104,31 @@ pub enum Commands {
         #[command(flatten)]
         review: AurReviewFlags,
     },
+
+    /// View or change persisted defaults (~/.config/emrac/config.toml)
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ConfigCommand {
+    /// Print the resolved config
+    Show,
+
+    /// Print a single key's value
+    Get { key: String },
+
+    /// Set a key to a value
+    Set { key: String, value: String },
+
+    /// Reset a key to its default
+    Unset { key: String },
+
+    /// Open the config file in $EDITOR
+    Edit,
+
+    /// Check that the config file parses
+    Validate,
 }
