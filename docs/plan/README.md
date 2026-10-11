@@ -16,3 +16,5 @@ Current:
   bash|zsh|fish`, static shell completion generated from the clap definition.
 - [`u3-history.md`](./u3-history.md) — persisted transaction log and
   `emrac history`/`transactions`; the groundwork for rollback.
+- [`u4-rollback.md`](./u4-rollback.md) — `emrac rollback [tx]` / `emrac undo`:
+  inverse of a recorded transaction, guarded by a post-state check.
