@@ -126,6 +126,22 @@ pub enum Commands {
         command: ConfigCommand,
     },
 
+    /// Save, list, show or delete named restore points of the installed
+    /// package set (no subcommand: save a new one)
+    Snapshot {
+        #[command(subcommand)]
+        command: Option<SnapshotCommand>,
+    },
+
+    /// Make the installed packages match a snapshot
+    Restore {
+        name: String,
+
+        /// Also remove installed packages that are not in the snapshot
+        #[arg(long)]
+        prune: bool,
+    },
+
     /// Check that installed packages' files still match pacman's record
     #[command(visible_alias = "check")]
     Verify {
@@ -187,6 +203,28 @@ pub enum CompletionShell {
     Bash,
     Zsh,
     Fish,
+}
+
+#[derive(Subcommand)]
+pub enum SnapshotCommand {
+    /// Save the installed packages as a restore point
+    Create {
+        /// Name (default: snap-N)
+        name: Option<String>,
+
+        /// A note to remember it by
+        #[arg(long)]
+        note: Option<String>,
+    },
+
+    /// List snapshots, newest first
+    List,
+
+    /// Show the packages in a snapshot
+    Show { name: String },
+
+    /// Delete a snapshot
+    Delete { name: String },
 }
 
 #[derive(Subcommand)]

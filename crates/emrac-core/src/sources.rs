@@ -13,6 +13,9 @@ use crate::plan::{Plan, PlanAction, PlannedPackage};
 use crate::purge::PurgePlan;
 use crate::reinstall::{self, ReinstallItem, ReinstallPlan, ReinstallSource};
 use crate::rollback::{self, Download, RemoteFile, RollbackPlan};
+use crate::snapshot::{
+    self, RestoreEntry, RestorePlan, RestoreSource, Snapshot, SnapshotPackage, SnapshotStore,
+};
 use crate::verify::VerifyReport;
 
 /// Which package sources a search should cover. Defaults to both.
@@ -796,6 +799,178 @@ impl Sources {
                 self.pacman.execute_install_files(&files)
             }
         }
+    }
+
+    /// Saves the installed package set as a named restore point.
+    pub fn create_snapshot(&self, name: Option<&str>, note: Option<&str>) -> Result<Snapshot> {
+        SnapshotStore::create(name, note, self.alpm.installed_snapshot())
+    }
+
+    /// Plans `emrac restore`: what it takes to make the installed set match
+    /// `snapshot`. No root, nothing is changed or downloaded; package files
+    /// are found the way a rollback finds them (and the Archive only listed,
+    /// unless `offline`). Every file that can't be found is reported at once.
+    pub fn plan_restore(&self, name: &str, prune: bool, offline: bool) -> Result<RestorePlan> {
+        let snapshot = SnapshotStore::load(name)?;
+        let installed: Vec<(String, String)> = self
+            .alpm
+            .installed_snapshot()
+            .into_iter()
+            .map(|p: SnapshotPackage| (p.name, p.version))
+            .collect();
+        let diff = snapshot::diff(&snapshot, &installed, &version_is_newer);
+        let cache_dirs = self.pacman.cache_dirs()?;
+
+        let mut entries = Vec::new();
+        let mut files = Vec::new();
+        let mut downloads = Vec::new();
+        let mut repository = Vec::new();
+        let mut missing = Vec::new();
+
+        for item in diff.items {
+            if let Some(path) = self.locate_file(&cache_dirs, &item.name, &item.to) {
+                files.push(path);
+                entries.push(RestoreEntry {
+                    item,
+                    source: RestoreSource::File,
+                });
+                continue;
+            }
+            if item.foreign {
+                missing.push(format!("{} {}", item.name, item.to));
+                continue;
+            }
+            // A missing package that the repositories still carry at the
+            // snapshot's version needs no file.
+            let sync = self
+                .alpm
+                .sync_resolved(std::slice::from_ref(&item.name))
+                .into_iter()
+                .next();
+            if item.action == PlanAction::Install
+                && sync.as_ref().is_some_and(|s| s.version == item.to)
+            {
+                repository.push(item.name.clone());
+                entries.push(RestoreEntry {
+                    item,
+                    source: RestoreSource::Repository,
+                });
+                continue;
+            }
+            match self.locate_remote(offline, &item.name, &item.to)? {
+                Some(remote) => {
+                    downloads.push(Download {
+                        name: item.name.clone(),
+                        version: item.to.clone(),
+                        url: remote.url,
+                        dest: remote.dest.clone(),
+                    });
+                    files.push(remote.dest);
+                    entries.push(RestoreEntry {
+                        item,
+                        source: RestoreSource::Archive,
+                    });
+                }
+                None => missing.push(format!("{} {}", item.name, item.to)),
+            }
+        }
+
+        if !missing.is_empty() {
+            return Err(Error::RestoreFilesMissing(missing.join(", ")));
+        }
+
+        Ok(RestorePlan {
+            snapshot: snapshot.name,
+            entries,
+            extras: diff.extras,
+            prune,
+            files,
+            downloads,
+            repository,
+        })
+    }
+
+    /// Carries out a restore, one pacman call at a time (`-U` for files,
+    /// `-S` for repository installs, then `-R` for `--prune`), stopping at
+    /// the first failure. `on_step` is told about every call that ran, as a
+    /// plan per action, so each can be recorded in the history.
+    pub fn execute_restore(
+        &self,
+        restore: &RestorePlan,
+        on_step: &mut dyn FnMut(&Plan, &Result<()>),
+    ) -> Result<()> {
+        self.fetch_downloads(&restore.downloads)?;
+
+        let plans = |source_is_repo: bool| -> Vec<Plan> {
+            [
+                PlanAction::Install,
+                PlanAction::Upgrade,
+                PlanAction::Downgrade,
+            ]
+            .into_iter()
+            .filter_map(|action| {
+                let packages: Vec<PlannedPackage> = restore
+                    .entries
+                    .iter()
+                    .filter(|e| {
+                        e.item.action == action
+                            && (e.source == RestoreSource::Repository) == source_is_repo
+                    })
+                    .map(|e| PlannedPackage {
+                        name: e.item.name.clone(),
+                        version: e.item.to.clone(),
+                        repo: if e.item.foreign { "aur" } else { "restore" }.to_string(),
+                        explicit: true,
+                        previous_version: e.item.from.clone(),
+                    })
+                    .collect();
+                (!packages.is_empty()).then_some(Plan {
+                    action,
+                    packages,
+                    total_download_size: 0,
+                    total_installed_size_delta: 0,
+                })
+            })
+            .collect()
+        };
+
+        if !restore.files.is_empty() {
+            let result = self.pacman.execute_install_files(&restore.files);
+            for plan in plans(false) {
+                on_step(&plan, &result);
+            }
+            result?;
+        }
+        if !restore.repository.is_empty() {
+            let result = self.pacman.execute_install(&restore.repository);
+            for plan in plans(true) {
+                on_step(&plan, &result);
+            }
+            result?;
+        }
+        if restore.prune && !restore.extras.is_empty() {
+            let names: Vec<String> = restore.extras.iter().map(|(n, _)| n.clone()).collect();
+            let result = self.pacman.execute_remove(&names, false, false, false);
+            let plan = Plan {
+                action: PlanAction::Remove,
+                packages: restore
+                    .extras
+                    .iter()
+                    .map(|(name, version)| PlannedPackage {
+                        name: name.clone(),
+                        version: version.clone(),
+                        repo: "local".to_string(),
+                        explicit: true,
+                        previous_version: None,
+                    })
+                    .collect(),
+                total_download_size: 0,
+                total_installed_size_delta: 0,
+            };
+            on_step(&plan, &result);
+            result?;
+        }
+        Ok(())
     }
 
     /// Actually removes `pkgs` via `sudo pacman -R`. Prompts for a

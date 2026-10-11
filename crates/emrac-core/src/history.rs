@@ -155,7 +155,7 @@ fn read_from(path: &Path) -> Result<Vec<TransactionRecord>> {
         .collect())
 }
 
-fn now() -> u64 {
+pub(crate) fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -187,7 +187,7 @@ pub fn parse_date(input: &str) -> Result<u64> {
     u64::try_from(days * 86_400).map_err(|_| invalid())
 }
 
-fn format_utc(timestamp: u64) -> String {
+pub(crate) fn format_utc(timestamp: u64) -> String {
     let days = (timestamp / 86_400) as i64;
     let secs = timestamp % 86_400;
     let (y, m, d) = civil_from_days(days);

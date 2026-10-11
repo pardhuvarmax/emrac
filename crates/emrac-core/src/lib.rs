@@ -8,6 +8,7 @@ mod plan;
 mod purge;
 mod reinstall;
 mod rollback;
+mod snapshot;
 mod sources;
 mod verify;
 
@@ -21,5 +22,9 @@ pub use plan::{Plan, PlanAction, PlannedPackage};
 pub use purge::{ConfigFile, ConfigState, PurgePlan};
 pub use reinstall::{ReinstallItem, ReinstallPlan, ReinstallSource};
 pub use rollback::{rolled_back_by, Download, RollbackPlan, SkippedPackage};
-pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};
+pub use snapshot::{
+    RestoreDiff, RestoreEntry, RestoreItem, RestorePlan, RestoreSource, Snapshot, SnapshotPackage,
+    SnapshotStore,
+};
 pub use sources::{SearchResults, SearchScope, Sources, UpgradePlan};
+pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};

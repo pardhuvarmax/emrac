@@ -11,7 +11,7 @@ snapshots and no configuration-file contents.
 
 ## Design
 
-- `emrac snapshot [create] [NAME] [--note TEXT]`: saves every installed
+- `emrac snapshot` (default name) or `emrac snapshot create [NAME] [--note TEXT]`: saves every installed
   package (name, version, explicit/dependency, official/foreign) to
   `<data dir>/emrac/snapshots/<name>.json`. Default name `snap-N` (next free
   number). Names are `[A-Za-z0-9._-]+`; an existing name is refused.

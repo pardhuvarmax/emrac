@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 
@@ -6,6 +7,7 @@ use alpm::{Alpm, SigLevel};
 use crate::error::{Error, Result};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::purge::{classify, ConfigFile, Observed};
+use crate::snapshot::SnapshotPackage;
 use crate::verify::{self, PackageReport};
 
 /// Read-only access to the official repositories via libalpm, scoped to the
@@ -185,6 +187,22 @@ impl AlpmBackend {
             .pkg(name)
             .ok()
             .map(|pkg| pkg.version().to_string())
+    }
+
+    /// Every installed package, as a snapshot records it.
+    pub fn installed_snapshot(&self) -> Vec<SnapshotPackage> {
+        let foreign: HashSet<String> = self.foreign_package_names().into_iter().collect();
+        self.handle
+            .localdb()
+            .pkgs()
+            .into_iter()
+            .map(|pkg| SnapshotPackage {
+                name: pkg.name().to_string(),
+                version: pkg.version().to_string(),
+                explicit: pkg.reason() == alpm::PackageReason::Explicit,
+                foreign: foreign.contains(pkg.name()),
+            })
+            .collect()
     }
 
     /// Names of installed packages that aren't in any sync database — the

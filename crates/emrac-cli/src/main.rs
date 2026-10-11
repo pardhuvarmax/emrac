@@ -6,7 +6,7 @@ mod prompt;
 use clap::Parser;
 use emrac_core::{Config, Result, Sources};
 
-use cli::{Cli, Commands};
+use cli::{Cli, Commands, SnapshotCommand};
 use commands::rollback::Which;
 
 fn main() {
@@ -26,6 +26,19 @@ fn run(cli: &Cli) -> Result<()> {
 
     if let Commands::History { limit, since } = &cli.command {
         return commands::history::run(*limit, since.as_deref(), cli.json);
+    }
+
+    // Listing, showing and deleting snapshots only touch emrac's own files.
+    if let Commands::Snapshot {
+        command:
+            Some(
+                command @ (SnapshotCommand::List
+                | SnapshotCommand::Show { .. }
+                | SnapshotCommand::Delete { .. }),
+            ),
+    } = &cli.command
+    {
+        return commands::snapshot::run_stored(command, cli.json);
     }
 
     // `config` doesn't need a working pacman/alpm setup — handle it before
@@ -93,6 +106,12 @@ fn run(cli: &Cli) -> Result<()> {
             json,
             quiet,
         ),
+        Commands::Snapshot { command } => {
+            commands::snapshot::create(&sources, command.as_ref(), json)
+        }
+        Commands::Restore { name, prune } => {
+            commands::restore::run(&sources, name, *prune, dry_run, yes, offline, json)
+        }
         Commands::Verify { pkgs } => commands::verify::run(&sources, pkgs, json),
         Commands::Reinstall { pkgs } => {
             commands::reinstall::run(&sources, pkgs, dry_run, yes, offline, json)

@@ -155,6 +155,28 @@ pub enum Error {
     )]
     VerificationFailed { count: usize, names: String },
 
+    #[error("'{0}' isn't a valid snapshot name — use letters, digits, `.`, `_` and `-` (up to 64, not starting with a dot)")]
+    InvalidSnapshotName(String),
+
+    #[error("a snapshot named '{0}' already exists")]
+    SnapshotExists(String),
+
+    #[error("there's no snapshot named '{0}' — `emrac snapshot list` shows what exists")]
+    UnknownSnapshot(String),
+
+    #[error("the snapshot '{name}' can't be read: {why}")]
+    SnapshotCorrupt { name: String, why: String },
+
+    #[error("couldn't write the snapshot at {path}: {source}")]
+    SnapshotWrite {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("can't restore: no package file for {0} — not cached, and not in the Arch Linux Archive (or --offline)")]
+    RestoreFilesMissing(String),
+
     #[error("there's no rollback in your history to redo")]
     NoTransactionToRedo,
 
@@ -204,6 +226,11 @@ impl Error {
             | Error::NotOlder { .. }
             | Error::NoOlderVersion(_)
             | Error::VersionUnavailable { .. }
+            | Error::InvalidSnapshotName(_)
+            | Error::SnapshotExists(_)
+            | Error::UnknownSnapshot(_)
+            | Error::SnapshotCorrupt { .. }
+            | Error::RestoreFilesMissing(_)
             | Error::NoTransactionToRedo
             | Error::NotRollbackable { .. }
             | Error::RollbackFilesMissing(_) => "found",
@@ -221,6 +248,7 @@ impl Error {
             | Error::ConfigParse { .. }
             | Error::ConfigWrite { .. }
             | Error::NoDataDir
+            | Error::SnapshotWrite { .. }
             | Error::HistoryWrite { .. } => "says",
         }
     }

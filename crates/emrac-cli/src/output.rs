@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use emrac_core::{
     ConfigState, DowngradePlan, Download, IssueKind, PackageDetails, PackageSummary, Plan,
-    PlanAction, PurgePlan, ReinstallPlan, ReinstallSource, RollbackPlan, TransactionRecord,
-    TxStatus, VerifyReport, VersionList,
+    PlanAction, PurgePlan, ReinstallPlan, ReinstallSource, RestorePlan, RestoreSource,
+    RollbackPlan, Snapshot, TransactionRecord, TxStatus, VerifyReport, VersionList,
 };
 
 pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
@@ -443,4 +443,127 @@ fn human_size(bytes: u64) -> String {
         unit += 1;
     }
     format!("{size:.2} {}", UNITS[unit])
+}
+
+pub fn print_snapshot_created(snapshot: &Snapshot, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(snapshot).unwrap());
+        return;
+    }
+    println!(
+        "emrac notes: saved snapshot '{}' ({}).",
+        snapshot.name,
+        plural(snapshot.packages.len(), "package")
+    );
+}
+
+pub fn print_snapshots(snapshots: &[Snapshot], json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(snapshots).unwrap());
+        return;
+    }
+    if snapshots.is_empty() {
+        println!("emrac notes: no snapshots yet — `emrac snapshot` saves one.");
+        return;
+    }
+    println!(
+        "emrac found: {} (times are UTC)\n",
+        plural(snapshots.len(), "snapshot")
+    );
+    for s in snapshots {
+        let note = s
+            .note
+            .as_deref()
+            .map(|n| format!("  {n}"))
+            .unwrap_or_default();
+        println!(
+            "  {}  {}  {}{note}",
+            s.name,
+            s.timestamp_utc(),
+            plural(s.packages.len(), "package")
+        );
+    }
+}
+
+pub fn print_snapshot(snapshot: &Snapshot, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(snapshot).unwrap());
+        return;
+    }
+    println!(
+        "emrac found: snapshot '{}' from {} (UTC), {}",
+        snapshot.name,
+        snapshot.timestamp_utc(),
+        plural(snapshot.packages.len(), "package")
+    );
+    if let Some(note) = &snapshot.note {
+        println!("  note: {note}");
+    }
+    println!();
+    for p in &snapshot.packages {
+        let tags = match (p.explicit, p.foreign) {
+            (true, true) => "  [explicit, foreign]",
+            (true, false) => "  [explicit]",
+            (false, true) => "  [dependency, foreign]",
+            (false, false) => "",
+        };
+        println!("  {} {}{tags}", p.name, p.version);
+    }
+}
+
+pub fn print_restore(restore: &RestorePlan, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(restore).unwrap());
+        return;
+    }
+
+    if restore.entries.is_empty() && restore.extras.is_empty() {
+        println!(
+            "emrac notes: the installed packages already match '{}'.",
+            restore.snapshot
+        );
+        return;
+    }
+
+    if !restore.entries.is_empty() {
+        println!(
+            "emrac plans: restore {} to match '{}'\n",
+            plural(restore.entries.len(), "package"),
+            restore.snapshot
+        );
+        for entry in &restore.entries {
+            let item = &entry.item;
+            let what = match item.action {
+                PlanAction::Install => "install  ",
+                PlanAction::Upgrade => "upgrade  ",
+                _ => "downgrade",
+            };
+            let from = match &item.from {
+                Some(from) => format!(" (from {from})"),
+                None => String::new(),
+            };
+            let source = match entry.source {
+                RestoreSource::File => "package file on this machine",
+                RestoreSource::Archive => "Arch Linux Archive",
+                RestoreSource::Repository => "repositories",
+            };
+            println!("  {what} {} {}{from}  [{source}]", item.name, item.to);
+        }
+        print_downloads(&restore.downloads);
+        println!(
+            "\nNote: restored packages are marked as explicitly installed; their original install reason isn't restored."
+        );
+    }
+
+    if !restore.extras.is_empty() {
+        let verb = if restore.prune {
+            "Will remove"
+        } else {
+            "Not in the snapshot, left alone (--prune removes them)"
+        };
+        println!("\n{verb}:");
+        for (name, version) in &restore.extras {
+            println!("  {name} {version}");
+        }
+    }
 }
