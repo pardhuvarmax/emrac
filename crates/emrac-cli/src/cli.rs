@@ -123,6 +123,15 @@ pub enum Commands {
         since: Option<String>,
     },
 
+    /// Reverse a recorded transaction (default: the most recent one)
+    Rollback {
+        /// Transaction id from `emrac history`, like tx-12
+        tx: Option<String>,
+    },
+
+    /// Reverse the most recent transaction that can still be rolled back
+    Undo,
+
     /// Print a shell completion script to stdout
     Completion { shell: CompletionShell },
 }

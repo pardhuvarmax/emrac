@@ -125,6 +125,15 @@ impl AlpmBackend {
             .collect()
     }
 
+    /// The currently installed version of `name`, if it is installed.
+    pub fn installed_version(&self, name: &str) -> Option<String> {
+        self.handle
+            .localdb()
+            .pkg(name)
+            .ok()
+            .map(|pkg| pkg.version().to_string())
+    }
+
     /// Names of installed packages that aren't in any sync database — the
     /// standard definition of a "foreign" package (matches `pacman -Qm`),
     /// almost always AUR-built. Used to find AUR packages that might need

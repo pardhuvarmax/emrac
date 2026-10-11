@@ -28,6 +28,10 @@ pub struct TransactionRecord {
     pub status: TxStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Set on a record written by `rollback`/`undo`: the id of the
+    /// transaction it reversed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rollback_of: Option<String>,
 }
 
 impl TransactionRecord {
@@ -49,8 +53,17 @@ impl History {
     /// Records the outcome of an executed plan. `outcome` is the
     /// transaction's own result; it is only inspected, never consumed, so
     /// callers can return it unchanged afterwards.
-    pub fn record(plan: &Plan, outcome: &Result<()>) -> Result<TransactionRecord> {
-        Self::record_to(&Self::path()?, plan, outcome, now())
+    pub fn record(
+        plan: &Plan,
+        outcome: &Result<()>,
+        rollback_of: Option<&str>,
+    ) -> Result<TransactionRecord> {
+        Self::record_to(&Self::path()?, plan, outcome, rollback_of, now())
+    }
+
+    /// Every record, oldest first.
+    pub fn all() -> Result<Vec<TransactionRecord>> {
+        read_from(&Self::path()?)
     }
 
     /// Newest first. `since` is a unix timestamp lower bound (inclusive).
@@ -62,6 +75,7 @@ impl History {
         path: &Path,
         plan: &Plan,
         outcome: &Result<()>,
+        rollback_of: Option<&str>,
         timestamp: u64,
     ) -> Result<TransactionRecord> {
         let write_err = |source| Error::HistoryWrite {
@@ -86,6 +100,7 @@ impl History {
                 TxStatus::Failed
             },
             error: outcome.as_ref().err().map(|e| e.to_string()),
+            rollback_of: rollback_of.map(str::to_string),
         };
 
         if let Some(parent) = path.parent() {
@@ -241,11 +256,21 @@ mod tests {
                     version: "1.0-1".into(),
                     repo: "extra".into(),
                     explicit: true,
+                    previous_version: None,
                 })
                 .collect(),
             total_download_size: 0,
             total_installed_size_delta: 0,
         }
+    }
+
+    fn record(
+        path: &Path,
+        plan: &Plan,
+        outcome: &Result<()>,
+        timestamp: u64,
+    ) -> Result<TransactionRecord> {
+        History::record_to(path, plan, outcome, None, timestamp)
     }
 
     fn failure() -> Result<()> {
@@ -264,7 +289,7 @@ mod tests {
     #[test]
     fn record_creates_dirs_and_roundtrips() {
         let s = Scratch::new("roundtrip");
-        let rec = History::record_to(
+        let rec = record(
             &s.file(),
             &plan(PlanAction::Install, &["a", "b"]),
             &Ok(()),
@@ -287,8 +312,7 @@ mod tests {
     #[test]
     fn failed_outcome_is_recorded_with_error_text() {
         let s = Scratch::new("failed");
-        let rec = History::record_to(&s.file(), &plan(PlanAction::Upgrade, &["a"]), &failure(), 5)
-            .unwrap();
+        let rec = record(&s.file(), &plan(PlanAction::Upgrade, &["a"]), &failure(), 5).unwrap();
         assert_eq!(rec.status, TxStatus::Failed);
         assert!(rec.error.unwrap().contains("boom"));
     }
@@ -297,7 +321,7 @@ mod tests {
     fn ids_increment_and_list_is_newest_first_with_limit() {
         let s = Scratch::new("order");
         for (i, name) in ["a", "b", "c"].iter().enumerate() {
-            History::record_to(
+            record(
                 &s.file(),
                 &plan(PlanAction::Install, &[name]),
                 &Ok(()),
@@ -318,7 +342,7 @@ mod tests {
     fn since_is_an_inclusive_lower_bound_applied_before_limit() {
         let s = Scratch::new("since");
         for t in [10, 20, 30] {
-            History::record_to(&s.file(), &plan(PlanAction::Remove, &["a"]), &Ok(()), t).unwrap();
+            record(&s.file(), &plan(PlanAction::Remove, &["a"]), &Ok(()), t).unwrap();
         }
         let got = History::list_from(&s.file(), None, Some(20)).unwrap();
         assert_eq!(
@@ -332,15 +356,14 @@ mod tests {
     #[test]
     fn corrupt_lines_are_skipped_and_ids_continue_past_them() {
         let s = Scratch::new("corrupt");
-        History::record_to(&s.file(), &plan(PlanAction::Install, &["a"]), &Ok(()), 1).unwrap();
+        record(&s.file(), &plan(PlanAction::Install, &["a"]), &Ok(()), 1).unwrap();
         let mut f = OpenOptions::new().append(true).open(s.file()).unwrap();
         f.write_all(b"not json\n{\"id\":\"tx-9\"}\n\n").unwrap();
         drop(f);
 
         let listed = History::list_from(&s.file(), None, None).unwrap();
         assert_eq!(listed.len(), 1);
-        let rec =
-            History::record_to(&s.file(), &plan(PlanAction::Install, &["b"]), &Ok(()), 2).unwrap();
+        let rec = record(&s.file(), &plan(PlanAction::Install, &["b"]), &Ok(()), 2).unwrap();
         assert_eq!(rec.id, "tx-2");
     }
 
@@ -361,7 +384,7 @@ mod tests {
         let locked = s.0.join("locked");
         fs::create_dir(&locked).unwrap();
         fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).unwrap();
-        let result = History::record_to(
+        let result = record(
             &locked.join("sub/history.jsonl"),
             &plan(PlanAction::Install, &["a"]),
             &Ok(()),
@@ -411,5 +434,22 @@ mod tests {
                 "{bad:?} should be rejected"
             );
         }
+    }
+
+    #[test]
+    fn rollback_of_is_persisted_and_old_lines_still_parse() {
+        let s = Scratch::new("rollback_of");
+        let p = plan(PlanAction::Remove, &["a"]);
+        History::record_to(&s.file(), &p, &Ok(()), Some("tx-1"), 7).unwrap();
+        let got = History::list_from(&s.file(), None, None).unwrap();
+        assert_eq!(got[0].rollback_of.as_deref(), Some("tx-1"));
+
+        // A line in the u3 format: no `rollback_of`, no `previous_version`.
+        let old = r#"{"id":"tx-5","timestamp":1,"action":"upgrade","packages":[{"name":"a","version":"2","repo":"extra","explicit":true}],"status":"committed"}"#;
+        fs::write(s.file(), format!("{old}\n")).unwrap();
+        let got = History::list_from(&s.file(), None, None).unwrap();
+        assert_eq!(got.len(), 1);
+        assert!(got[0].rollback_of.is_none());
+        assert!(got[0].packages[0].previous_version.is_none());
     }
 }

@@ -12,6 +12,16 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u4 — 2026-10-11 — rollback and undo
+
+New `emrac rollback [tx-N]` and `emrac undo` reverse a recorded transaction: an `install` is undone by removing what it installed (`pacman -R`), a `remove` by reinstalling the recorded version, an `upgrade` by downgrading to the previous version (both via `pacman -U` on files already on disk — pacman's `CacheDir` and `~/.cache/emrac/build/<pkg>`; nothing is downloaded). A bare `rollback` and `undo` pick the most recent transaction that is neither a rollback nor already rolled back. Honors `--dry-run`, `--yes` and `--json`.
+
+Safety rules: a package is only touched if it is still as the transaction left it (same version after an install/upgrade, absent after a remove); everything else is listed as left alone with the reason, which also makes rolling back a *failed* transaction reverse exactly the part that landed. If any needed package file is missing the whole rollback aborts before prompting and names every one. Rollbacks are themselves logged (`rollback_of`), `emrac history` shows `rollback of`/`rolled back by`, and rolling back a transaction twice, or a rollback itself (that would be `redo`, not built), is refused. Undoing an install does not cascade: if something now depends on the packages, pacman refuses and the failure is recorded. AUR versions are not compared for the post-state check since RPC metadata can differ from what a VCS package's build produced.
+
+Schema: `PlannedPackage.previous_version` (filled for upgrades) and `TransactionRecord.rollback_of` are new, both optional so u3 logs still parse. Upgrade records written by u3 lack the previous version and are refused with an explanation; old install/remove records work. New `PlanAction::Downgrade`. Design in `docs/plan/u4-rollback.md`.
+
+Verified with 16 new unit tests (inverse for each action, post-state skips, failed-partial, AUR version handling, missing files aggregated, old-format and repeat refusals, candidate ordering, id parsing, exact package-file matching) and inside the podman container with real pacman: upgrade of an Archive-fetched old `tree` then `undo` restored 1.8.0-2 (file found in the AUR build dir); a second `undo` and `rollback tx-1` were refused; `remove` then `rollback` reinstalled from the pacman cache; an `install` of `ripgrep` was undone; rolling back an upgrade whose package was since removed was skipped with a reason; after `pacman -Scc` a rollback aborted naming `tree 2.3.2-1`; `--dry-run` recorded nothing; `history` shows the markers. Not covered by a live test: a rollback of a `failed` transaction (unit-tested only) and `redo`.
+
 ## Slice u3 — 2026-10-11 — transaction history
 
 Executed `install`/`remove`/`upgrade` transactions are now recorded in an append-only JSON Lines log at `~/.local/share/emrac/history.jsonl`, and `emrac history` (alias `emrac transactions`, per `SPEC.md`) shows them newest-first with `--limit N`, `--since YYYY-MM-DD` and `--json`. Each record holds an id (`tx-N`), a UTC timestamp, the action, the planned packages, a `committed`/`failed` status and, on failure, the error text. This is groundwork for `rollback`/`undo`/resume, which are not built yet.

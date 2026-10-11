@@ -66,7 +66,9 @@ pub enum Error {
     )]
     NoHomeDir,
 
-    #[error("'{0}' isn't installed, so there's nothing to upgrade — did you mean `emrac install {0}`?")]
+    #[error(
+        "'{0}' isn't installed, so there's nothing to upgrade — did you mean `emrac install {0}`?"
+    )]
     PackageNotInstalledForUpgrade(String),
 
     #[error(
@@ -103,7 +105,26 @@ pub enum Error {
     #[error("'{0}' isn't a date I understand — use YYYY-MM-DD, like 2026-10-11")]
     InvalidDate(String),
 
-    #[error("'{0}' isn't a config key emrac knows about — see `emrac config show` for the full list")]
+    #[error("'{0}' isn't a transaction id — they look like tx-12 (see `emrac history`)")]
+    InvalidTransactionId(String),
+
+    #[error("there's no transaction {0} in your history")]
+    UnknownTransaction(String),
+
+    #[error("there's nothing in your history to roll back")]
+    NoTransactionToRollBack,
+
+    #[error("can't roll back {id}: {why}")]
+    NotRollbackable { id: String, why: String },
+
+    #[error(
+        "can't roll back — these package files aren't in the pacman cache or the AUR build cache: {0}"
+    )]
+    RollbackFilesMissing(String),
+
+    #[error(
+        "'{0}' isn't a config key emrac knows about — see `emrac config show` for the full list"
+    )]
     UnknownConfigKey(String),
 
     #[error("'{value}' isn't a valid value for '{key}'")]
@@ -127,7 +148,12 @@ impl Error {
             | Error::PackageNotInstalledForUpgrade(_)
             | Error::UnknownConfigKey(_)
             | Error::InvalidConfigValue { .. }
-            | Error::InvalidDate(_) => "found",
+            | Error::InvalidDate(_)
+            | Error::InvalidTransactionId(_)
+            | Error::UnknownTransaction(_)
+            | Error::NoTransactionToRollBack
+            | Error::NotRollbackable { .. }
+            | Error::RollbackFilesMissing(_) => "found",
             Error::PacmanConfSpawn(_)
             | Error::PacmanConfStatus(_)
             | Error::AlpmInit(_)

@@ -1,4 +1,8 @@
-use emrac_core::{PackageDetails, PackageSummary, Plan, PlanAction, TransactionRecord, TxStatus};
+use std::collections::HashMap;
+
+use emrac_core::{
+    PackageDetails, PackageSummary, Plan, PlanAction, RollbackPlan, TransactionRecord, TxStatus,
+};
 
 pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
     if json {
@@ -73,6 +77,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
             PlanAction::Install => "nothing to install — you're already up to date.",
             PlanAction::Remove => "nothing to remove.",
             PlanAction::Upgrade => "nothing to upgrade — you're already up to date.",
+            PlanAction::Downgrade => "nothing to downgrade.",
         };
         println!("emrac notes: {note}");
         return;
@@ -82,6 +87,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
         PlanAction::Install => "install",
         PlanAction::Remove => "remove",
         PlanAction::Upgrade => "upgrade",
+        PlanAction::Downgrade => "downgrade",
     };
 
     println!(
@@ -122,7 +128,53 @@ pub fn print_pkgbuild_diff(pkg: &str, diff: &str) {
     println!("{diff}");
 }
 
-pub fn print_history(records: &[TransactionRecord], json: bool) {
+pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(rollback).unwrap());
+        return;
+    }
+
+    let plan = &rollback.plan;
+    if plan.is_empty() {
+        println!(
+            "emrac notes: nothing left to roll back for {} — none of its packages are as it left them.",
+            rollback.target
+        );
+    } else {
+        let verb = match plan.action {
+            PlanAction::Remove => "remove",
+            PlanAction::Install => "reinstall",
+            PlanAction::Downgrade => "downgrade",
+            PlanAction::Upgrade => "upgrade",
+        };
+        println!(
+            "emrac plans: roll back {} — {verb} {}\n",
+            rollback.target,
+            plural(plan.packages.len(), "package")
+        );
+        for pkg in &plan.packages {
+            match (&plan.action, &pkg.previous_version) {
+                (PlanAction::Downgrade, Some(from)) => {
+                    println!("  {}/{} {} (from {from})", pkg.repo, pkg.name, pkg.version)
+                }
+                _ => println!("  {}/{} {}", pkg.repo, pkg.name, pkg.version),
+            }
+        }
+    }
+
+    if !rollback.skipped.is_empty() {
+        println!("\nLeft alone (no longer as {} left them):", rollback.target);
+        for skipped in &rollback.skipped {
+            println!("  {} — {}", skipped.name, skipped.reason);
+        }
+    }
+}
+
+pub fn print_history(
+    records: &[TransactionRecord],
+    rolled_back: &HashMap<String, String>,
+    json: bool,
+) {
     if json {
         println!("{}", serde_json::to_string_pretty(records).unwrap());
         return;
@@ -143,19 +195,26 @@ pub fn print_history(records: &[TransactionRecord], json: bool) {
             PlanAction::Install => "install",
             PlanAction::Remove => "remove",
             PlanAction::Upgrade => "upgrade",
+            PlanAction::Downgrade => "downgrade",
         };
         let status = match record.status {
             TxStatus::Committed => "committed",
             TxStatus::Failed => "FAILED",
         };
         println!(
-            "{:<7} {}  {:<8} {:<9} {}",
+            "{:<7} {}  {:<9} {:<9} {}",
             record.id,
             record.timestamp_utc(),
             action,
             status,
             summarize_packages(record)
         );
+        if let Some(original) = &record.rollback_of {
+            println!("        rollback of {original}");
+        }
+        if let Some(by) = rolled_back.get(&record.id) {
+            println!("        rolled back by {by}");
+        }
         if let Some(error) = &record.error {
             println!("        error: {error}");
         }

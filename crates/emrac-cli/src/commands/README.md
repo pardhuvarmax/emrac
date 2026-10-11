@@ -9,3 +9,5 @@ Currently: [`search.rs`](./search.rs), [`info.rs`](./info.rs), [`install.rs`](./
 [`completion.rs`](./completion.rs) prints a `clap_complete`-generated bash/zsh/fish script for `emrac completion <shell>`; like `config`, it's dispatched before `Sources::init()`.
 
 [`history.rs`](./history.rs) handles `emrac history` (alias `transactions`) and exports `record()`, which `install`/`remove`/`upgrade` call after executing to append to the transaction log; a failed write there only warns.
+
+[`rollback.rs`](./rollback.rs) handles `emrac rollback [tx]` and `emrac undo` (same code path): plan, show what will change and what is left alone, confirm, execute, then log the result with `history::record_rollback`.

@@ -6,6 +6,8 @@ pub enum PlanAction {
     Install,
     Remove,
     Upgrade,
+    /// Only produced by a rollback of an upgrade.
+    Downgrade,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +19,11 @@ pub struct PlannedPackage {
     /// pacman is pulling it in as a dependency (install) or it's coming
     /// along via `--cascade`/`--recursive` (remove).
     pub explicit: bool,
+    /// For upgrades and downgrades, the version installed before this
+    /// transaction — what a rollback needs to go back to. `None` for
+    /// installs/removes, and for records written before rollback support.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -105,7 +105,7 @@ impl AurBuildBackend {
         Ok(())
     }
 
-    fn build_dir(&self, pkg: &str) -> Result<PathBuf> {
+    pub fn build_dir(&self, pkg: &str) -> Result<PathBuf> {
         let home = env::var("HOME").map_err(|_| Error::NoHomeDir)?;
         Ok(PathBuf::from(home).join(".cache/emrac/build").join(pkg))
     }

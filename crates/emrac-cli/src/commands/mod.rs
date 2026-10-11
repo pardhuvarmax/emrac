@@ -5,5 +5,6 @@ pub mod history;
 pub mod info;
 pub mod install;
 pub mod remove;
+pub mod rollback;
 pub mod search;
 pub mod upgrade;

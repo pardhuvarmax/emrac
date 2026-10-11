@@ -1,12 +1,15 @@
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use crate::backend::{
-    AlpmBackend, AurBackend, AurBuildBackend, AurSyncOutcome, InstalledSource, PacmanBackend,
-    ResolvedPackage, version_is_newer,
+    version_is_newer, AlpmBackend, AurBackend, AurBuildBackend, AurSyncOutcome, InstalledSource,
+    PacmanBackend, ResolvedPackage,
 };
 use crate::error::{Error, Result};
+use crate::history::{History, TxStatus};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::plan::{Plan, PlanAction, PlannedPackage};
+use crate::rollback::{self, RollbackPlan};
 
 /// Which package sources a search should cover. Defaults to both.
 #[derive(Debug, Clone, Copy)]
@@ -164,6 +167,7 @@ impl Sources {
                 version: details.version,
                 repo: "aur".to_string(),
                 explicit: true,
+                previous_version: None,
             });
         }
 
@@ -250,8 +254,7 @@ impl Sources {
                     Ok(aur_details) => {
                         let installed = self.alpm.local_resolved(&foreign_names);
                         for details in aur_details {
-                            let Some(current) =
-                                installed.iter().find(|r| r.name == details.name)
+                            let Some(current) = installed.iter().find(|r| r.name == details.name)
                             else {
                                 continue;
                             };
@@ -261,6 +264,7 @@ impl Sources {
                                     version: details.version,
                                     repo: "aur".to_string(),
                                     explicit: true,
+                                    previous_version: Some(current.version.clone()),
                                 });
                             }
                         }
@@ -298,6 +302,7 @@ impl Sources {
                 .info(name)?
                 .ok_or_else(|| Error::PackageNotFoundAnywhere(name.clone()))?;
             packages.push(PlannedPackage {
+                previous_version: self.installed_version(&details.name),
                 name: details.name,
                 version: details.version,
                 repo: "aur".to_string(),
@@ -341,11 +346,9 @@ impl Sources {
         let mut total_installed_size_delta = 0i64;
 
         for pkg in new {
-            let old_size = old
-                .iter()
-                .find(|r| r.name == pkg.name)
-                .map(|r| r.installed_size)
-                .unwrap_or(0);
+            let old_pkg = old.iter().find(|r| r.name == pkg.name);
+            let old_size = old_pkg.map(|r| r.installed_size).unwrap_or(0);
+            let previous_version = old_pkg.map(|r| r.version.clone());
 
             total_download_size += pkg.download_size;
             total_installed_size_delta += pkg.installed_size as i64 - old_size as i64;
@@ -355,6 +358,7 @@ impl Sources {
                 name: pkg.name,
                 version: pkg.version,
                 repo: pkg.repo,
+                previous_version,
             });
         }
 
@@ -366,6 +370,66 @@ impl Sources {
         let names = self.pacman.resolve_remove(pkgs, cascade, recursive)?;
         let resolved = self.alpm.local_resolved(&names);
         Ok(build_plan(PlanAction::Remove, pkgs, resolved, -1))
+    }
+
+    /// The installed version of `name`, if it is installed.
+    pub fn installed_version(&self, name: &str) -> Option<String> {
+        self.alpm.installed_version(name)
+    }
+
+    /// Plans reversing a recorded transaction: `tx` names one, `None` means
+    /// the most recent one that can still be rolled back. No root, nothing
+    /// is mutated.
+    pub fn plan_rollback(&self, tx: Option<&str>) -> Result<RollbackPlan> {
+        let history = History::all()?;
+        let cache_dirs = self.pacman.cache_dirs()?;
+        let installed = |name: &str| self.alpm.installed_version(name);
+        let find_file = |name: &str, version: &str| {
+            let mut dirs = cache_dirs.clone();
+            if let Ok(build_dir) = self.aur_build.build_dir(name) {
+                dirs.push(build_dir);
+            }
+            rollback::find_package_file(&dirs, name, version)
+        };
+
+        if let Some(tx) = tx {
+            let id = rollback::parse_tx_id(tx)?;
+            let record = rollback::find_record(&history, &id)?;
+            return rollback::plan_rollback(record, &history, &installed, &find_file);
+        }
+
+        // A failed transaction that never got as far as changing anything
+        // (e.g. a locked database) leaves nothing to reverse; stepping past
+        // it is what "undo the last thing" means. A committed one with
+        // nothing left to reverse stops here and is reported as such.
+        for record in rollback::candidates(&history) {
+            let plan = rollback::plan_rollback(record, &history, &installed, &find_file)?;
+            if plan.plan.is_empty() && record.status == TxStatus::Failed {
+                continue;
+            }
+            return Ok(plan);
+        }
+        Err(Error::NoTransactionToRollBack)
+    }
+
+    /// Runs a rollback plan: a removal via `sudo pacman -R`, anything else
+    /// by installing the located package files with `sudo pacman -U`.
+    pub fn execute_rollback(&self, rollback: &RollbackPlan) -> Result<()> {
+        match rollback.plan.action {
+            PlanAction::Remove => {
+                let names: Vec<String> = rollback
+                    .plan
+                    .packages
+                    .iter()
+                    .map(|p| p.name.clone())
+                    .collect();
+                self.pacman.execute_remove(&names, false, false)
+            }
+            _ => {
+                let files: Vec<PathBuf> = rollback.files.clone();
+                self.pacman.execute_install_files(&files)
+            }
+        }
     }
 
     /// Actually removes `pkgs` via `sudo pacman -R`. Prompts for a
@@ -400,6 +464,7 @@ fn build_plan(
                 name: r.name,
                 version: r.version,
                 repo: r.repo,
+                previous_version: None,
             }
         })
         .collect();

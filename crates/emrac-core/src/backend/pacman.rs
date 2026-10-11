@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
 use crate::error::{Error, Result};
@@ -134,6 +135,37 @@ impl PacmanBackend {
         args.push("--noconfirm".to_string());
 
         self.run_inherited("sudo", &args)
+    }
+
+    /// Actually installs local package files (`pacman -U`) — how a rollback
+    /// reinstalls a removed package or downgrades to an older version.
+    /// Runs under `sudo`, with stdio inherited.
+    pub fn execute_install_files(&self, files: &[PathBuf]) -> Result<()> {
+        let mut args = vec!["pacman".to_string(), "-U".to_string()];
+        args.extend(files.iter().map(|f| f.display().to_string()));
+        args.push("--noconfirm".to_string());
+
+        self.run_inherited("sudo", &args)
+    }
+
+    /// pacman's package cache directories (`pacman-conf CacheDir`).
+    pub fn cache_dirs(&self) -> Result<Vec<PathBuf>> {
+        let output = Command::new("pacman-conf")
+            .arg("CacheDir")
+            .output()
+            .map_err(Error::PacmanConfSpawn)?;
+
+        if !output.status.success() {
+            return Err(Error::PacmanConfStatus(format!(
+                "pacman-conf CacheDir failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
+
+        Ok(parse_names(&output.stdout)
+            .into_iter()
+            .map(PathBuf::from)
+            .collect())
     }
 
     fn spawn_captured(&self, program: &str, args: &[String]) -> Result<Output> {

@@ -106,6 +106,15 @@ this runs after `Sources::init()`.
   skipped list, history markers), `main.rs`.
 - Docs: READMEs, `FEATURE_STATUS.rst` #1, `CHANGELOG.md`, plan index.
 
+## Refinement made while implementing
+
+A bare `rollback`/`undo` steps past a `failed` transaction that has nothing
+left to reverse (it never got as far as changing anything, e.g. a locked
+database) and picks the next candidate; a `committed` one with nothing left
+stops there and is reported as such. Package files are matched only with the
+compressions makepkg can produce (`.zst`, `.xz`, ...), so `.sig` and
+interrupted `.part` downloads are never picked.
+
 ## Open decisions (defaults chosen, easy to flip)
 
 - `--cascade`-style removal on install-rollback is **off**: if something now
