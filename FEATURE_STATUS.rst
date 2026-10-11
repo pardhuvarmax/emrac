@@ -124,7 +124,7 @@ Complete Feature Catalog
    * - 18
      - Unified Interfaces
      - Partial
-     - CLI complete for the 5 MVP commands, ``--json``, ``--dry-run``, ``-y``; no shell completion, no TUI at all
+     - CLI complete for the 5 MVP commands, ``--json``, ``--dry-run``, ``-y``; ``emrac completion bash|zsh|fish`` (static, no package-name completion); no TUI at all
    * - 19
      - Configuration
      - Partial

@@ -1,4 +1,5 @@
 pub mod aur_review;
+pub mod completion;
 pub mod config;
 pub mod info;
 pub mod install;

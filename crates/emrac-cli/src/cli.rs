@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(
@@ -110,6 +110,18 @@ pub enum Commands {
         #[command(subcommand)]
         command: ConfigCommand,
     },
+
+    /// Print a shell completion script to stdout
+    Completion { shell: CompletionShell },
+}
+
+/// The shells `SPEC.md` promises completion for — deliberately not
+/// `clap_complete::Shell`, which would also advertise elvish/powershell.
+#[derive(Clone, Copy, ValueEnum)]
+pub enum CompletionShell {
+    Bash,
+    Zsh,
+    Fish,
 }
 
 #[derive(Subcommand)]
