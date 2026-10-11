@@ -12,6 +12,14 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u1 — 2026-10-11 — config file
+
+New `emrac config` command group (`show`/`get`/`set`/`unset`/`edit`/`validate`) backed by `~/.config/emrac/config.toml` (new `emrac_core::Config`, `toml` dependency). It persists defaults for flags that already exist: `[flags]` (`offline`, `yes`, `dry_run`, `json`, `quiet`), `[review]` (`skip_pkgbuild`, `skip_diff`) and `[search]` (`limit`, `official`, `aur`) — a fixed 10-key allowlist, type-checked on `set`. A missing file means all defaults; a file that exists but doesn't parse fails every command with the TOML line/column rather than being silently ignored.
+
+Merge is OR, not override: every setting is a bool flag that can only turn behavior on (clap can't tell "not passed" from "false"), so the effective value is `cli || config`, and `search.limit` is `cli.or(config)`. `config` is dispatched before `Sources::init()`, so it works without a pacman setup. Design in `docs/plan/u1-config.md`; descoped `config reset`/`export`/`import` (the file is already portable). `FEATURE_STATUS.rst` #19 moves to Partial.
+
+Verified on the host against a scratch `$HOME` (file I/O only, no pacman state touched): `show` with no file doesn't create one; `set`/`get`/`unset` round-trip; bad value and unknown key give clean errors; broken TOML is reported by `validate` and by other commands; `edit` with a no-op editor creates a valid defaults file; `flags.offline` and `search.limit` set in config take effect on `search`, and `--limit` still raises above the config floor.
+
 ## Slice i1 — 2026-07-17 — `db75c7a` — `upgrade`, completing the core CLI loop milestone
 
 Last piece of the `i1 → r1` milestone bar (`search`/`info`/`install`/`remove`/`upgrade` against official repos + AUR, `SPEC.md` Part X). Built almost entirely by reusing what `install` already had rather than a parallel implementation: the AUR PKGBUILD/diff review flow (`review_aur_package`, extracted from `commands/install.rs` into shared `commands/aur_review.rs`, since "upgrade an AUR package" and "build it for the first time" are literally the same `AurBuildBackend::sync` outcome check) and `install_official`/`build_aur` execution paths.

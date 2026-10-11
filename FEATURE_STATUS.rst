@@ -127,8 +127,8 @@ Complete Feature Catalog
      - CLI complete for the 5 MVP commands, ``--json``, ``--dry-run``, ``-y``; no shell completion, no TUI at all
    * - 19
      - Configuration
-     - Not started
-     - No config file -- reads live ``pacman-conf`` only
+     - Partial
+     - ``~/.config/emrac/config.toml`` with ``emrac config show/get/set/unset/edit/validate``; persists defaults for existing global/search/review flags only. No theming, keybindings, aliases, profiles, system-wide or per-repo config
    * - 20
      - Performance
      - Partial
