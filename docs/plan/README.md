@@ -26,3 +26,5 @@ Current:
   same installed version again, without a partial upgrade.
 - [`u8-purge.md`](./u8-purge.md) — `emrac purge <pkg>...`: remove without
   `.pacsave`, with a preview of the modified configs it will destroy.
+- [`u9-verify.md`](./u9-verify.md) — `emrac verify <pkg>...`: installed files
+  vs. pacman's mtree record.
