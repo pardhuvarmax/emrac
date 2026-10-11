@@ -24,3 +24,5 @@ Current:
   built on the rollback file/Archive machinery.
 - [`u7-reinstall.md`](./u7-reinstall.md) — `emrac reinstall <pkg>...`: the
   same installed version again, without a partial upgrade.
+- [`u8-purge.md`](./u8-purge.md) — `emrac purge <pkg>...`: remove without
+  `.pacsave`, with a preview of the modified configs it will destroy.
