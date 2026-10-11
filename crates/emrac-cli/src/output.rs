@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use emrac_core::{
-    ConfigState, DowngradePlan, Download, PackageDetails, PackageSummary, Plan, PlanAction,
-    PurgePlan, ReinstallPlan, ReinstallSource, RollbackPlan, TransactionRecord, TxStatus,
-    VersionList,
+    ConfigState, DowngradePlan, Download, IssueKind, PackageDetails, PackageSummary, Plan,
+    PlanAction, PurgePlan, ReinstallPlan, ReinstallSource, RollbackPlan, TransactionRecord,
+    TxStatus, VerifyReport, VersionList,
 };
 
 pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
@@ -132,6 +132,65 @@ pub fn print_pkgbuild(pkg: &str, content: &str) {
 pub fn print_pkgbuild_diff(pkg: &str, diff: &str) {
     println!("emrac notes: PKGBUILD changes for '{pkg}' since your last build:\n");
     println!("{diff}");
+}
+
+pub fn print_verify(report: &VerifyReport, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(report).unwrap());
+        return;
+    }
+
+    let files: usize = report.packages.iter().map(|p| p.files_checked).sum();
+    println!(
+        "emrac found: checked {} ({} files)\n",
+        plural(report.packages.len(), "package"),
+        files
+    );
+
+    let mut unreadable = 0;
+    for pkg in &report.packages {
+        unreadable += pkg.unreadable_count();
+        let problems = pkg.problem_count();
+        if problems == 0 {
+            println!(
+                "{} {}: ok ({} files)",
+                pkg.package, pkg.version, pkg.files_checked
+            );
+        } else {
+            println!(
+                "{} {}: {} ({} files)",
+                pkg.package,
+                pkg.version,
+                plural(problems, "problem"),
+                pkg.files_checked
+            );
+        }
+        for issue in pkg.problems() {
+            let what = match issue.kind {
+                IssueKind::Missing => "missing",
+                IssueKind::WrongType => "wrong type",
+                IssueKind::SizeMismatch => "size differs",
+                IssueKind::ContentMismatch => "contents differ",
+                IssueKind::ModeMismatch => "permissions differ",
+                IssueKind::LinkMismatch => "symlink differs",
+                IssueKind::Unreadable => continue,
+            };
+            match &issue.detail {
+                Some(detail) => println!("    {what:<18} {} ({detail})", issue.path),
+                None => println!("    {what:<18} {}", issue.path),
+            }
+        }
+        for path in &pkg.modified_config {
+            println!("    config edited      {path}");
+        }
+    }
+
+    if unreadable > 0 {
+        println!(
+            "\nemrac notes: {} couldn't be read, so they weren't checked — run as root for a complete check.",
+            plural(unreadable, "file")
+        );
+    }
 }
 
 pub fn print_purge(purge: &PurgePlan, json: bool) {

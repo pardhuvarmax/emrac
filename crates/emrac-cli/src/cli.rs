@@ -126,6 +126,13 @@ pub enum Commands {
         command: ConfigCommand,
     },
 
+    /// Check that installed packages' files still match pacman's record
+    #[command(visible_alias = "check")]
+    Verify {
+        #[arg(required = true)]
+        pkgs: Vec<String>,
+    },
+
     /// Put the installed version of one or more packages back (repair)
     Reinstall {
         #[arg(required = true)]

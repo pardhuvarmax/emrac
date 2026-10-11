@@ -11,3 +11,4 @@ pub mod remove;
 pub mod rollback;
 pub mod search;
 pub mod upgrade;
+pub mod verify;

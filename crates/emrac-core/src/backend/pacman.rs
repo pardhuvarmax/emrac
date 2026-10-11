@@ -160,6 +160,23 @@ impl PacmanBackend {
         self.run_inherited("sudo", &args)
     }
 
+    /// pacman's `NoExtract` patterns (`pacman-conf NoExtract`).
+    pub fn no_extract(&self) -> Result<Vec<String>> {
+        let output = Command::new("pacman-conf")
+            .arg("NoExtract")
+            .output()
+            .map_err(Error::PacmanConfSpawn)?;
+
+        if !output.status.success() {
+            return Err(Error::PacmanConfStatus(format!(
+                "pacman-conf NoExtract failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
+
+        Ok(parse_names(&output.stdout))
+    }
+
     /// pacman's package cache directories (`pacman-conf CacheDir`).
     pub fn cache_dirs(&self) -> Result<Vec<PathBuf>> {
         let output = Command::new("pacman-conf")

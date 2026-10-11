@@ -17,3 +17,5 @@ Currently: [`search.rs`](./search.rs), [`info.rs`](./info.rs), [`install.rs`](./
 [`reinstall.rs`](./reinstall.rs) handles `emrac reinstall <pkg>...`: plan (each package's source is shown), confirm, execute, log as a `reinstall` transaction (which `undo` skips and `rollback` refuses, since no version changes).
 
 [`purge.rs`](./purge.rs) handles `emrac purge <pkg>...`: the `remove` flow plus a preview of the config files with local changes that will be deleted instead of kept as `.pacsave`, and a dedicated confirmation when there are any.
+
+[`verify.rs`](./verify.rs) handles `emrac verify <pkg>...` (alias `check`): prints the per-package report and then exits non-zero if any package has real problems (edited config files and unreadable files don't count), so scripts can use it. Read-only; not logged in the history.

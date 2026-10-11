@@ -38,6 +38,17 @@ package-*signature* verification belong to features that don't exist yet.
 Out of scope: `--all` (every installed package; large and slow, a later
 flag), mtime/owner checks, repairing automatically, signature checks.
 
+## Refinement found while testing
+
+Two sources of false "missing" reports had to be handled, both visible in the
+stock Arch container image: the mtree describes the whole package, but files
+excluded at install time by `NoExtract` (docs, locales, man pages in that
+image) are not on disk. Pacman's `-Qk` skips them; so does `verify`, by
+matching each entry against `pacman-conf NoExtract` (`fnmatch`-style globs
+where `*` crosses `/`; a `!` pattern re-includes; last match wins; directories
+matched with a trailing `/`), and by dropping entries absent from libalpm's
+installed file list.
+
 ## Files
 
 - `verify.rs` (new, core): mtree parser, `check_entry`, report types,

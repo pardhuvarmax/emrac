@@ -299,6 +299,7 @@ name = "emrac-core"
 version = "0.1.0"
 dependencies = [
  "alpm",
+ "flate2",
  "serde",
  "serde_json",
  "thiserror",

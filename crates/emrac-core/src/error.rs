@@ -145,6 +145,16 @@ pub enum Error {
     #[error("can't reinstall: {0}")]
     CannotReinstall(String),
 
+    #[error("not installed, so there's nothing to verify: {0}")]
+    NotInstalledForVerify(String),
+
+    #[error(
+        "{count} {noun} {verb} problems — `emrac reinstall {names}` puts the files back",
+        noun = if *.count == 1 { "package" } else { "packages" },
+        verb = if *.count == 1 { "has" } else { "have" }
+    )]
+    VerificationFailed { count: usize, names: String },
+
     #[error("there's no rollback in your history to redo")]
     NoTransactionToRedo,
 
@@ -186,6 +196,8 @@ impl Error {
             | Error::InvalidTransactionId(_)
             | Error::UnknownTransaction(_)
             | Error::NoTransactionToRollBack
+            | Error::NotInstalledForVerify(_)
+            | Error::VerificationFailed { .. }
             | Error::NotInstalledForReinstall(_)
             | Error::CannotReinstall(_)
             | Error::PackageNotInstalledForDowngrade(_)

@@ -13,6 +13,7 @@ use crate::plan::{Plan, PlanAction, PlannedPackage};
 use crate::purge::PurgePlan;
 use crate::reinstall::{self, ReinstallItem, ReinstallPlan, ReinstallSource};
 use crate::rollback::{self, Download, RemoteFile, RollbackPlan};
+use crate::verify::VerifyReport;
 
 /// Which package sources a search should cover. Defaults to both.
 #[derive(Debug, Clone, Copy)]
@@ -375,6 +376,33 @@ impl Sources {
         let names = self.pacman.resolve_remove(pkgs, cascade, recursive)?;
         let resolved = self.alpm.local_resolved(&names);
         Ok(build_plan(PlanAction::Remove, pkgs, resolved, -1))
+    }
+
+    /// Verifies the installed files of each named package against pacman's
+    /// record of them. Read-only; no root. Names that aren't installed are
+    /// an error, reported together.
+    pub fn verify(&self, pkgs: &[String]) -> Result<VerifyReport> {
+        let mut names: Vec<&String> = Vec::new();
+        for pkg in pkgs {
+            if !names.contains(&pkg) {
+                names.push(pkg);
+            }
+        }
+        let missing: Vec<&str> = names
+            .iter()
+            .filter(|p| self.alpm.installed_version(p).is_none())
+            .map(|p| p.as_str())
+            .collect();
+        if !missing.is_empty() {
+            return Err(Error::NotInstalledForVerify(missing.join(", ")));
+        }
+
+        let no_extract = self.pacman.no_extract()?;
+        let packages = names
+            .into_iter()
+            .map(|name| self.alpm.verify_installed(name, &no_extract))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(VerifyReport { packages })
     }
 
     /// The installed version of `name`, if it is installed.

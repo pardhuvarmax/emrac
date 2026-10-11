@@ -6,6 +6,7 @@ use alpm::{Alpm, SigLevel};
 use crate::error::{Error, Result};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::purge::{classify, ConfigFile, Observed};
+use crate::verify::{self, PackageReport};
 
 /// Read-only access to the official repositories via libalpm, scoped to the
 /// sync databases pacman has already downloaded locally (`/var/lib/pacman/sync`).
@@ -147,6 +148,34 @@ impl AlpmBackend {
             }
         }
         files
+    }
+
+    /// Checks an installed package's files against its mtree record.
+    pub fn verify_installed(&self, name: &str, no_extract: &[String]) -> Result<PackageReport> {
+        let pkg = self
+            .handle
+            .localdb()
+            .pkg(name)
+            .map_err(|_| Error::NotInstalledForVerify(name.to_string()))?;
+        let version = pkg.version().to_string();
+        let mtree = verify::read_mtree(&verify::mtree_path(self.handle.dbpath(), name, &version))?;
+        let backup: Vec<String> = pkg.backup().iter().map(|b| b.name().to_string()).collect();
+        let mut entries = verify::parse_mtree(&mtree);
+        let installed: Vec<String> = pkg
+            .files()
+            .files()
+            .iter()
+            .map(|f| String::from_utf8_lossy(f.name()).into_owned())
+            .collect();
+        verify::retain_installed(&mut entries, &installed);
+        verify::drop_no_extract(&mut entries, no_extract);
+        Ok(verify::verify_entries(
+            name,
+            &version,
+            Path::new(self.handle.root()),
+            &entries,
+            &backup,
+        ))
     }
 
     /// The currently installed version of `name`, if it is installed.

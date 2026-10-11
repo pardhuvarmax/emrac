@@ -93,6 +93,7 @@ fn run(cli: &Cli) -> Result<()> {
             json,
             quiet,
         ),
+        Commands::Verify { pkgs } => commands::verify::run(&sources, pkgs, json),
         Commands::Reinstall { pkgs } => {
             commands::reinstall::run(&sources, pkgs, dry_run, yes, offline, json)
         }

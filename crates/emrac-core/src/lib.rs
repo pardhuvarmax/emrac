@@ -9,6 +9,7 @@ mod purge;
 mod reinstall;
 mod rollback;
 mod sources;
+mod verify;
 
 pub use backend::AurSyncOutcome;
 pub use config::Config;
@@ -20,4 +21,5 @@ pub use plan::{Plan, PlanAction, PlannedPackage};
 pub use purge::{ConfigFile, ConfigState, PurgePlan};
 pub use reinstall::{ReinstallItem, ReinstallPlan, ReinstallSource};
 pub use rollback::{rolled_back_by, Download, RollbackPlan, SkippedPackage};
+pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};
 pub use sources::{SearchResults, SearchScope, Sources, UpgradePlan};
