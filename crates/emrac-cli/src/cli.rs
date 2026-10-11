@@ -111,6 +111,19 @@ pub enum Commands {
         command: ConfigCommand,
     },
 
+    /// Go back to an older version of an installed package
+    Downgrade {
+        pkg: String,
+
+        /// Version to go back to; omitted = the newest version older than
+        /// the one installed
+        version: Option<String>,
+
+        /// List the versions available instead of downgrading
+        #[arg(long, conflicts_with = "version")]
+        list: bool,
+    },
+
     /// Show past install/remove/upgrade transactions, newest first
     #[command(visible_alias = "transactions")]
     History {

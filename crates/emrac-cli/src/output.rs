@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use emrac_core::{
-    PackageDetails, PackageSummary, Plan, PlanAction, RollbackPlan, TransactionRecord, TxStatus,
+    DowngradePlan, Download, PackageDetails, PackageSummary, Plan, PlanAction, RollbackPlan,
+    TransactionRecord, TxStatus, VersionList,
 };
 
 pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
@@ -128,6 +129,63 @@ pub fn print_pkgbuild_diff(pkg: &str, diff: &str) {
     println!("{diff}");
 }
 
+pub fn print_downgrade(downgrade: &DowngradePlan, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(downgrade).unwrap());
+        return;
+    }
+
+    let pkg = &downgrade.plan.packages[0];
+    println!("emrac plans: downgrade 1 package\n");
+    match &pkg.previous_version {
+        Some(from) => println!("  {}/{} {} (from {from})", pkg.repo, pkg.name, pkg.version),
+        None => println!("  {}/{} {}", pkg.repo, pkg.name, pkg.version),
+    }
+    print_downloads(&downgrade.downloads);
+}
+
+pub fn print_versions(list: &VersionList, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(list).unwrap());
+        return;
+    }
+
+    if list.versions.is_empty() {
+        println!(
+            "emrac notes: no other versions of '{}' found on this machine or in the Arch Linux Archive.",
+            list.package
+        );
+        return;
+    }
+
+    match &list.installed {
+        Some(v) => println!(
+            "emrac found: {} of '{}' (installed: {v})\n",
+            plural(list.versions.len(), "version"),
+            list.package
+        ),
+        None => println!(
+            "emrac found: {} of '{}' (not installed)\n",
+            plural(list.versions.len(), "version"),
+            list.package
+        ),
+    }
+    for entry in &list.versions {
+        let marker = if entry.installed { " (installed)" } else { "" };
+        println!("  {:<24} {}{marker}", entry.version, entry.source);
+    }
+}
+
+fn print_downloads(downloads: &[Download]) {
+    if downloads.is_empty() {
+        return;
+    }
+    println!("\nWill download from the Arch Linux Archive:");
+    for download in downloads {
+        println!("  {} {}", download.name, download.version);
+    }
+}
+
 pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
     if json {
         println!("{}", serde_json::to_string_pretty(rollback).unwrap());
@@ -165,12 +223,7 @@ pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
         }
     }
 
-    if !rollback.downloads.is_empty() {
-        println!("\nWill download from the Arch Linux Archive:");
-        for download in &rollback.downloads {
-            println!("  {} {}", download.name, download.version);
-        }
-    }
+    print_downloads(&rollback.downloads);
 
     if !rollback.skipped.is_empty() {
         println!("\nLeft alone (no longer as {} left them):", rollback.target);

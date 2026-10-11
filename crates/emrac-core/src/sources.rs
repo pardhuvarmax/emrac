@@ -5,11 +5,12 @@ use crate::backend::{
     AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome, InstalledSource,
     PacmanBackend, ResolvedPackage, version_is_newer,
 };
+use crate::downgrade::{self, DowngradePlan, VersionList};
 use crate::error::{Error, Result};
 use crate::history::{History, TxStatus};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::plan::{Plan, PlanAction, PlannedPackage};
-use crate::rollback::{self, RemoteFile, RollbackPlan};
+use crate::rollback::{self, Download, RemoteFile, RollbackPlan};
 
 /// Which package sources a search should cover. Defaults to both.
 #[derive(Debug, Clone, Copy)]
@@ -396,28 +397,8 @@ impl Sources {
         let history = History::all()?;
         let cache_dirs = self.pacman.cache_dirs()?;
         let installed = |name: &str| self.alpm.installed_version(name);
-        let find_file = |name: &str, version: &str| {
-            let mut dirs = cache_dirs.clone();
-            if let Ok(build_dir) = self.aur_build.build_dir(name) {
-                dirs.push(build_dir);
-            }
-            if let Ok(archive_dir) = self.archive.cache_dir(name) {
-                dirs.push(archive_dir);
-            }
-            rollback::find_package_file(&dirs, name, version)
-        };
-        let find_remote = |name: &str, version: &str| -> Result<Option<RemoteFile>> {
-            if offline {
-                return Ok(None);
-            }
-            let Some(file) = self.archive.find(name, version)? else {
-                return Ok(None);
-            };
-            Ok(Some(RemoteFile {
-                dest: self.archive.cache_dir(name)?.join(&file.filename),
-                url: file.url,
-            }))
-        };
+        let find_file = |name: &str, version: &str| self.locate_file(&cache_dirs, name, version);
+        let find_remote = |name: &str, version: &str| self.locate_remote(offline, name, version);
 
         if let Some(tx) = tx {
             let id = rollback::parse_tx_id(tx)?;
@@ -449,13 +430,44 @@ impl Sources {
         })
     }
 
-    /// Runs a rollback plan: a removal via `sudo pacman -R`, anything else
-    /// by installing the located package files with `sudo pacman -U` —
-    /// after fetching whichever of them still have to be downloaded. The
-    /// detached signature is fetched next to each package, best effort;
-    /// pacman verifies it when present.
-    pub fn execute_rollback(&self, rollback: &RollbackPlan) -> Result<()> {
-        for download in &rollback.downloads {
+    /// A package file for exactly `name`/`version` already on this machine:
+    /// pacman's cache, the AUR build dir, or emrac's archive cache.
+    fn locate_file(&self, cache_dirs: &[PathBuf], name: &str, version: &str) -> Option<PathBuf> {
+        let mut dirs = cache_dirs.to_vec();
+        if let Ok(build_dir) = self.aur_build.build_dir(name) {
+            dirs.push(build_dir);
+        }
+        if let Ok(archive_dir) = self.archive.cache_dir(name) {
+            dirs.push(archive_dir);
+        }
+        rollback::find_package_file(&dirs, name, version)
+    }
+
+    /// The same file in the Arch Linux Archive (read-only lookup), unless
+    /// `offline`.
+    fn locate_remote(
+        &self,
+        offline: bool,
+        name: &str,
+        version: &str,
+    ) -> Result<Option<RemoteFile>> {
+        if offline {
+            return Ok(None);
+        }
+        let Some(file) = self.archive.find(name, version)? else {
+            return Ok(None);
+        };
+        Ok(Some(RemoteFile {
+            dest: self.archive.cache_dir(name)?.join(&file.filename),
+            url: file.url,
+        }))
+    }
+
+    /// Downloads whatever hasn't been fetched yet, plus each detached
+    /// signature (best effort — pacman verifies one when it sits beside the
+    /// package).
+    fn fetch_downloads(&self, downloads: &[Download]) -> Result<()> {
+        for download in downloads {
             if !download.dest.exists() {
                 self.archive.download(&download.url, &download.dest)?;
             }
@@ -466,6 +478,131 @@ impl Sources {
                     .download(&format!("{}.sig", download.url), &sig_dest);
             }
         }
+        Ok(())
+    }
+
+    /// Plans `emrac downgrade`: `version` is the target, or `None` for the
+    /// newest version older than the installed one. No root, nothing is
+    /// written; the Archive is only listed (and not at all if `offline` or
+    /// the package is foreign/AUR).
+    pub fn plan_downgrade(
+        &self,
+        pkg: &str,
+        version: Option<&str>,
+        offline: bool,
+    ) -> Result<DowngradePlan> {
+        let installed = self
+            .alpm
+            .installed_version(pkg)
+            .ok_or_else(|| Error::PackageNotInstalledForDowngrade(pkg.to_string()))?;
+        let official = matches!(
+            self.alpm.installed_source(pkg),
+            Some(InstalledSource::Official)
+        );
+        let repo = self
+            .alpm
+            .sync_resolved(&[pkg.to_string()])
+            .into_iter()
+            .next()
+            .map(|r| r.repo)
+            .unwrap_or_else(|| "aur".to_string());
+        let use_archive = official && !offline;
+
+        let cache_dirs = self.pacman.cache_dirs()?;
+        let target = if version.is_some() {
+            downgrade::choose_target(pkg, &installed, version, &[])?
+        } else {
+            let mut available = self.local_versions(&cache_dirs, pkg);
+            if use_archive {
+                available.extend(self.archive.versions(pkg)?.unwrap_or_default());
+            }
+            downgrade::choose_target(pkg, &installed, None, &available)?
+        };
+
+        let mut files = Vec::new();
+        let mut downloads = Vec::new();
+        if let Some(path) = self.locate_file(&cache_dirs, pkg, &target) {
+            files.push(path);
+        } else if let Some(remote) = self.locate_remote(!use_archive, pkg, &target)? {
+            files.push(remote.dest.clone());
+            downloads.push(Download {
+                name: pkg.to_string(),
+                version: target.clone(),
+                url: remote.url,
+                dest: remote.dest,
+            });
+        } else {
+            return Err(Error::VersionUnavailable {
+                pkg: pkg.to_string(),
+                version: target,
+            });
+        }
+
+        Ok(DowngradePlan {
+            plan: Plan {
+                action: PlanAction::Downgrade,
+                packages: vec![PlannedPackage {
+                    name: pkg.to_string(),
+                    version: target,
+                    repo,
+                    explicit: true,
+                    previous_version: Some(installed),
+                }],
+                total_download_size: 0,
+                total_installed_size_delta: 0,
+            },
+            files,
+            downloads,
+        })
+    }
+
+    /// Versions of `pkg` that `emrac downgrade` could go to (and the one
+    /// installed), newest first.
+    pub fn list_versions(&self, pkg: &str, offline: bool) -> Result<VersionList> {
+        let installed = self.alpm.installed_version(pkg);
+        let official = !matches!(
+            self.alpm.installed_source(pkg),
+            Some(InstalledSource::Foreign)
+        );
+        let local = self.local_versions(&self.pacman.cache_dirs()?, pkg);
+        let archive = if official && !offline {
+            self.archive.versions(pkg)?.unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        Ok(downgrade::merge_versions(
+            pkg,
+            installed.as_deref(),
+            &local,
+            &archive,
+        ))
+    }
+
+    fn local_versions(&self, cache_dirs: &[PathBuf], pkg: &str) -> Vec<String> {
+        let mut dirs = cache_dirs.to_vec();
+        if let Ok(dir) = self.aur_build.build_dir(pkg) {
+            dirs.push(dir);
+        }
+        if let Ok(dir) = self.archive.cache_dir(pkg) {
+            dirs.push(dir);
+        }
+        rollback::package_versions_in_dirs(&dirs, pkg)
+    }
+
+    /// Fetches what's missing, then installs the chosen package file with
+    /// `sudo pacman -U`.
+    pub fn execute_downgrade(&self, downgrade: &DowngradePlan) -> Result<()> {
+        self.fetch_downloads(&downgrade.downloads)?;
+        self.pacman.execute_install_files(&downgrade.files)
+    }
+
+    /// Runs a rollback plan: a removal via `sudo pacman -R`, anything else
+    /// by installing the located package files with `sudo pacman -U` —
+    /// after fetching whichever of them still have to be downloaded. The
+    /// detached signature is fetched next to each package, best effort;
+    /// pacman verifies it when present.
+    pub fn execute_rollback(&self, rollback: &RollbackPlan) -> Result<()> {
+        self.fetch_downloads(&rollback.downloads)?;
 
         match rollback.plan.action {
             PlanAction::Remove => {

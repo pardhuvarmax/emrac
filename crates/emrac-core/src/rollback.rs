@@ -299,12 +299,60 @@ pub(crate) fn is_package_file(file_name: &str, prefix: &str) -> bool {
     let Some((arch, ext)) = rest.split_once(".pkg.tar") else {
         return false;
     };
-    // The compressions makepkg can produce; anything else (`.sig`,
-    // `.part` from an interrupted download, ...) isn't an installable file.
+    !arch.is_empty() && !arch.contains('-') && is_package_extension(ext)
+}
+
+/// The compressions makepkg can produce; anything else (`.sig`, `.part` from
+/// an interrupted download, ...) isn't an installable file.
+fn is_package_extension(ext: &str) -> bool {
     const EXTENSIONS: [&str; 9] = [
         "", ".zst", ".xz", ".gz", ".bz2", ".lz4", ".lrz", ".lzo", ".Z",
     ];
-    !arch.is_empty() && !arch.contains('-') && EXTENSIONS.contains(&ext)
+    EXTENSIONS.contains(&ext)
+}
+
+/// The version in a `<name>-<pkgver>-<pkgrel>-<arch>.pkg.tar[.ext]` file
+/// name, or `None` if it isn't such a file for exactly `name` (so `foo`
+/// never claims `foo-bar-1.0-1-x86_64...`: a pkgver never contains `-`).
+pub(crate) fn package_file_version(file_name: &str, name: &str) -> Option<String> {
+    let rest = file_name.strip_prefix(name)?.strip_prefix('-')?;
+    let (head, ext) = rest.split_once(".pkg.tar")?;
+    if !is_package_extension(ext) {
+        return None;
+    }
+    let (ver_rel, arch) = head.rsplit_once('-')?;
+    let (pkgver, pkgrel) = ver_rel.rsplit_once('-')?;
+    let rel_ok = !pkgrel.is_empty()
+        && pkgrel.split('.').count() <= 2
+        && pkgrel
+            .split('.')
+            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()));
+    if arch.is_empty() || pkgver.is_empty() || pkgver.contains('-') || !rel_ok {
+        return None;
+    }
+    Some(ver_rel.to_string())
+}
+
+/// Every version of `name` that has a package file in `dirs`.
+pub(crate) fn package_versions_in_dirs(dirs: &[PathBuf], name: &str) -> Vec<String> {
+    let mut versions = Vec::new();
+    for dir in dirs {
+        let Ok(entries) = fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if let Some(version) = entry
+                .file_name()
+                .to_str()
+                .and_then(|f| package_file_version(f, name))
+            {
+                if !versions.contains(&version) {
+                    versions.push(version);
+                }
+            }
+        }
+    }
+    versions
 }
 
 #[cfg(test)]
@@ -782,5 +830,37 @@ mod tests {
         w.remote_error = true;
         let p = w.plan(&r, std::slice::from_ref(&r)).unwrap();
         assert!(p.downloads.is_empty());
+    }
+
+    #[test]
+    fn versions_are_parsed_from_file_names() {
+        let v = |f: &str, n: &str| package_file_version(f, n);
+        assert_eq!(
+            v("foo-1.0-1-x86_64.pkg.tar.zst", "foo").as_deref(),
+            Some("1.0-1")
+        );
+        assert_eq!(
+            v("foo-1:2.0-3-any.pkg.tar.xz", "foo").as_deref(),
+            Some("1:2.0-3")
+        );
+        assert_eq!(
+            v("foo-1.0-1.1-x86_64.pkg.tar.zst", "foo").as_deref(),
+            Some("1.0-1.1")
+        );
+        assert_eq!(
+            v("foo-r12.ab34-1-x86_64.pkg.tar.zst", "foo").as_deref(),
+            Some("r12.ab34-1")
+        );
+        assert_eq!(v("foo-bar-1.0-1-x86_64.pkg.tar.zst", "foo"), None);
+        assert_eq!(
+            v("foo-bar-1.0-1-x86_64.pkg.tar.zst", "foo-bar").as_deref(),
+            Some("1.0-1")
+        );
+        assert_eq!(v("foo-1.0-1-x86_64.pkg.tar.zst.sig", "foo"), None);
+        assert_eq!(v("foo-1.0-1-x86_64.pkg.tar.zst.part", "foo"), None);
+        assert_eq!(v("foo-1.0-x86_64.pkg.tar.zst", "foo"), None);
+        assert_eq!(v("foo-1.0-a-x86_64.pkg.tar.zst", "foo"), None);
+        assert_eq!(v("fo-1.0-1-x86_64.pkg.tar.zst", "foo"), None);
+        assert_eq!(v("foo.txt", "foo"), None);
     }
 }

@@ -88,6 +88,21 @@ fn run(cli: &Cli) -> Result<()> {
             json,
             quiet,
         ),
+        Commands::Downgrade { pkg, version, list } => {
+            if *list {
+                commands::downgrade::list(&sources, pkg, offline, json)
+            } else {
+                commands::downgrade::run(
+                    &sources,
+                    pkg,
+                    version.as_deref(),
+                    dry_run,
+                    yes,
+                    offline,
+                    json,
+                )
+            }
+        }
         Commands::Rollback { tx } => commands::rollback::run(
             &sources,
             Which::Rollback(tx.as_deref()),

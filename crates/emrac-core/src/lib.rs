@@ -1,5 +1,6 @@
 mod backend;
 mod config;
+mod downgrade;
 mod error;
 mod history;
 mod package;
@@ -9,6 +10,7 @@ mod sources;
 
 pub use backend::AurSyncOutcome;
 pub use config::Config;
+pub use downgrade::{DowngradePlan, ListedVersion, VersionList};
 pub use error::{Error, Result};
 pub use history::{parse_date, History, TransactionRecord, TxStatus};
 pub use package::{PackageDetails, PackageSummary};

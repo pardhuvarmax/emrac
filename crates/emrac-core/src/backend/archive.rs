@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::error::{Error, Result};
-use crate::rollback::is_package_file;
+use crate::rollback::{is_package_file, package_file_version};
 
 const BASE_URL: &str = "https://archive.archlinux.org/packages";
 const USER_AGENT: &str = concat!(
@@ -44,6 +44,37 @@ impl ArchiveBackend {
     /// means the Archive doesn't have it (including a package it has never
     /// heard of); `Err` means it couldn't be asked.
     pub fn find(&self, name: &str, version: &str) -> Result<Option<ArchiveFile>> {
+        let Some((dir_url, hrefs)) = self.listing(name)? else {
+            return Ok(None);
+        };
+        Ok(
+            pick_file(&hrefs, name, version).map(|filename| ArchiveFile {
+                url: format!("{dir_url}{}", percent_encode(&filename)),
+                filename,
+            }),
+        )
+    }
+
+    /// Every version of `name` the Archive has (unordered, deduplicated).
+    /// `Ok(None)` if the Archive has never heard of the package.
+    pub fn versions(&self, name: &str) -> Result<Option<Vec<String>>> {
+        let Some((_, hrefs)) = self.listing(name)? else {
+            return Ok(None);
+        };
+        let mut versions: Vec<String> = Vec::new();
+        for href in &hrefs {
+            if let Some(version) = package_file_version(href, name) {
+                if !versions.contains(&version) {
+                    versions.push(version);
+                }
+            }
+        }
+        Ok(Some(versions))
+    }
+
+    /// The directory URL and the (decoded) file names in it, or `None` on a
+    /// 404.
+    fn listing(&self, name: &str) -> Result<Option<(String, Vec<String>)>> {
         let Some(dir_url) = package_dir_url(name) else {
             return Ok(None);
         };
@@ -75,12 +106,7 @@ impl ArchiveBackend {
                 ))
             })?;
 
-        Ok(
-            pick_file(&listing_hrefs(&html), name, version).map(|filename| ArchiveFile {
-                url: format!("{dir_url}{}", percent_encode(&filename)),
-                filename,
-            }),
-        )
+        Ok(Some((dir_url, listing_hrefs(&html))))
     }
 
     /// Downloads `url` to `dest` via `<dest>.part`, renamed on success so an

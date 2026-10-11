@@ -117,6 +117,28 @@ pub enum Error {
     #[error("there's nothing in your history to roll back")]
     NoTransactionToRollBack,
 
+    #[error("'{0}' isn't installed, so there's nothing to downgrade — did you mean `emrac install {0}`?")]
+    PackageNotInstalledForDowngrade(String),
+
+    #[error(
+        "{pkg} {requested} isn't older than the {installed} you have — downgrade only goes back (use `emrac upgrade` or `emrac install` to go forward)"
+    )]
+    NotOlder {
+        pkg: String,
+        installed: String,
+        requested: String,
+    },
+
+    #[error(
+        "I can't find an older version of '{0}' to go back to — try `emrac downgrade {0} --list`"
+    )]
+    NoOlderVersion(String),
+
+    #[error(
+        "{pkg} {version} isn't on this machine and isn't available from the Arch Linux Archive — try `emrac downgrade {pkg} --list`"
+    )]
+    VersionUnavailable { pkg: String, version: String },
+
     #[error("there's no rollback in your history to redo")]
     NoTransactionToRedo,
 
@@ -158,6 +180,10 @@ impl Error {
             | Error::InvalidTransactionId(_)
             | Error::UnknownTransaction(_)
             | Error::NoTransactionToRollBack
+            | Error::PackageNotInstalledForDowngrade(_)
+            | Error::NotOlder { .. }
+            | Error::NoOlderVersion(_)
+            | Error::VersionUnavailable { .. }
             | Error::NoTransactionToRedo
             | Error::NotRollbackable { .. }
             | Error::RollbackFilesMissing(_) => "found",
