@@ -18,3 +18,5 @@ Current:
   `emrac history`/`transactions`; the groundwork for rollback.
 - [`u4-rollback.md`](./u4-rollback.md) — `emrac rollback [tx]` / `emrac undo`:
   inverse of a recorded transaction, guarded by a post-state check.
+- [`u5-archive-fetch.md`](./u5-archive-fetch.md) — rollback fetches
+  missing official package versions from the Arch Linux Archive.
