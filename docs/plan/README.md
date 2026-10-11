@@ -14,3 +14,5 @@ Current:
   ...`), the first increment after the `r1` core CLI loop milestone.
 - [`u2-completion.md`](./u2-completion.md) — `emrac completion
   bash|zsh|fish`, static shell completion generated from the clap definition.
+- [`u3-history.md`](./u3-history.md) — persisted transaction log and
+  `emrac history`/`transactions`; the groundwork for rollback.
