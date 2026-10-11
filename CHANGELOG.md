@@ -18,7 +18,11 @@ Executed `install`/`remove`/`upgrade` transactions are now recorded in an append
 
 Decisions: only transactions that actually ran are logged (dry runs, declined confirmations and empty plans are not); a failed history write only warns on stderr and never changes the transaction's own result; a record is the *plan* that was executed, so a run that failed halfway (official part done, AUR build failed) is one `failed` record rather than per-package status; reading skips unparsable lines so one bad line can't brick the command. Dates use a small tested civil-date conversion instead of adding `chrono`; all times are UTC. Design in `docs/plan/u3-history.md`.
 
-Verified on the host with a scratch `$HOME`: empty history, `--json`, `--limit`, `--since` (including a day with no matches), invalid dates like `2026-02-30` rejected, a hand-written log containing a corrupt line, and `install --dry-run` writing nothing. 10 new unit tests cover the log and date logic. **Not yet verified:** a real install/remove/failed-build writing records inside the podman container — the plan's container step is still open.
+Verified on the host with a scratch `$HOME`: empty history, `--json`, `--limit`, `--since` (including a day with no matches), invalid dates like `2026-02-30` rejected, a hand-written log containing a corrupt line, and `install --dry-run` writing nothing. 10 new unit tests cover the log and date logic.
+
+Verified inside the podman container (real execution): a real `install` and `remove` of `ripgrep` each wrote a `committed` record (`tx-1`, `tx-2`, correct JSON incl. `--json --limit 1`), `remove --dry-run` wrote nothing, and with a stale `/var/lib/pacman/db.lck` forced, `install` failed in `sudo pacman` and wrote a `FAILED` record with the error text while the command still reported its own error. (A removal pacman rejects at the `--print` planning stage, e.g. `remove ncurses`, never executes and so is correctly not recorded.)
+
+Build note: the debug binary was linked against nix's glibc loader because `~/.nix-profile/bin/cargo` precedes `/usr/bin` on this machine's `PATH`, so it can't run in the Arch container or even directly on the host. Build with `PATH=/usr/bin /usr/bin/cargo build` for a binary with the standard `/lib64` loader.
 
 ## Slice u2 — 2026-10-11 — shell completion
 
