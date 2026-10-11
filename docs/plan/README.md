@@ -22,3 +22,5 @@ Current:
   missing official package versions from the Arch Linux Archive.
 - [`u6-downgrade.md`](./u6-downgrade.md) — `emrac downgrade <pkg> [version]`,
   built on the rollback file/Archive machinery.
+- [`u7-reinstall.md`](./u7-reinstall.md) — `emrac reinstall <pkg>...`: the
+  same installed version again, without a partial upgrade.
