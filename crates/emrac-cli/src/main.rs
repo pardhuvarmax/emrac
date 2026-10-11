@@ -88,6 +88,9 @@ fn run(cli: &Cli) -> Result<()> {
             json,
             quiet,
         ),
+        Commands::Reinstall { pkgs } => {
+            commands::reinstall::run(&sources, pkgs, dry_run, yes, offline, json)
+        }
         Commands::Downgrade { pkg, version, list } => {
             if *list {
                 commands::downgrade::list(&sources, pkg, offline, json)

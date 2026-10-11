@@ -88,13 +88,18 @@ pub fn find_record<'a>(
 }
 
 /// Records `undo`/a bare `rollback` may pick, newest first: real
-/// transactions (not rollbacks) that nothing is currently reversing.
+/// transactions (not rollbacks, and not reinstalls, which change nothing to
+/// undo) that nothing is currently reversing.
 /// `history` is oldest first.
 pub fn candidates(history: &[TransactionRecord]) -> Vec<&TransactionRecord> {
     history
         .iter()
         .rev()
-        .filter(|r| r.rollback_of.is_none() && rolled_back_by(history, &r.id).is_none())
+        .filter(|r| {
+            r.rollback_of.is_none()
+                && r.action != PlanAction::Reinstall
+                && rolled_back_by(history, &r.id).is_none()
+        })
         .collect()
 }
 
@@ -137,6 +142,11 @@ pub fn plan_rollback(
     if let Some(by) = rolled_back_by(history, &record.id) {
         return Err(refuse(format!("it was already reversed by {}", by.id)));
     }
+    if record.action == PlanAction::Reinstall {
+        return Err(refuse(
+            "a reinstall puts back the same version, so there's nothing to undo".into(),
+        ));
+    }
     if matches!(record.action, PlanAction::Upgrade | PlanAction::Downgrade)
         && record.packages.iter().any(|p| p.previous_version.is_none())
     {
@@ -151,6 +161,7 @@ pub fn plan_rollback(
         PlanAction::Remove => PlanAction::Install,
         PlanAction::Upgrade => PlanAction::Downgrade,
         PlanAction::Downgrade => PlanAction::Upgrade,
+        PlanAction::Reinstall => unreachable!("refused above"),
     };
 
     let mut packages = Vec::new();
@@ -176,6 +187,7 @@ pub fn plan_rollback(
                 pkg.previous_version.clone().expect("checked above"),
                 current.clone(),
             ),
+            PlanAction::Reinstall => unreachable!("refused above"),
         };
 
         if inverse != PlanAction::Remove {
@@ -263,6 +275,7 @@ fn still_in_post_state(
             Some(current) => Err(format!("installed again (at {current})")),
             None => Ok(()),
         },
+        PlanAction::Reinstall => Err("a reinstall can't be rolled back".into()),
     }
 }
 
@@ -862,5 +875,20 @@ mod tests {
         assert_eq!(v("foo-1.0-a-x86_64.pkg.tar.zst", "foo"), None);
         assert_eq!(v("fo-1.0-1-x86_64.pkg.tar.zst", "foo"), None);
         assert_eq!(v("foo.txt", "foo"), None);
+    }
+
+    #[test]
+    fn reinstalls_cannot_be_rolled_back_and_undo_skips_them() {
+        let install = rec("tx-1", PlanAction::Install, vec![pkg("a", "1-1", None)]);
+        let reinstall = rec("tx-2", PlanAction::Reinstall, vec![pkg("a", "1-1", None)]);
+        let history = vec![install, reinstall.clone()];
+        let w = World::new(&[("a", "1-1")], &[]);
+
+        match w.plan(&reinstall, &history) {
+            Err(Error::NotRollbackable { why, .. }) => assert!(why.contains("same version")),
+            other => panic!("expected refusal, got {other:?}"),
+        }
+        let ids: Vec<_> = candidates(&history).iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, ["tx-1"]);
     }
 }

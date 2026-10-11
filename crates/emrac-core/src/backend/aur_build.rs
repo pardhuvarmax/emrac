@@ -105,6 +105,13 @@ impl AurBuildBackend {
         Ok(())
     }
 
+    /// Whether emrac already has a git checkout of `pkg`'s AUR repo.
+    pub fn has_checkout(&self, pkg: &str) -> bool {
+        self.build_dir(pkg)
+            .map(|dir| dir.join(".git").exists())
+            .unwrap_or(false)
+    }
+
     pub fn build_dir(&self, pkg: &str) -> Result<PathBuf> {
         let home = env::var("HOME").map_err(|_| Error::NoHomeDir)?;
         Ok(PathBuf::from(home).join(".cache/emrac/build").join(pkg))

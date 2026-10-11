@@ -13,3 +13,5 @@ Currently: [`search.rs`](./search.rs), [`info.rs`](./info.rs), [`install.rs`](./
 [`rollback.rs`](./rollback.rs) handles `emrac rollback [tx]`, `emrac undo` and `emrac redo` (same code path; redo is just reversing the latest undo): plan, show what will change and what is left alone, confirm, execute, then log the result with `history::record_rollback`.
 
 [`downgrade.rs`](./downgrade.rs) handles `emrac downgrade <pkg> [version]` and `--list`: plan, preview, confirm, execute via the same fetch + `pacman -U` path rollback uses, then log it as a `downgrade` transaction (so `undo` can reverse it).
+
+[`reinstall.rs`](./reinstall.rs) handles `emrac reinstall <pkg>...`: plan (each package's source is shown), confirm, execute, log as a `reinstall` transaction (which `undo` skips and `rollback` refuses, since no version changes).

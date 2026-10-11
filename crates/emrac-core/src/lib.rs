@@ -5,6 +5,7 @@ mod error;
 mod history;
 mod package;
 mod plan;
+mod reinstall;
 mod rollback;
 mod sources;
 
@@ -15,5 +16,6 @@ pub use error::{Error, Result};
 pub use history::{parse_date, History, TransactionRecord, TxStatus};
 pub use package::{PackageDetails, PackageSummary};
 pub use plan::{Plan, PlanAction, PlannedPackage};
+pub use reinstall::{ReinstallItem, ReinstallPlan, ReinstallSource};
 pub use rollback::{rolled_back_by, Download, RollbackPlan, SkippedPackage};
 pub use sources::{SearchResults, SearchScope, Sources, UpgradePlan};

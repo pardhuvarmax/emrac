@@ -10,6 +10,7 @@ use crate::error::{Error, Result};
 use crate::history::{History, TxStatus};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::plan::{Plan, PlanAction, PlannedPackage};
+use crate::reinstall::{self, ReinstallItem, ReinstallPlan, ReinstallSource};
 use crate::rollback::{self, Download, RemoteFile, RollbackPlan};
 
 /// Which package sources a search should cover. Defaults to both.
@@ -594,6 +595,153 @@ impl Sources {
     pub fn execute_downgrade(&self, downgrade: &DowngradePlan) -> Result<()> {
         self.fetch_downloads(&downgrade.downloads)?;
         self.pacman.execute_install_files(&downgrade.files)
+    }
+
+    /// Plans `emrac reinstall`: the installed version of each named package
+    /// again, never the repositories' newer one (see `reinstall.rs`). No
+    /// root and nothing written; the Archive is only listed, and only for an
+    /// official package whose installed version is neither on disk nor still
+    /// in the repositories (and not at all if `offline`).
+    pub fn plan_reinstall(&self, pkgs: &[String], offline: bool) -> Result<ReinstallPlan> {
+        let mut names: Vec<&String> = Vec::new();
+        for pkg in pkgs {
+            if !names.contains(&pkg) {
+                names.push(pkg);
+            }
+        }
+
+        let missing: Vec<&str> = names
+            .iter()
+            .filter(|p| self.alpm.installed_version(p).is_none())
+            .map(|p| p.as_str())
+            .collect();
+        if !missing.is_empty() {
+            return Err(Error::NotInstalledForReinstall(missing.join(", ")));
+        }
+
+        let cache_dirs = self.pacman.cache_dirs()?;
+        let mut packages = Vec::new();
+        let mut items = Vec::new();
+        let mut files = Vec::new();
+        let mut repository = Vec::new();
+        let mut rebuild = Vec::new();
+        let mut downloads = Vec::new();
+        let mut problems = Vec::new();
+
+        for pkg in names {
+            let installed = self
+                .alpm
+                .installed_version(pkg)
+                .expect("checked installed above");
+            let foreign = matches!(
+                self.alpm.installed_source(pkg),
+                Some(InstalledSource::Foreign)
+            );
+            let sync = self
+                .alpm
+                .sync_resolved(std::slice::from_ref(pkg))
+                .into_iter()
+                .next();
+            let repo = sync
+                .as_ref()
+                .map(|r| r.repo.clone())
+                .unwrap_or_else(|| "aur".to_string());
+            let local_file = self.locate_file(&cache_dirs, pkg, &installed);
+
+            let mut remote: Option<RemoteFile> = None;
+            let mut remote_error: Option<Error> = None;
+            let source = reinstall::choose_source(
+                foreign,
+                &installed,
+                sync.as_ref().map(|r| r.version.as_str()),
+                local_file.is_some(),
+                !offline,
+                || {
+                    match self.locate_remote(false, pkg, &installed) {
+                        Ok(found) => remote = found,
+                        Err(err) => remote_error = Some(err),
+                    }
+                    remote.is_some()
+                },
+                self.aur_build.has_checkout(pkg),
+            );
+            // An Archive we couldn't reach is not "the Archive doesn't have
+            // it" — surface that instead of a misleading reason.
+            if let Some(err) = remote_error {
+                return Err(err);
+            }
+            let source = match source {
+                Ok(source) => source,
+                Err(why) => {
+                    problems.push(format!("{pkg} ({why})"));
+                    continue;
+                }
+            };
+
+            match source {
+                ReinstallSource::File => files.extend(local_file),
+                ReinstallSource::Repository => repository.push(pkg.clone()),
+                ReinstallSource::Rebuild => rebuild.push(pkg.clone()),
+                ReinstallSource::Archive => {
+                    let remote = remote.expect("Archive source implies a remote file");
+                    files.push(remote.dest.clone());
+                    downloads.push(Download {
+                        name: pkg.clone(),
+                        version: installed.clone(),
+                        url: remote.url,
+                        dest: remote.dest,
+                    });
+                }
+            }
+            items.push(ReinstallItem {
+                name: pkg.clone(),
+                version: installed.clone(),
+                source,
+            });
+            packages.push(PlannedPackage {
+                name: pkg.clone(),
+                version: installed,
+                repo,
+                explicit: true,
+                previous_version: None,
+            });
+        }
+
+        if !problems.is_empty() {
+            return Err(Error::CannotReinstall(problems.join("; ")));
+        }
+
+        Ok(ReinstallPlan {
+            plan: Plan {
+                action: PlanAction::Reinstall,
+                packages,
+                total_download_size: 0,
+                total_installed_size_delta: 0,
+            },
+            items,
+            files,
+            repository,
+            rebuild,
+            downloads,
+        })
+    }
+
+    /// Runs a reinstall plan: fetches what's missing, then package files
+    /// (`pacman -U`), then repository packages (`pacman -S`), then AUR
+    /// rebuilds (`makepkg -si` on the existing checkout). Stops at the first
+    /// failure.
+    pub fn execute_reinstall(&self, reinstall: &ReinstallPlan) -> Result<()> {
+        self.fetch_downloads(&reinstall.downloads)?;
+        if !reinstall.files.is_empty() {
+            self.pacman.execute_install_files(&reinstall.files)?;
+        }
+        if !reinstall.repository.is_empty() {
+            self.pacman.execute_install(&reinstall.repository)?;
+        }
+        for name in &reinstall.rebuild {
+            self.aur_build.build_and_install(name)?;
+        }
+        Ok(())
     }
 
     /// Runs a rollback plan: a removal via `sudo pacman -R`, anything else

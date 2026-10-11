@@ -1,0 +1,30 @@
+use emrac_core::{Result, Sources};
+
+use crate::commands::history;
+use crate::output;
+use crate::prompt::confirm;
+
+pub fn run(
+    sources: &Sources,
+    pkgs: &[String],
+    dry_run: bool,
+    yes: bool,
+    offline: bool,
+    json: bool,
+) -> Result<()> {
+    let reinstall = sources.plan_reinstall(pkgs, offline)?;
+    output::print_reinstall(&reinstall, json);
+
+    if dry_run {
+        return Ok(());
+    }
+
+    if !yes && !confirm("Proceed with the reinstall?") {
+        println!("emrac notes: okay, nothing reinstalled.");
+        return Ok(());
+    }
+
+    let result = sources.execute_reinstall(&reinstall);
+    history::record(&reinstall.plan, &result);
+    result
+}

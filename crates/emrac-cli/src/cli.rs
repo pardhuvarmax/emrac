@@ -111,6 +111,12 @@ pub enum Commands {
         command: ConfigCommand,
     },
 
+    /// Put the installed version of one or more packages back (repair)
+    Reinstall {
+        #[arg(required = true)]
+        pkgs: Vec<String>,
+    },
+
     /// Go back to an older version of an installed package
     Downgrade {
         pkg: String,

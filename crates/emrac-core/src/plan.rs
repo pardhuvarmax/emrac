@@ -8,6 +8,8 @@ pub enum PlanAction {
     Upgrade,
     /// Only produced by a rollback of an upgrade.
     Downgrade,
+    /// The same version put back: repair, re-run install scripts.
+    Reinstall,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

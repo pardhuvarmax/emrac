@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use emrac_core::{
-    DowngradePlan, Download, PackageDetails, PackageSummary, Plan, PlanAction, RollbackPlan,
-    TransactionRecord, TxStatus, VersionList,
+    DowngradePlan, Download, PackageDetails, PackageSummary, Plan, PlanAction, ReinstallPlan,
+    ReinstallSource, RollbackPlan, TransactionRecord, TxStatus, VersionList,
 };
 
 pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
@@ -79,6 +79,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
             PlanAction::Remove => "nothing to remove.",
             PlanAction::Upgrade => "nothing to upgrade — you're already up to date.",
             PlanAction::Downgrade => "nothing to downgrade.",
+            PlanAction::Reinstall => "nothing to reinstall.",
         };
         println!("emrac notes: {note}");
         return;
@@ -89,6 +90,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
         PlanAction::Remove => "remove",
         PlanAction::Upgrade => "upgrade",
         PlanAction::Downgrade => "downgrade",
+        PlanAction::Reinstall => "reinstall",
     };
 
     println!(
@@ -127,6 +129,28 @@ pub fn print_pkgbuild(pkg: &str, content: &str) {
 pub fn print_pkgbuild_diff(pkg: &str, diff: &str) {
     println!("emrac notes: PKGBUILD changes for '{pkg}' since your last build:\n");
     println!("{diff}");
+}
+
+pub fn print_reinstall(reinstall: &ReinstallPlan, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(reinstall).unwrap());
+        return;
+    }
+
+    println!(
+        "emrac plans: reinstall {}\n",
+        plural(reinstall.items.len(), "package")
+    );
+    for (item, pkg) in reinstall.items.iter().zip(&reinstall.plan.packages) {
+        let from = match item.source {
+            ReinstallSource::File => "from a package file on this machine",
+            ReinstallSource::Repository => "from the repositories",
+            ReinstallSource::Archive => "from the Arch Linux Archive",
+            ReinstallSource::Rebuild => "rebuilt from your existing AUR checkout",
+        };
+        println!("  {}/{} {} ({from})", pkg.repo, pkg.name, pkg.version);
+    }
+    print_downloads(&reinstall.downloads);
 }
 
 pub fn print_downgrade(downgrade: &DowngradePlan, json: bool) {
@@ -204,6 +228,7 @@ pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
             PlanAction::Install => "reinstall",
             PlanAction::Downgrade => "downgrade",
             PlanAction::Upgrade => "upgrade",
+            PlanAction::Reinstall => "reinstall",
         };
         let what = match &rollback.reapplies {
             Some(original) => format!("redo {original} (by reversing {})", rollback.target),
@@ -259,6 +284,7 @@ pub fn print_history(
             PlanAction::Remove => "remove",
             PlanAction::Upgrade => "upgrade",
             PlanAction::Downgrade => "downgrade",
+            PlanAction::Reinstall => "reinstall",
         };
         let status = match record.status {
             TxStatus::Committed => "committed",

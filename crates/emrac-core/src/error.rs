@@ -139,6 +139,12 @@ pub enum Error {
     )]
     VersionUnavailable { pkg: String, version: String },
 
+    #[error("not installed, so there's nothing to reinstall: {0} — did you mean `emrac install`?")]
+    NotInstalledForReinstall(String),
+
+    #[error("can't reinstall: {0}")]
+    CannotReinstall(String),
+
     #[error("there's no rollback in your history to redo")]
     NoTransactionToRedo,
 
@@ -180,6 +186,8 @@ impl Error {
             | Error::InvalidTransactionId(_)
             | Error::UnknownTransaction(_)
             | Error::NoTransactionToRollBack
+            | Error::NotInstalledForReinstall(_)
+            | Error::CannotReinstall(_)
             | Error::PackageNotInstalledForDowngrade(_)
             | Error::NotOlder { .. }
             | Error::NoOlderVersion(_)
