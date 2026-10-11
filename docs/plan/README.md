@@ -28,3 +28,5 @@ Current:
   `.pacsave`, with a preview of the modified configs it will destroy.
 - [`u9-verify.md`](./u9-verify.md) — `emrac verify <pkg>...`: installed files
   vs. pacman's mtree record.
+- [`u10-snapshot.md`](./u10-snapshot.md) — `emrac snapshot` / `emrac restore`:
+  named package-set restore points and a diff-driven restore.
