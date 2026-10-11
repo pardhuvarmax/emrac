@@ -12,3 +12,5 @@ Current:
 
 - [`u1-config.md`](./u1-config.md) — persisted config file (`emrac config
   ...`), the first increment after the `r1` core CLI loop milestone.
+- [`u2-completion.md`](./u2-completion.md) — `emrac completion
+  bash|zsh|fish`, static shell completion generated from the clap definition.
