@@ -32,3 +32,5 @@ Current:
   named package-set restore points and a diff-driven restore.
 - [`u11-auto-snapshot.md`](./u11-auto-snapshot.md) — `snapshot.before_upgrade`: automatic
   restore point before `emrac upgrade`.
+- [`u12-deps.md`](./u12-deps.md) — `emrac deps`/`rdeps`/`why`/`orphans`: read-only
+  dependency inspection.
