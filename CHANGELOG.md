@@ -12,6 +12,14 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u12 — 2026-10-11 — deps, rdeps, why, orphans
+
+Four read-only dependency commands (libalpm only, no root, no network, `--json`), from the spec's Dependency Intelligence group. `emrac deps <pkg> [--recursive]` (alias `depends`) lists a package's required and optional dependencies, each with what satisfies it on this machine (`installed`, `provided by <pkg>` or `not installed`); an uninstalled package is described from the repositories. `--recursive` adds the transitive closure of required dependencies of installed packages, each once with its shallowest level. `emrac rdeps <pkg>` (alias `required-by`) lists installed packages that require it and those that list it as optional. `emrac why <pkg>` says why an installed package is there: explicitly installed (plus who else needs it, capped at 12 names), installed as a dependency with the shortest chain from an explicit package (`bash → readline`; breadth-first over required-by, ties alphabetical, hard dependencies only), or an orphan. `emrac orphans` lists dependencies that nothing requires or optionally depends on, with sizes (the `pacman -Qdtq` rule); it only lists, removal stays with `emrac remove`. Chain and closure searches are pure functions in `deps.rs`. Design in `docs/plan/u12-deps.md`.
+
+Verified with 5 new unit tests (shortest chain, no explicit dependent, cycles, alphabetical ties, closure depths; 96 in emrac-core). On the host: `orphans` equals `pacman -Qdtq` exactly (15 packages), and `rdeps` matches `pacman -Qi`'s "Required By" for readline, glibc and openssl.
+
+Not built: `tree`, `graph`, `impact`, `cycles`, `--recursive` for uninstalled packages.
+
 ## Slice u11 — 2026-10-11 — automatic snapshot before upgrade
 
 New config key `snapshot.before_upgrade` (default `false`; `emrac config set snapshot.before_upgrade true`). When on, `emrac upgrade` saves a snapshot named `pre-upgrade-<unix time>` (note "before emrac upgrade") after the review and confirmation steps, immediately before anything changes, and prints `emrac restore <name>` to go back. Not taken for `--dry-run`, a declined prompt or an empty plan. Only the newest 5 `pre-upgrade-*` snapshots are kept; snapshots with other names are never deleted. A failure to save is a warning on stderr and the upgrade continues. The message goes to stderr so `--json` output stays clean. Design in `docs/plan/u11-auto-snapshot.md`.

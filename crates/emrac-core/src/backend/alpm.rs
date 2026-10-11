@@ -4,6 +4,7 @@ use std::process::Command;
 
 use alpm::{Alpm, SigLevel};
 
+use crate::deps::{DepEntry, Orphan};
 use crate::error::{Error, Result};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::purge::{classify, ConfigFile, Observed};
@@ -203,6 +204,90 @@ impl AlpmBackend {
                 foreign: foreign.contains(pkg.name()),
             })
             .collect()
+    }
+
+    /// Dependencies of `name`: the installed package if there is one, else
+    /// the sync-db one. `None` if neither exists.
+    pub fn dependencies(&self, name: &str) -> Option<(String, bool, Vec<DepEntry>, Vec<DepEntry>)> {
+        let local = self.handle.localdb();
+        let (pkg, installed) = match local.pkg(name) {
+            Ok(pkg) => (pkg, true),
+            Err(_) => (
+                self.handle
+                    .syncdbs()
+                    .into_iter()
+                    .find_map(|db| db.pkg(name).ok())?,
+                false,
+            ),
+        };
+        let entry = |dep: &alpm::Dep, with_desc: bool| DepEntry {
+            spec: dep.to_string(),
+            satisfied_by: local
+                .pkgs()
+                .find_satisfier(dep.to_string())
+                .map(|p| (p.name().to_string(), p.version().to_string())),
+            description: with_desc.then(|| dep.desc().unwrap_or_default().to_string()),
+        };
+        let depends = pkg.depends().iter().map(|d| entry(d, false)).collect();
+        let optional = pkg.optdepends().iter().map(|d| entry(d, true)).collect();
+        Some((pkg.version().to_string(), installed, depends, optional))
+    }
+
+    /// Names of the installed packages satisfying `name`'s required
+    /// dependencies (duplicates removed, unsatisfied ones skipped).
+    pub fn installed_dependency_names(&self, name: &str) -> Vec<String> {
+        let local = self.handle.localdb();
+        let Ok(pkg) = local.pkg(name) else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = pkg
+            .depends()
+            .iter()
+            .filter_map(|d| local.pkgs().find_satisfier(d.to_string()))
+            .map(|p| p.name().to_string())
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    pub fn is_explicit(&self, name: &str) -> bool {
+        self.handle
+            .localdb()
+            .pkg(name)
+            .is_ok_and(|p| p.reason() == alpm::PackageReason::Explicit)
+    }
+
+    /// `(required_by, optional_for)` of an installed package.
+    pub fn dependents(&self, name: &str) -> Option<(Vec<String>, Vec<String>)> {
+        let pkg = self.handle.localdb().pkg(name).ok()?;
+        let mut required: Vec<String> = pkg.required_by().iter().map(str::to_string).collect();
+        let mut optional: Vec<String> = pkg.optional_for().iter().map(str::to_string).collect();
+        required.sort();
+        optional.sort();
+        Some((required, optional))
+    }
+
+    /// Dependencies that nothing requires or optionally depends on.
+    pub fn orphans(&self) -> Vec<Orphan> {
+        let mut found: Vec<Orphan> = self
+            .handle
+            .localdb()
+            .pkgs()
+            .into_iter()
+            .filter(|p| {
+                p.reason() == alpm::PackageReason::Depend
+                    && p.required_by().is_empty()
+                    && p.optional_for().is_empty()
+            })
+            .map(|p| Orphan {
+                name: p.name().to_string(),
+                version: p.version().to_string(),
+                installed_size: p.isize().max(0) as u64,
+            })
+            .collect();
+        found.sort_by(|a, b| a.name.cmp(&b.name));
+        found
     }
 
     /// Names of installed packages that aren't in any sync database — the

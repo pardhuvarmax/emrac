@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use emrac_core::{
-    ConfigState, DowngradePlan, Download, IssueKind, PackageDetails, PackageSummary, Plan,
-    PlanAction, PurgePlan, ReinstallPlan, ReinstallSource, RestorePlan, RestoreSource,
-    RollbackPlan, Snapshot, TransactionRecord, TxStatus, VerifyReport, VersionList,
+    ConfigState, DepEntry, DepsReport, DowngradePlan, Download, IssueKind, Orphan, PackageDetails,
+    PackageSummary, Plan, PlanAction, PurgePlan, RdepsReport, ReinstallPlan, ReinstallSource,
+    RestorePlan, RestoreSource, RollbackPlan, Snapshot, TransactionRecord, TxStatus, VerifyReport,
+    VersionList, WhyReport,
 };
 
 pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
@@ -566,4 +567,131 @@ pub fn print_restore(restore: &RestorePlan, json: bool) {
             println!("  {name} {version}");
         }
     }
+}
+
+fn print_dep_entries(entries: &[DepEntry]) {
+    for dep in entries {
+        let state = match &dep.satisfied_by {
+            Some((name, version)) if dep.spec.split(['<', '>', '=']).next() == Some(name) => {
+                format!("installed {version}")
+            }
+            Some((name, version)) => format!("provided by {name} {version}"),
+            None => "not installed".to_string(),
+        };
+        match dep.description.as_deref().filter(|d| !d.is_empty()) {
+            Some(desc) => println!("  {}  [{state}]  {desc}", dep.spec),
+            None => println!("  {}  [{state}]", dep.spec),
+        }
+    }
+}
+
+pub fn print_deps(report: &DepsReport, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(report).unwrap());
+        return;
+    }
+
+    let source = if report.installed {
+        ""
+    } else {
+        " (not installed; from the repositories)"
+    };
+    println!("emrac found: {} {}{source}\n", report.name, report.version);
+    if report.depends.is_empty() {
+        println!("Requires: nothing");
+    } else {
+        println!("Requires:");
+        print_dep_entries(&report.depends);
+    }
+    if !report.optional.is_empty() {
+        println!("\nOptional:");
+        print_dep_entries(&report.optional);
+    }
+    if let Some(all) = &report.recursive {
+        println!("\nAll required dependencies, transitively ({}):", all.len());
+        for (name, depth) in all {
+            println!("  {name}  (level {depth})");
+        }
+    }
+}
+
+pub fn print_rdeps(report: &RdepsReport, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(report).unwrap());
+        return;
+    }
+
+    if report.required_by.is_empty() && report.optional_for.is_empty() {
+        println!("emrac notes: no installed package needs '{}'.", report.name);
+        return;
+    }
+    println!("emrac found: what needs {}\n", report.name);
+    if !report.required_by.is_empty() {
+        println!("Required by: {}", report.required_by.join("  "));
+    }
+    if !report.optional_for.is_empty() {
+        println!("Optional for: {}", report.optional_for.join("  "));
+    }
+}
+
+pub fn print_why(report: &WhyReport, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(report).unwrap());
+        return;
+    }
+
+    match report {
+        WhyReport::Explicit { name, required_by } => {
+            println!("emrac found: {name} is installed because you asked for it.");
+            if !required_by.is_empty() {
+                const SHOWN: usize = 12;
+                let mut list = required_by.iter().take(SHOWN).cloned().collect::<Vec<_>>();
+                if required_by.len() > SHOWN {
+                    list.push(format!("and {} more", required_by.len() - SHOWN));
+                }
+                println!("It is also required by: {}", list.join("  "));
+            }
+        }
+        WhyReport::Dependency { name, chain } => {
+            println!("emrac found: {name} is installed as a dependency.\n");
+            println!("  {}", chain.join(" → "));
+        }
+        WhyReport::Orphan { name } => {
+            println!(
+                "emrac found: {name} was installed as a dependency, but no installed package needs it any more."
+            );
+            println!("`emrac remove {name}` would clear it.");
+        }
+    }
+}
+
+pub fn print_orphans(orphans: &[Orphan], json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(orphans).unwrap());
+        return;
+    }
+
+    if orphans.is_empty() {
+        println!("emrac notes: no orphaned dependencies.");
+        return;
+    }
+    let noun = if orphans.len() == 1 {
+        "orphaned dependency"
+    } else {
+        "orphaned dependencies"
+    };
+    println!(
+        "emrac found: {} {noun}, which no package needs\n",
+        orphans.len()
+    );
+    for o in orphans {
+        println!(
+            "  {} {}  ({})",
+            o.name,
+            o.version,
+            human_size(o.installed_size)
+        );
+    }
+    let total: u64 = orphans.iter().map(|o| o.installed_size).sum();
+    println!("\n{} in total.", human_size(total));
 }

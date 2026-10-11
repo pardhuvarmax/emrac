@@ -177,6 +177,14 @@ pub enum Error {
     #[error("can't restore: no package file for {0} — not cached, and not in the Arch Linux Archive (or --offline)")]
     RestoreFilesMissing(String),
 
+    #[error(
+        "'{0}' isn't installed and isn't in the repositories, so it has no dependencies to show"
+    )]
+    NoSuchPackage(String),
+
+    #[error("'{0}' isn't installed")]
+    NotInstalled(String),
+
     #[error("there's no rollback in your history to redo")]
     NoTransactionToRedo,
 
@@ -226,6 +234,8 @@ impl Error {
             | Error::NotOlder { .. }
             | Error::NoOlderVersion(_)
             | Error::VersionUnavailable { .. }
+            | Error::NoSuchPackage(_)
+            | Error::NotInstalled(_)
             | Error::InvalidSnapshotName(_)
             | Error::SnapshotExists(_)
             | Error::UnknownSnapshot(_)

@@ -2,9 +2,10 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::backend::{
-    AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome, InstalledSource,
-    PacmanBackend, ResolvedPackage, version_is_newer,
+    version_is_newer, AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome,
+    InstalledSource, PacmanBackend, ResolvedPackage,
 };
+use crate::deps::{self, DepsReport, Orphan, RdepsReport, WhyReport};
 use crate::downgrade::{self, DowngradePlan, VersionList};
 use crate::error::{Error, Result};
 use crate::history::{History, TxStatus};
@@ -799,6 +800,63 @@ impl Sources {
                 self.pacman.execute_install_files(&files)
             }
         }
+    }
+
+    /// `emrac deps`: direct dependencies, optionally the whole closure.
+    pub fn deps(&self, pkg: &str, recursive: bool) -> Result<DepsReport> {
+        let (version, installed, depends, optional) = self
+            .alpm
+            .dependencies(pkg)
+            .ok_or_else(|| Error::NoSuchPackage(pkg.to_string()))?;
+        let recursive = (recursive && installed)
+            .then(|| deps::closure(pkg, &|n| self.alpm.installed_dependency_names(n)));
+        Ok(DepsReport {
+            name: pkg.to_string(),
+            version,
+            installed,
+            depends,
+            optional,
+            recursive,
+        })
+    }
+
+    /// `emrac rdeps`: installed packages that need `pkg`.
+    pub fn rdeps(&self, pkg: &str) -> Result<RdepsReport> {
+        let (required_by, optional_for) = self
+            .alpm
+            .dependents(pkg)
+            .ok_or_else(|| Error::NotInstalled(pkg.to_string()))?;
+        Ok(RdepsReport {
+            name: pkg.to_string(),
+            required_by,
+            optional_for,
+        })
+    }
+
+    /// `emrac why`: why `pkg` is installed.
+    pub fn why(&self, pkg: &str) -> Result<WhyReport> {
+        let (required_by, _) = self
+            .alpm
+            .dependents(pkg)
+            .ok_or_else(|| Error::NotInstalled(pkg.to_string()))?;
+        let name = pkg.to_string();
+        if self.alpm.is_explicit(pkg) {
+            return Ok(WhyReport::Explicit { name, required_by });
+        }
+        let chain = deps::why_chain(
+            pkg,
+            &|n| self.alpm.dependents(n).map(|d| d.0).unwrap_or_default(),
+            &|n| self.alpm.is_explicit(n),
+        );
+        Ok(match chain {
+            Some(chain) => WhyReport::Dependency { name, chain },
+            None => WhyReport::Orphan { name },
+        })
+    }
+
+    /// `emrac orphans`.
+    pub fn orphans(&self) -> Vec<Orphan> {
+        self.alpm.orphans()
     }
 
     /// Saves the installed package set as a named restore point.

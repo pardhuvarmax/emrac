@@ -126,6 +126,26 @@ pub enum Commands {
         command: ConfigCommand,
     },
 
+    /// Show a package's dependencies
+    #[command(visible_alias = "depends")]
+    Deps {
+        pkg: String,
+
+        /// The whole transitive closure of required dependencies
+        #[arg(short, long)]
+        recursive: bool,
+    },
+
+    /// Show which installed packages need a package
+    #[command(visible_alias = "required-by")]
+    Rdeps { pkg: String },
+
+    /// Explain why an installed package is on this system
+    Why { pkg: String },
+
+    /// List dependencies nothing needs any more
+    Orphans,
+
     /// Save, list, show or delete named restore points of the installed
     /// package set (no subcommand: save a new one)
     Snapshot {

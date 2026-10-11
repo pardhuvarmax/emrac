@@ -107,6 +107,10 @@ fn run(cli: &Cli) -> Result<()> {
             quiet,
             config.snapshot.before_upgrade,
         ),
+        Commands::Deps { pkg, recursive } => commands::deps::deps(&sources, pkg, *recursive, json),
+        Commands::Rdeps { pkg } => commands::deps::rdeps(&sources, pkg, json),
+        Commands::Why { pkg } => commands::deps::why(&sources, pkg, json),
+        Commands::Orphans => commands::deps::orphans(&sources, json),
         Commands::Snapshot { command } => {
             commands::snapshot::create(&sources, command.as_ref(), json)
         }

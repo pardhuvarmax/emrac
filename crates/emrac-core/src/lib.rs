@@ -1,5 +1,6 @@
 mod backend;
 mod config;
+mod deps;
 mod downgrade;
 mod error;
 mod history;
@@ -14,6 +15,7 @@ mod verify;
 
 pub use backend::AurSyncOutcome;
 pub use config::Config;
+pub use deps::{DepEntry, DepsReport, Orphan, RdepsReport, WhyReport};
 pub use downgrade::{DowngradePlan, ListedVersion, VersionList};
 pub use error::{Error, Result};
 pub use history::{parse_date, History, TransactionRecord, TxStatus};
