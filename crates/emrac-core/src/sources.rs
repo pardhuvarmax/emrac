@@ -2,14 +2,14 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::backend::{
-    version_is_newer, AlpmBackend, AurBackend, AurBuildBackend, AurSyncOutcome, InstalledSource,
-    PacmanBackend, ResolvedPackage,
+    AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome, InstalledSource,
+    PacmanBackend, ResolvedPackage, version_is_newer,
 };
 use crate::error::{Error, Result};
 use crate::history::{History, TxStatus};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::plan::{Plan, PlanAction, PlannedPackage};
-use crate::rollback::{self, RollbackPlan};
+use crate::rollback::{self, RemoteFile, RollbackPlan};
 
 /// Which package sources a search should cover. Defaults to both.
 #[derive(Debug, Clone, Copy)]
@@ -51,6 +51,7 @@ pub struct Sources {
     alpm: AlpmBackend,
     aur: AurBackend,
     aur_build: AurBuildBackend,
+    archive: ArchiveBackend,
     pacman: PacmanBackend,
 }
 
@@ -60,6 +61,7 @@ impl Sources {
             alpm: AlpmBackend::init()?,
             aur: AurBackend::new(),
             aur_build: AurBuildBackend::new(),
+            archive: ArchiveBackend::new(),
             pacman: PacmanBackend::new(),
         })
     }
@@ -379,17 +381,18 @@ impl Sources {
 
     /// Plans reversing a recorded transaction: `tx` names one, `None` means
     /// the most recent one that can still be rolled back. No root, nothing
-    /// is mutated.
-    pub fn plan_rollback(&self, tx: Option<&str>) -> Result<RollbackPlan> {
-        self.plan_reversal(tx, false)
+    /// is mutated. Package files missing from disk are looked up in the Arch
+    /// Linux Archive (read-only) unless `offline`.
+    pub fn plan_rollback(&self, tx: Option<&str>, offline: bool) -> Result<RollbackPlan> {
+        self.plan_reversal(tx, false, offline)
     }
 
     /// Plans re-applying the most recent rollback — i.e. reversing it.
-    pub fn plan_redo(&self) -> Result<RollbackPlan> {
-        self.plan_reversal(None, true)
+    pub fn plan_redo(&self, offline: bool) -> Result<RollbackPlan> {
+        self.plan_reversal(None, true, offline)
     }
 
-    fn plan_reversal(&self, tx: Option<&str>, redo: bool) -> Result<RollbackPlan> {
+    fn plan_reversal(&self, tx: Option<&str>, redo: bool, offline: bool) -> Result<RollbackPlan> {
         let history = History::all()?;
         let cache_dirs = self.pacman.cache_dirs()?;
         let installed = |name: &str| self.alpm.installed_version(name);
@@ -398,13 +401,28 @@ impl Sources {
             if let Ok(build_dir) = self.aur_build.build_dir(name) {
                 dirs.push(build_dir);
             }
+            if let Ok(archive_dir) = self.archive.cache_dir(name) {
+                dirs.push(archive_dir);
+            }
             rollback::find_package_file(&dirs, name, version)
+        };
+        let find_remote = |name: &str, version: &str| -> Result<Option<RemoteFile>> {
+            if offline {
+                return Ok(None);
+            }
+            let Some(file) = self.archive.find(name, version)? else {
+                return Ok(None);
+            };
+            Ok(Some(RemoteFile {
+                dest: self.archive.cache_dir(name)?.join(&file.filename),
+                url: file.url,
+            }))
         };
 
         if let Some(tx) = tx {
             let id = rollback::parse_tx_id(tx)?;
             let record = rollback::find_record(&history, &id)?;
-            return rollback::plan_rollback(record, &history, &installed, &find_file);
+            return rollback::plan_rollback(record, &history, &installed, &find_file, &find_remote);
         }
 
         // A failed transaction that never got as far as changing anything
@@ -417,7 +435,8 @@ impl Sources {
             rollback::candidates(&history)
         };
         for record in candidates {
-            let plan = rollback::plan_rollback(record, &history, &installed, &find_file)?;
+            let plan =
+                rollback::plan_rollback(record, &history, &installed, &find_file, &find_remote)?;
             if plan.plan.is_empty() && record.status == TxStatus::Failed {
                 continue;
             }
@@ -431,8 +450,23 @@ impl Sources {
     }
 
     /// Runs a rollback plan: a removal via `sudo pacman -R`, anything else
-    /// by installing the located package files with `sudo pacman -U`.
+    /// by installing the located package files with `sudo pacman -U` —
+    /// after fetching whichever of them still have to be downloaded. The
+    /// detached signature is fetched next to each package, best effort;
+    /// pacman verifies it when present.
     pub fn execute_rollback(&self, rollback: &RollbackPlan) -> Result<()> {
+        for download in &rollback.downloads {
+            if !download.dest.exists() {
+                self.archive.download(&download.url, &download.dest)?;
+            }
+            let sig_dest = PathBuf::from(format!("{}.sig", download.dest.display()));
+            if !sig_dest.exists() {
+                let _ = self
+                    .archive
+                    .download(&format!("{}.sig", download.url), &sig_dest);
+            }
+        }
+
         match rollback.plan.action {
             PlanAction::Remove => {
                 let names: Vec<String> = rollback

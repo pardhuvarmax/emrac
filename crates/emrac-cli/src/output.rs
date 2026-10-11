@@ -165,6 +165,13 @@ pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
         }
     }
 
+    if !rollback.downloads.is_empty() {
+        println!("\nWill download from the Arch Linux Archive:");
+        for download in &rollback.downloads {
+            println!("  {} {}", download.name, download.version);
+        }
+    }
+
     if !rollback.skipped.is_empty() {
         println!("\nLeft alone (no longer as {} left them):", rollback.target);
         for skipped in &rollback.skipped {

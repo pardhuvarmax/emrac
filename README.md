@@ -6,7 +6,7 @@ A source-first package management platform for Arch Linux — an orchestration a
 
 ---
 
-Status: **Slice i1.** `search`/`info`/`install`/`remove`/`upgrade` all work against official repos (via libalpm/pacman) and the AUR (via RPC API + `git`/`makepkg`). Slice u1 adds `emrac config` — a persisted `~/.config/emrac/config.toml` for default flags, and `emrac completion bash|zsh|fish` prints a shell completion script, and `emrac history` lists past install/remove/upgrade transactions, and `emrac rollback [tx]` / `emrac undo` / `emrac redo` reverse and re-apply them.
+Status: **Slice i1.** `search`/`info`/`install`/`remove`/`upgrade` all work against official repos (via libalpm/pacman) and the AUR (via RPC API + `git`/`makepkg`). Slice u1 adds `emrac config` — a persisted `~/.config/emrac/config.toml` for default flags, and `emrac completion bash|zsh|fish` prints a shell completion script, and `emrac history` lists past install/remove/upgrade transactions, and `emrac rollback [tx]` / `emrac undo` / `emrac redo` reverse and re-apply them (fetching old versions from the Arch Linux Archive if they're no longer cached).
 
 Every mutating command shows a transaction preview and a confirmation prompt first; AUR builds additionally show the PKGBUILD (or a diff, on rebuilds/upgrades) with their own review step. Still missing: the TUI, build profiles, and everything else in `SPEC.md` Part IV. 
 

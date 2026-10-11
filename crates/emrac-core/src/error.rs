@@ -29,6 +29,9 @@ pub enum Error {
     )]
     PackageNotFoundOffline(String),
 
+    #[error("the Arch Linux Archive didn't cooperate: {0}")]
+    Archive(String),
+
     #[error("the AUR didn't cooperate: {0}")]
     Aur(String),
 
@@ -121,7 +124,7 @@ pub enum Error {
     NotRollbackable { id: String, why: String },
 
     #[error(
-        "can't roll back — these package files aren't in the pacman cache or the AUR build cache: {0}"
+        "can't roll back — these package files aren't on this machine (pacman cache, AUR build cache) and aren't available from the Arch Linux Archive: {0}"
     )]
     RollbackFilesMissing(String),
 
@@ -163,6 +166,7 @@ impl Error {
             | Error::AlpmInit(_)
             | Error::RegisterSyncDb { .. }
             | Error::Aur(_)
+            | Error::Archive(_)
             | Error::CommandSpawn(_, _)
             | Error::CommandFailed { .. }
             | Error::Io { .. }

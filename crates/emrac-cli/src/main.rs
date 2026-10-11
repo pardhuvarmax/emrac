@@ -88,13 +88,20 @@ fn run(cli: &Cli) -> Result<()> {
             json,
             quiet,
         ),
-        Commands::Rollback { tx } => {
-            commands::rollback::run(&sources, Which::Rollback(tx.as_deref()), dry_run, yes, json)
-        }
+        Commands::Rollback { tx } => commands::rollback::run(
+            &sources,
+            Which::Rollback(tx.as_deref()),
+            dry_run,
+            yes,
+            offline,
+            json,
+        ),
         Commands::Undo => {
-            commands::rollback::run(&sources, Which::Rollback(None), dry_run, yes, json)
+            commands::rollback::run(&sources, Which::Rollback(None), dry_run, yes, offline, json)
         }
-        Commands::Redo => commands::rollback::run(&sources, Which::Redo, dry_run, yes, json),
+        Commands::Redo => {
+            commands::rollback::run(&sources, Which::Redo, dry_run, yes, offline, json)
+        }
         Commands::Config { .. } | Commands::Completion { .. } | Commands::History { .. } => {
             unreachable!("handled above")
         }

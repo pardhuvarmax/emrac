@@ -18,6 +18,22 @@ pub struct SkippedPackage {
     pub reason: String,
 }
 
+/// A package file the Archive has and this machine doesn't — fetched after
+/// the user confirms, then installed with the rest.
+#[derive(Debug, Clone, Serialize)]
+pub struct Download {
+    pub name: String,
+    pub version: String,
+    pub url: String,
+    pub dest: PathBuf,
+}
+
+/// Where to get a package file that isn't on disk.
+pub struct RemoteFile {
+    pub url: String,
+    pub dest: PathBuf,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RollbackPlan {
     /// The transaction being reversed.
@@ -33,6 +49,8 @@ pub struct RollbackPlan {
     /// Package files for `pacman -U` (install/downgrade inverses); empty
     /// for a removal.
     pub files: Vec<PathBuf>,
+    /// The subset of `files` that still has to be downloaded first.
+    pub downloads: Vec<Download>,
     pub skipped: Vec<SkippedPackage>,
 }
 
@@ -101,12 +119,15 @@ pub fn redo_candidates(history: &[TransactionRecord]) -> Vec<&TransactionRecord>
 
 /// Builds the inverse of `record`. `history` (oldest first) is only used to
 /// refuse repeats. `installed` returns a package's current version;
-/// `find_file` locates a cached package file for an exact name + version.
+/// `find_file` locates a cached package file for an exact name + version;
+/// `find_remote` is only asked about official packages whose file isn't on
+/// disk (`Ok(None)`: the remote doesn't have it either).
 pub fn plan_rollback(
     record: &TransactionRecord,
     history: &[TransactionRecord],
     installed: &dyn Fn(&str) -> Option<String>,
     find_file: &dyn Fn(&str, &str) -> Option<PathBuf>,
+    find_remote: &dyn Fn(&str, &str) -> Result<Option<RemoteFile>>,
 ) -> Result<RollbackPlan> {
     let refuse = |why: String| Error::NotRollbackable {
         id: record.id.clone(),
@@ -134,6 +155,7 @@ pub fn plan_rollback(
 
     let mut packages = Vec::new();
     let mut files = Vec::new();
+    let mut downloads = Vec::new();
     let mut skipped = Vec::new();
     let mut missing = Vec::new();
 
@@ -159,7 +181,26 @@ pub fn plan_rollback(
         if inverse != PlanAction::Remove {
             match find_file(&pkg.name, &version) {
                 Some(path) => files.push(path),
-                None => missing.push(format!("{} {version}", pkg.name)),
+                None => {
+                    // The Archive only carries official packages.
+                    let remote = if pkg.repo == "aur" {
+                        None
+                    } else {
+                        find_remote(&pkg.name, &version)?
+                    };
+                    match remote {
+                        Some(remote) => {
+                            files.push(remote.dest.clone());
+                            downloads.push(Download {
+                                name: pkg.name.clone(),
+                                version: version.clone(),
+                                url: remote.url,
+                                dest: remote.dest,
+                            });
+                        }
+                        None => missing.push(format!("{} {version}", pkg.name)),
+                    }
+                }
             }
         }
 
@@ -186,6 +227,7 @@ pub fn plan_rollback(
             total_installed_size_delta: 0,
         },
         files,
+        downloads,
         skipped,
     })
 }
@@ -250,7 +292,7 @@ pub fn find_package_file(dirs: &[PathBuf], name: &str, version: &str) -> Option<
     found.into_iter().next()
 }
 
-fn is_package_file(file_name: &str, prefix: &str) -> bool {
+pub(crate) fn is_package_file(file_name: &str, prefix: &str) -> bool {
     let Some(rest) = file_name.strip_prefix(prefix) else {
         return false;
     };
@@ -296,6 +338,8 @@ mod tests {
     struct World {
         installed: HashMap<String, String>,
         files: HashMap<(String, String), PathBuf>,
+        remote: HashMap<(String, String), RemoteFile>,
+        remote_error: bool,
     }
 
     impl World {
@@ -314,7 +358,20 @@ mod tests {
                         )
                     })
                     .collect(),
+                remote: HashMap::new(),
+                remote_error: false,
             }
+        }
+
+        fn with_remote(mut self, name: &str, version: &str) -> Self {
+            self.remote.insert(
+                (name.to_string(), version.to_string()),
+                RemoteFile {
+                    url: format!("https://archive.example/{name}-{version}.pkg.tar.zst"),
+                    dest: PathBuf::from(format!("/archive/{name}-{version}-x86_64.pkg.tar.zst")),
+                },
+            );
+            self
         }
 
         fn plan(
@@ -327,6 +384,18 @@ mod tests {
                 history,
                 &|n| self.installed.get(n).cloned(),
                 &|n, v| self.files.get(&(n.to_string(), v.to_string())).cloned(),
+                &|n, v| {
+                    if self.remote_error {
+                        return Err(Error::Archive("unreachable".into()));
+                    }
+                    Ok(self
+                        .remote
+                        .get(&(n.to_string(), v.to_string()))
+                        .map(|r| RemoteFile {
+                            url: r.url.clone(),
+                            dest: r.dest.clone(),
+                        }))
+                },
             )
         }
     }
@@ -649,5 +718,69 @@ mod tests {
         assert!(find_package_file(&dirs, "fo", "1.0-1").is_none());
         assert!(find_package_file(&dirs, "bar", "1.0-1").is_none());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn archive_is_used_only_for_files_missing_locally() {
+        let r = rec(
+            "tx-1",
+            PlanAction::Upgrade,
+            vec![
+                pkg("local", "2-1", Some("1-1")),
+                pkg("remote", "2-1", Some("1-1")),
+            ],
+        );
+        let w = World::new(&[("local", "2-1"), ("remote", "2-1")], &[("local", "1-1")])
+            .with_remote("local", "1-1")
+            .with_remote("remote", "1-1");
+        let p = w.plan(&r, std::slice::from_ref(&r)).unwrap();
+        assert_eq!(p.files.len(), 2);
+        assert_eq!(p.downloads.len(), 1);
+        assert_eq!(p.downloads[0].name, "remote");
+        assert_eq!(p.downloads[0].version, "1-1");
+        assert_eq!(
+            p.downloads[0].dest,
+            PathBuf::from("/archive/remote-1-1-x86_64.pkg.tar.zst")
+        );
+        assert!(p.files.contains(&p.downloads[0].dest));
+    }
+
+    #[test]
+    fn archive_is_never_asked_about_aur_packages() {
+        let mut a = pkg("tool", "2-1", Some("1-1"));
+        a.repo = "aur".into();
+        let r = rec("tx-1", PlanAction::Upgrade, vec![a]);
+        let mut w = World::new(&[("tool", "2-1")], &[]).with_remote("tool", "1-1");
+        w.remote_error = true; // would blow up if consulted
+        match w.plan(&r, std::slice::from_ref(&r)) {
+            Err(Error::RollbackFilesMissing(list)) => assert_eq!(list, "tool 1-1"),
+            other => panic!("expected missing files, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn nothing_from_the_archive_means_missing_and_an_unreachable_archive_is_an_error() {
+        let r = rec("tx-1", PlanAction::Remove, vec![pkg("a", "1-1", None)]);
+        let w = World::new(&[], &[]);
+        assert!(matches!(
+            w.plan(&r, std::slice::from_ref(&r)),
+            Err(Error::RollbackFilesMissing(_))
+        ));
+
+        let mut w = World::new(&[], &[]);
+        w.remote_error = true;
+        assert!(matches!(
+            w.plan(&r, std::slice::from_ref(&r)),
+            Err(Error::Archive(_))
+        ));
+    }
+
+    #[test]
+    fn removals_never_touch_the_archive() {
+        let r = rec("tx-1", PlanAction::Install, vec![pkg("a", "1-1", None)]);
+        let mut w = World::new(&[("a", "1-1")], &[]);
+        w.remote_error = true;
+        let p = w.plan(&r, std::slice::from_ref(&r)).unwrap();
+        assert!(p.downloads.is_empty());
     }
 }

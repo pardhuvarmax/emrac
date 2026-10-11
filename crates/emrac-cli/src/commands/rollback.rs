@@ -10,10 +10,17 @@ pub enum Which<'a> {
     Redo,
 }
 
-pub fn run(sources: &Sources, which: Which, dry_run: bool, yes: bool, json: bool) -> Result<()> {
+pub fn run(
+    sources: &Sources,
+    which: Which,
+    dry_run: bool,
+    yes: bool,
+    offline: bool,
+    json: bool,
+) -> Result<()> {
     let rollback = match which {
-        Which::Rollback(tx) => sources.plan_rollback(tx)?,
-        Which::Redo => sources.plan_redo()?,
+        Which::Rollback(tx) => sources.plan_rollback(tx, offline)?,
+        Which::Redo => sources.plan_redo(offline)?,
     };
     output::print_rollback(&rollback, json);
 
