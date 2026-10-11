@@ -30,3 +30,5 @@ Current:
   vs. pacman's mtree record.
 - [`u10-snapshot.md`](./u10-snapshot.md) — `emrac snapshot` / `emrac restore`:
   named package-set restore points and a diff-driven restore.
+- [`u11-auto-snapshot.md`](./u11-auto-snapshot.md) — `snapshot.before_upgrade`: automatic
+  restore point before `emrac upgrade`.
