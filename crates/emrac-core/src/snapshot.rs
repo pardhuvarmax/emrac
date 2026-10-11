@@ -193,6 +193,26 @@ impl SnapshotStore {
         Self::delete_in(&Self::dir()?, name)
     }
 
+    /// Deletes all but the newest `keep` snapshots whose name starts with
+    /// `prefix`; other snapshots are never touched.
+    pub fn prune_prefixed(prefix: &str, keep: usize) -> Result<()> {
+        Self::prune_prefixed_in(&Self::dir()?, prefix, keep)
+    }
+
+    fn prune_prefixed_in(dir: &Path, prefix: &str, keep: usize) -> Result<()> {
+        // `list_from` is newest first.
+        let old: Vec<String> = Self::list_from(dir)?
+            .into_iter()
+            .filter(|s| s.name.starts_with(prefix))
+            .skip(keep)
+            .map(|s| s.name)
+            .collect();
+        for name in old {
+            Self::delete_in(dir, &name)?;
+        }
+        Ok(())
+    }
+
     fn create_in(
         dir: &Path,
         name: Option<&str>,
@@ -423,6 +443,23 @@ mod tests {
             SnapshotStore::load_from(&dir, "named"),
             Err(Error::UnknownSnapshot(_))
         ));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_keeps_the_newest_with_the_prefix_and_spares_the_rest() {
+        let dir = scratch("prune");
+        for (name, ts) in [("auto-1", 1), ("auto-2", 2), ("auto-3", 3), ("mine", 0)] {
+            SnapshotStore::create_in(&dir, Some(name), None, vec![], ts).unwrap();
+        }
+        SnapshotStore::prune_prefixed_in(&dir, "auto-", 2).unwrap();
+        let mut names: Vec<_> = SnapshotStore::list_from(&dir)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
+        names.sort();
+        assert_eq!(names, ["auto-2", "auto-3", "mine"]);
         let _ = fs::remove_dir_all(&dir);
     }
 

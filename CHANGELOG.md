@@ -12,6 +12,14 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u11 — 2026-10-11 — automatic snapshot before upgrade
+
+New config key `snapshot.before_upgrade` (default `false`; `emrac config set snapshot.before_upgrade true`). When on, `emrac upgrade` saves a snapshot named `pre-upgrade-<unix time>` (note "before emrac upgrade") after the review and confirmation steps, immediately before anything changes, and prints `emrac restore <name>` to go back. Not taken for `--dry-run`, a declined prompt or an empty plan. Only the newest 5 `pre-upgrade-*` snapshots are kept; snapshots with other names are never deleted. A failure to save is a warning on stderr and the upgrade continues. The message goes to stderr so `--json` output stays clean. Design in `docs/plan/u11-auto-snapshot.md`.
+
+Verified with 1 new unit test (pruning keeps the newest with the prefix and spares other names) and the config tests extended to the new key (91 in emrac-core). In the podman container: `--dry-run` saved nothing, a real upgrade saved exactly one snapshot and printed the restore hint, and after several more upgrades only 5 `pre-upgrade-*` snapshots remained.
+
+Not built: snapshots before install/remove, configurable retention, a per-run override flag.
+
 ## Slice u10 — 2026-10-11 — snapshot and restore
 
 New `emrac snapshot` (alias-free: `snapshot`, `snapshot create [NAME] [--note TEXT]`, `list`, `show <name>`, `delete <name>`) saves the installed package set — name, version, explicit/dependency, official/foreign — as a named restore point, one JSON file each in `~/.local/share/emrac/snapshots`. Names are `[A-Za-z0-9._-]` (they are file names); the default is `snap-N`; an existing name is refused. Everything but `create` works without libalpm. It is a package-set snapshot only: not filesystem snapshots, not config-file contents.

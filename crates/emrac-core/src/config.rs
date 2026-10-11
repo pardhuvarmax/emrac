@@ -18,6 +18,15 @@ pub struct Config {
     pub review: Review,
     #[serde(default)]
     pub search: Search,
+    #[serde(default)]
+    pub snapshot: SnapshotConfig,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SnapshotConfig {
+    /// Save a restore point right before `emrac upgrade` changes anything.
+    #[serde(default)]
+    pub before_upgrade: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -118,6 +127,7 @@ impl Config {
             },
             "search.official" => self.search.official.to_string(),
             "search.aur" => self.search.aur.to_string(),
+            "snapshot.before_upgrade" => self.snapshot.before_upgrade.to_string(),
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         })
     }
@@ -147,6 +157,9 @@ impl Config {
             }
             "search.official" => self.search.official = parse_bool(value).ok_or_else(invalid)?,
             "search.aur" => self.search.aur = parse_bool(value).ok_or_else(invalid)?,
+            "snapshot.before_upgrade" => {
+                self.snapshot.before_upgrade = parse_bool(value).ok_or_else(invalid)?;
+            }
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         }
         Ok(())
@@ -164,6 +177,7 @@ impl Config {
             "search.limit" => self.search.limit = None,
             "search.official" => self.search.official = false,
             "search.aur" => self.search.aur = false,
+            "snapshot.before_upgrade" => self.snapshot.before_upgrade = false,
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         }
         Ok(())
@@ -207,7 +221,7 @@ mod tests {
         }
     }
 
-    const KEYS: [&str; 10] = [
+    const KEYS: [&str; 11] = [
         "flags.offline",
         "flags.yes",
         "flags.dry_run",
@@ -218,6 +232,7 @@ mod tests {
         "search.limit",
         "search.official",
         "search.aur",
+        "snapshot.before_upgrade",
     ];
 
     #[test]

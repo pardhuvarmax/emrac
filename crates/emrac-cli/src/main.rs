@@ -105,6 +105,7 @@ fn run(cli: &Cli) -> Result<()> {
             review.skip_diff || config.review.skip_diff,
             json,
             quiet,
+            config.snapshot.before_upgrade,
         ),
         Commands::Snapshot { command } => {
             commands::snapshot::create(&sources, command.as_ref(), json)

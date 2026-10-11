@@ -806,6 +806,21 @@ impl Sources {
         SnapshotStore::create(name, note, self.alpm.installed_snapshot())
     }
 
+    /// The restore point taken before an upgrade when the user opted in:
+    /// `pre-upgrade-<unix time>`, keeping only the newest few.
+    pub fn auto_snapshot(&self) -> Result<Snapshot> {
+        const PREFIX: &str = "pre-upgrade-";
+        const KEEP: usize = 5;
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let name = format!("{PREFIX}{stamp}");
+        let snapshot = self.create_snapshot(Some(&name), Some("before emrac upgrade"))?;
+        SnapshotStore::prune_prefixed(PREFIX, KEEP)?;
+        Ok(snapshot)
+    }
+
     /// Plans `emrac restore`: what it takes to make the installed set match
     /// `snapshot`. No root, nothing is changed or downloaded; package files
     /// are found the way a rollback finds them (and the Archive only listed,

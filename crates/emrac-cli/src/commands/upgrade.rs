@@ -16,6 +16,7 @@ pub fn run(
     skip_diff: bool,
     json: bool,
     quiet: bool,
+    snapshot_first: bool,
 ) -> Result<()> {
     let upgrade = sources.plan_upgrade(pkgs, offline)?;
 
@@ -50,6 +51,16 @@ pub fn run(
     if !yes && !confirm("Proceed with the upgrade?") {
         println!("emrac notes: okay, nothing upgraded.");
         return Ok(());
+    }
+
+    if snapshot_first {
+        match sources.auto_snapshot() {
+            Ok(snapshot) => eprintln!(
+                "emrac notes: saved snapshot '{0}' — `emrac restore {0}` returns to it.",
+                snapshot.name
+            ),
+            Err(err) => eprintln!("emrac warns: couldn't save a snapshot before upgrading — {err}"),
+        }
     }
 
     // Official side: a real full `-Syu` when nothing was explicitly named
