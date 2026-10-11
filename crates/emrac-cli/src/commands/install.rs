@@ -1,6 +1,7 @@
 use emrac_core::{Result, Sources};
 
 use crate::commands::aur_review::review_aur_package;
+use crate::commands::history;
 use crate::output;
 use crate::prompt::confirm;
 
@@ -36,12 +37,15 @@ pub fn run(
         return Ok(());
     }
 
-    if !official.is_empty() {
-        sources.install_official(&official)?;
-    }
-    for details in &aur {
-        sources.build_aur(&details.name)?;
-    }
-
-    Ok(())
+    let result = (|| {
+        if !official.is_empty() {
+            sources.install_official(&official)?;
+        }
+        for details in &aur {
+            sources.build_aur(&details.name)?;
+        }
+        Ok(())
+    })();
+    history::record(&plan, &result);
+    result
 }

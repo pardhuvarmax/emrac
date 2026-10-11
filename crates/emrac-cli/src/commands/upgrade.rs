@@ -1,6 +1,7 @@
 use emrac_core::{Result, Sources};
 
 use crate::commands::aur_review::review_aur_package;
+use crate::commands::history;
 use crate::output;
 use crate::prompt::confirm;
 
@@ -66,12 +67,15 @@ pub fn run(
         !official_targets.is_empty()
     };
 
-    if has_official_targets {
-        sources.upgrade_official(&official_targets)?;
-    }
-    for name in &aur_names {
-        sources.build_aur(name)?;
-    }
-
-    Ok(())
+    let result = (|| {
+        if has_official_targets {
+            sources.upgrade_official(&official_targets)?;
+        }
+        for name in &aur_names {
+            sources.build_aur(name)?;
+        }
+        Ok(())
+    })();
+    history::record(&upgrade.plan, &result);
+    result
 }

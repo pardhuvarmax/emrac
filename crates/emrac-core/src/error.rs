@@ -88,6 +88,21 @@ pub enum Error {
         source: io::Error,
     },
 
+    #[error(
+        "couldn't determine your home directory (`$HOME` isn't set) — needed to locate ~/.local/share/emrac"
+    )]
+    NoDataDir,
+
+    #[error("couldn't write to your transaction history at {path}: {source}")]
+    HistoryWrite {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("'{0}' isn't a date I understand — use YYYY-MM-DD, like 2026-10-11")]
+    InvalidDate(String),
+
     #[error("'{0}' isn't a config key emrac knows about — see `emrac config show` for the full list")]
     UnknownConfigKey(String),
 
@@ -111,7 +126,8 @@ impl Error {
             | Error::PackagesNotInstalled(_)
             | Error::PackageNotInstalledForUpgrade(_)
             | Error::UnknownConfigKey(_)
-            | Error::InvalidConfigValue { .. } => "found",
+            | Error::InvalidConfigValue { .. }
+            | Error::InvalidDate(_) => "found",
             Error::PacmanConfSpawn(_)
             | Error::PacmanConfStatus(_)
             | Error::AlpmInit(_)
@@ -123,7 +139,9 @@ impl Error {
             | Error::NoHomeDir
             | Error::NoConfigDir
             | Error::ConfigParse { .. }
-            | Error::ConfigWrite { .. } => "says",
+            | Error::ConfigWrite { .. }
+            | Error::NoDataDir
+            | Error::HistoryWrite { .. } => "says",
         }
     }
 }

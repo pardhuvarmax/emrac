@@ -1,5 +1,6 @@
 use emrac_core::{Result, Sources};
 
+use crate::commands::history;
 use crate::output;
 use crate::prompt::confirm;
 
@@ -25,6 +26,7 @@ pub fn run(
         return Ok(());
     }
 
-    sources.remove(pkgs, cascade, recursive)?;
-    Ok(())
+    let result = sources.remove(pkgs, cascade, recursive);
+    history::record(&plan, &result);
+    result
 }

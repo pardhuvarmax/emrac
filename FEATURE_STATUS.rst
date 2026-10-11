@@ -56,7 +56,7 @@ Complete Feature Catalog
    * - 1
      - Unified Package Management
      - Partial
-     - install/remove/upgrade + dry-run/preview/confirm done; downgrade, purge, reinstall, verification, rollback, transaction history, resume-interrupted -- not started
+     - install/remove/upgrade + dry-run/preview/confirm done; ``emrac history``/``transactions`` (append-only log of executed transactions, ``--limit``/``--since``/``--json``); downgrade, purge, reinstall, verification, rollback, resume-interrupted -- not started
    * - 2
      - Source Build System
      - Partial

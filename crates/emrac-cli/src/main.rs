@@ -23,6 +23,10 @@ fn run(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
+    if let Commands::History { limit, since } = &cli.command {
+        return commands::history::run(*limit, since.as_deref(), cli.json);
+    }
+
     // `config` doesn't need a working pacman/alpm setup — handle it before
     // paying for `Sources::init()`.
     if let Commands::Config { command } = &cli.command {
@@ -83,6 +87,8 @@ fn run(cli: &Cli) -> Result<()> {
             json,
             quiet,
         ),
-        Commands::Config { .. } | Commands::Completion { .. } => unreachable!("handled above"),
+        Commands::Config { .. } | Commands::Completion { .. } | Commands::History { .. } => {
+            unreachable!("handled above")
+        }
     }
 }

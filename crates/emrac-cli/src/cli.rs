@@ -111,6 +111,18 @@ pub enum Commands {
         command: ConfigCommand,
     },
 
+    /// Show past install/remove/upgrade transactions, newest first
+    #[command(visible_alias = "transactions")]
+    History {
+        /// Show at most this many transactions
+        #[arg(long)]
+        limit: Option<usize>,
+
+        /// Only transactions on or after this date (YYYY-MM-DD, UTC)
+        #[arg(long, value_name = "DATE")]
+        since: Option<String>,
+    },
+
     /// Print a shell completion script to stdout
     Completion { shell: CompletionShell },
 }

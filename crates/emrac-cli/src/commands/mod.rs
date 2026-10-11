@@ -1,6 +1,7 @@
 pub mod aur_review;
 pub mod completion;
 pub mod config;
+pub mod history;
 pub mod info;
 pub mod install;
 pub mod remove;

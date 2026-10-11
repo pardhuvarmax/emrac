@@ -7,3 +7,5 @@ Currently: [`search.rs`](./search.rs), [`info.rs`](./info.rs), [`install.rs`](./
 [`config.rs`](./config.rs) handles `emrac config ...` (persisted flag defaults, see `emrac-core`'s `config.rs`); it's dispatched before `Sources::init()` since it needs no pacman/alpm setup.
 
 [`completion.rs`](./completion.rs) prints a `clap_complete`-generated bash/zsh/fish script for `emrac completion <shell>`; like `config`, it's dispatched before `Sources::init()`.
+
+[`history.rs`](./history.rs) handles `emrac history` (alias `transactions`) and exports `record()`, which `install`/`remove`/`upgrade` call after executing to append to the transaction log; a failed write there only warns.

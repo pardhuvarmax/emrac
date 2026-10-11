@@ -300,6 +300,7 @@ version = "0.1.0"
 dependencies = [
  "alpm",
  "serde",
+ "serde_json",
  "thiserror",
  "toml",
  "ureq",

@@ -1,4 +1,4 @@
-use emrac_core::{PackageDetails, PackageSummary, Plan, PlanAction};
+use emrac_core::{PackageDetails, PackageSummary, Plan, PlanAction, TransactionRecord, TxStatus};
 
 pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
     if json {
@@ -95,7 +95,10 @@ pub fn print_plan(plan: &Plan, json: bool) {
     println!();
 
     if plan.total_download_size > 0 {
-        println!("Download Size    : {}", human_size(plan.total_download_size));
+        println!(
+            "Download Size    : {}",
+            human_size(plan.total_download_size)
+        );
     }
 
     let (label, size) = if plan.total_installed_size_delta >= 0 {
@@ -117,6 +120,62 @@ pub fn print_pkgbuild(pkg: &str, content: &str) {
 pub fn print_pkgbuild_diff(pkg: &str, diff: &str) {
     println!("emrac notes: PKGBUILD changes for '{pkg}' since your last build:\n");
     println!("{diff}");
+}
+
+pub fn print_history(records: &[TransactionRecord], json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(records).unwrap());
+        return;
+    }
+
+    if records.is_empty() {
+        println!("emrac notes: no transactions found.");
+        return;
+    }
+
+    println!(
+        "emrac found: {} (times are UTC)\n",
+        plural(records.len(), "transaction")
+    );
+
+    for record in records {
+        let action = match record.action {
+            PlanAction::Install => "install",
+            PlanAction::Remove => "remove",
+            PlanAction::Upgrade => "upgrade",
+        };
+        let status = match record.status {
+            TxStatus::Committed => "committed",
+            TxStatus::Failed => "FAILED",
+        };
+        println!(
+            "{:<7} {}  {:<8} {:<9} {}",
+            record.id,
+            record.timestamp_utc(),
+            action,
+            status,
+            summarize_packages(record)
+        );
+        if let Some(error) = &record.error {
+            println!("        error: {error}");
+        }
+    }
+}
+
+/// `a, b, c` for short transactions, `a, b, c +4 more` for long ones.
+fn summarize_packages(record: &TransactionRecord) -> String {
+    const SHOWN: usize = 3;
+    let names: Vec<&str> = record
+        .packages
+        .iter()
+        .take(SHOWN)
+        .map(|p| p.name.as_str())
+        .collect();
+    let mut summary = names.join(", ");
+    if record.packages.len() > SHOWN {
+        summary.push_str(&format!(" +{} more", record.packages.len() - SHOWN));
+    }
+    summary
 }
 
 fn plural(n: usize, singular: &str) -> String {
