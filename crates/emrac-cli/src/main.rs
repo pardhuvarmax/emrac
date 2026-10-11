@@ -77,6 +77,11 @@ fn run(cli: &Cli) -> Result<()> {
             cascade,
             recursive,
         } => commands::remove::run(&sources, pkgs, *cascade, *recursive, dry_run, yes, json),
+        Commands::Purge {
+            pkgs,
+            cascade,
+            recursive,
+        } => commands::purge::run(&sources, pkgs, *cascade, *recursive, dry_run, yes, json),
         Commands::Upgrade { pkgs, review } => commands::upgrade::run(
             &sources,
             pkgs,

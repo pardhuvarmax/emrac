@@ -96,6 +96,21 @@ pub enum Commands {
         recursive: bool,
     },
 
+    /// Remove packages and delete their config files instead of keeping
+    /// modified ones as .pacsave
+    Purge {
+        #[arg(required = true)]
+        pkgs: Vec<String>,
+
+        /// Also remove packages that depend on the given packages
+        #[arg(long)]
+        cascade: bool,
+
+        /// Also remove dependencies that become orphaned as a result
+        #[arg(long)]
+        recursive: bool,
+    },
+
     /// Upgrade installed packages, official repos and the AUR alike
     Upgrade {
         /// Packages to upgrade; omitted = everything that's out of date

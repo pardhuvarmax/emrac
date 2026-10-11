@@ -122,9 +122,21 @@ impl PacmanBackend {
         self.run_inherited("sudo", &args)
     }
 
-    /// Actually removes. Runs under `sudo`, with stdio inherited.
-    pub fn execute_remove(&self, pkgs: &[String], cascade: bool, recursive: bool) -> Result<()> {
+    /// Actually removes. Runs under `sudo`, with stdio inherited. `nosave`
+    /// is `pacman -Rn`: modified config files are deleted, not kept as
+    /// `.pacsave`.
+    pub fn execute_remove(
+        &self,
+        pkgs: &[String],
+        cascade: bool,
+        recursive: bool,
+        nosave: bool,
+    ) -> Result<()> {
         let mut args = vec!["pacman".to_string(), "-R".to_string()];
+        if nosave {
+            // Delete modified config files instead of saving them as .pacsave.
+            args.push("--nosave".to_string());
+        }
         if cascade {
             args.push("--cascade".to_string());
         }

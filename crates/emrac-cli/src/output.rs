@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use emrac_core::{
-    DowngradePlan, Download, PackageDetails, PackageSummary, Plan, PlanAction, ReinstallPlan,
-    ReinstallSource, RollbackPlan, TransactionRecord, TxStatus, VersionList,
+    ConfigState, DowngradePlan, Download, PackageDetails, PackageSummary, Plan, PlanAction,
+    PurgePlan, ReinstallPlan, ReinstallSource, RollbackPlan, TransactionRecord, TxStatus,
+    VersionList,
 };
 
 pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
@@ -80,6 +81,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
             PlanAction::Upgrade => "nothing to upgrade — you're already up to date.",
             PlanAction::Downgrade => "nothing to downgrade.",
             PlanAction::Reinstall => "nothing to reinstall.",
+            PlanAction::Purge => "nothing to purge.",
         };
         println!("emrac notes: {note}");
         return;
@@ -91,6 +93,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
         PlanAction::Upgrade => "upgrade",
         PlanAction::Downgrade => "downgrade",
         PlanAction::Reinstall => "reinstall",
+        PlanAction::Purge => "purge",
     };
 
     println!(
@@ -129,6 +132,30 @@ pub fn print_pkgbuild(pkg: &str, content: &str) {
 pub fn print_pkgbuild_diff(pkg: &str, diff: &str) {
     println!("emrac notes: PKGBUILD changes for '{pkg}' since your last build:\n");
     println!("{diff}");
+}
+
+pub fn print_purge(purge: &PurgePlan, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(purge).unwrap());
+        return;
+    }
+
+    print_plan(&purge.plan, false);
+
+    let at_risk = purge.at_risk();
+    if at_risk.is_empty() {
+        return;
+    }
+    println!(
+        "\nThese config files have local changes, or couldn't be checked. `remove` would keep them as .pacsave; purge deletes them for good:"
+    );
+    for file in at_risk {
+        let note = match file.state {
+            ConfigState::Unknown => " (couldn't be read — may be modified)",
+            _ => "",
+        };
+        println!("  {} ({}){note}", file.path, file.package);
+    }
 }
 
 pub fn print_reinstall(reinstall: &ReinstallPlan, json: bool) {
@@ -229,6 +256,7 @@ pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
             PlanAction::Downgrade => "downgrade",
             PlanAction::Upgrade => "upgrade",
             PlanAction::Reinstall => "reinstall",
+            PlanAction::Purge => "purge",
         };
         let what = match &rollback.reapplies {
             Some(original) => format!("redo {original} (by reversing {})", rollback.target),
@@ -249,6 +277,10 @@ pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
     }
 
     print_downloads(&rollback.downloads);
+
+    if let Some(note) = &rollback.note {
+        println!("\nemrac notes: {note}");
+    }
 
     if !rollback.skipped.is_empty() {
         println!("\nLeft alone (no longer as {} left them):", rollback.target);
@@ -285,6 +317,7 @@ pub fn print_history(
             PlanAction::Upgrade => "upgrade",
             PlanAction::Downgrade => "downgrade",
             PlanAction::Reinstall => "reinstall",
+            PlanAction::Purge => "purge",
         };
         let status = match record.status {
             TxStatus::Committed => "committed",

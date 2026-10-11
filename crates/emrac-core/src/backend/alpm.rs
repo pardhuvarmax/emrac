@@ -1,9 +1,11 @@
+use std::path::Path;
 use std::process::Command;
 
 use alpm::{Alpm, SigLevel};
 
 use crate::error::{Error, Result};
 use crate::package::{PackageDetails, PackageSummary};
+use crate::purge::{classify, ConfigFile, Observed};
 
 /// Read-only access to the official repositories via libalpm, scoped to the
 /// sync databases pacman has already downloaded locally (`/var/lib/pacman/sync`).
@@ -125,6 +127,28 @@ impl AlpmBackend {
             .collect()
     }
 
+    /// The `backup=()` config files of the installed `names`, each checked
+    /// against the hash recorded when it was installed.
+    pub fn config_files(&self, names: &[String]) -> Vec<ConfigFile> {
+        let root = self.handle.root().to_string();
+        let local = self.handle.localdb();
+        let mut files = Vec::new();
+        for name in names {
+            let Ok(pkg) = local.pkg(name.as_str()) else {
+                continue;
+            };
+            for backup in pkg.backup() {
+                let observed = observe(&root, backup.name());
+                files.push(ConfigFile {
+                    package: name.clone(),
+                    path: Path::new(&root).join(backup.name()).display().to_string(),
+                    state: classify(backup.hash(), &observed),
+                });
+            }
+        }
+        files
+    }
+
     /// The currently installed version of `name`, if it is installed.
     pub fn installed_version(&self, name: &str) -> Option<String> {
         self.handle
@@ -187,6 +211,20 @@ pub fn version_is_newer(current: &str, candidate: &str) -> bool {
     alpm::vercmp(candidate, current) == std::cmp::Ordering::Greater
 }
 
+/// Looks at `rel` (a path relative to the root, as pacman records it).
+pub(crate) fn observe(root: &str, rel: &str) -> Observed {
+    let path = Path::new(root).join(rel);
+    match path.try_exists() {
+        Ok(false) => return Observed::Missing,
+        Err(_) => return Observed::Unreadable,
+        Ok(true) => {}
+    }
+    match alpm::compute_md5sum(path.display().to_string()) {
+        Ok(hash) => Observed::Hash(hash),
+        Err(_) => Observed::Unreadable,
+    }
+}
+
 pub struct ResolvedPackage {
     pub name: String,
     pub version: String,
@@ -229,4 +267,34 @@ fn pacman_conf_list(arg: &str) -> Result<Vec<String>> {
         .map(|line| line.trim().to_string())
         .filter(|line| !line.is_empty())
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::purge::ConfigState;
+    use std::{env, fs};
+
+    #[test]
+    fn observe_and_classify_against_a_temp_root() {
+        let root = env::temp_dir().join(format!("emrac-purge-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("etc")).unwrap();
+        fs::write(root.join("etc/a.conf"), "hello\n").unwrap();
+        let root_str = root.display().to_string();
+
+        // md5("hello\n")
+        let shipped = "b1946ac92492d2347c6235b4d2611184";
+        let state = |rel: &str, hash: &str| classify(hash, &observe(&root_str, rel));
+        assert_eq!(state("etc/a.conf", shipped), ConfigState::Unmodified);
+        assert_eq!(
+            state("etc/a.conf", "00000000000000000000000000000000"),
+            ConfigState::Modified
+        );
+        assert_eq!(state("etc/gone.conf", shipped), ConfigState::Missing);
+
+        fs::write(root.join("etc/a.conf"), "edited\n").unwrap();
+        assert_eq!(state("etc/a.conf", shipped), ConfigState::Modified);
+        let _ = fs::remove_dir_all(&root);
+    }
 }

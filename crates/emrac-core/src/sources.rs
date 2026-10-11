@@ -10,6 +10,7 @@ use crate::error::{Error, Result};
 use crate::history::{History, TxStatus};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::plan::{Plan, PlanAction, PlannedPackage};
+use crate::purge::PurgePlan;
 use crate::reinstall::{self, ReinstallItem, ReinstallPlan, ReinstallSource};
 use crate::rollback::{self, Download, RemoteFile, RollbackPlan};
 
@@ -760,7 +761,7 @@ impl Sources {
                     .iter()
                     .map(|p| p.name.clone())
                     .collect();
-                self.pacman.execute_remove(&names, false, false)
+                self.pacman.execute_remove(&names, false, false, false)
             }
             _ => {
                 let files: Vec<PathBuf> = rollback.files.clone();
@@ -772,7 +773,24 @@ impl Sources {
     /// Actually removes `pkgs` via `sudo pacman -R`. Prompts for a
     /// password interactively if needed.
     pub fn remove(&self, pkgs: &[String], cascade: bool, recursive: bool) -> Result<()> {
-        self.pacman.execute_remove(pkgs, cascade, recursive)
+        self.pacman.execute_remove(pkgs, cascade, recursive, false)
+    }
+
+    /// Plans `emrac purge`: what `remove` would do, plus which of the
+    /// packages' config files carry local changes that would be deleted
+    /// rather than saved as `.pacsave`. No root, nothing is mutated.
+    pub fn plan_purge(&self, pkgs: &[String], cascade: bool, recursive: bool) -> Result<PurgePlan> {
+        let mut plan = self.plan_remove(pkgs, cascade, recursive)?;
+        plan.action = PlanAction::Purge;
+        let names: Vec<String> = plan.packages.iter().map(|p| p.name.clone()).collect();
+        let config_files = self.alpm.config_files(&names);
+        Ok(PurgePlan { plan, config_files })
+    }
+
+    /// Removes `pkgs` via `sudo pacman -Rn`: modified config files are
+    /// deleted instead of being saved as `.pacsave`.
+    pub fn purge(&self, pkgs: &[String], cascade: bool, recursive: bool) -> Result<()> {
+        self.pacman.execute_remove(pkgs, cascade, recursive, true)
     }
 }
 

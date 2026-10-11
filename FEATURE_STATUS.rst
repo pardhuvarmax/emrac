@@ -56,7 +56,7 @@ Complete Feature Catalog
    * - 1
      - Unified Package Management
      - Partial
-     - install/remove/upgrade + dry-run/preview/confirm done; ``emrac history``/``transactions`` (append-only log of executed transactions, ``--limit``/``--since``/``--json``); ``emrac rollback [tx]``/``undo``/``redo`` reverse and re-apply recorded transactions from cached package files, fetching missing official versions from the Arch Linux Archive (no snapshots); ``emrac downgrade <pkg> [version]``/``--list`` (one package, official from cache or Archive, AUR from local files only); ``emrac reinstall <pkg>...`` (same installed version again; no build options); purge, verification, resume-interrupted -- not started
+     - install/remove/upgrade + dry-run/preview/confirm done; ``emrac history``/``transactions`` (append-only log of executed transactions, ``--limit``/``--since``/``--json``); ``emrac rollback [tx]``/``undo``/``redo`` reverse and re-apply recorded transactions from cached package files, fetching missing official versions from the Arch Linux Archive (no snapshots); ``emrac downgrade <pkg> [version]``/``--list`` (one package, official from cache or Archive, AUR from local files only); ``emrac reinstall <pkg>...`` (same installed version again; no build options); ``emrac purge <pkg>...`` (``pacman -Rn``, previews the modified configs it will delete; `$HOME` and old ``.pacsave`` files untouched); verification, resume-interrupted -- not started
    * - 2
      - Source Build System
      - Partial

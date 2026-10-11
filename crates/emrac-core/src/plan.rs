@@ -10,6 +10,8 @@ pub enum PlanAction {
     Downgrade,
     /// The same version put back: repair, re-run install scripts.
     Reinstall,
+    /// A removal that also discards modified configuration files.
+    Purge,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

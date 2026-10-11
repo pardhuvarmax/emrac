@@ -42,6 +42,9 @@ pub struct RollbackPlan {
     /// original transaction (i.e. this is a redo).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reapplies: Option<String>,
+    /// Something worth saying about this particular rollback.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
     /// The inverse operation: `Remove` for an install, `Install` for a
     /// remove, `Downgrade` for an upgrade. Only packages still in their
     /// post-transaction state are in here.
@@ -158,7 +161,7 @@ pub fn plan_rollback(
 
     let inverse = match record.action {
         PlanAction::Install => PlanAction::Remove,
-        PlanAction::Remove => PlanAction::Install,
+        PlanAction::Remove | PlanAction::Purge => PlanAction::Install,
         PlanAction::Upgrade => PlanAction::Downgrade,
         PlanAction::Downgrade => PlanAction::Upgrade,
         PlanAction::Reinstall => unreachable!("refused above"),
@@ -182,7 +185,7 @@ pub fn plan_rollback(
 
         let (version, previous_version) = match record.action {
             PlanAction::Install => (current.clone().unwrap_or_else(|| pkg.version.clone()), None),
-            PlanAction::Remove => (pkg.version.clone(), None),
+            PlanAction::Remove | PlanAction::Purge => (pkg.version.clone(), None),
             PlanAction::Upgrade | PlanAction::Downgrade => (
                 pkg.previous_version.clone().expect("checked above"),
                 current.clone(),
@@ -232,6 +235,9 @@ pub fn plan_rollback(
     Ok(RollbackPlan {
         target: record.id.clone(),
         reapplies: record.rollback_of.clone(),
+        note: (record.action == PlanAction::Purge).then(|| {
+            "this was a purge: reinstalling brings the packages back, but their deleted configuration files stay deleted".to_string()
+        }),
         plan: Plan {
             action: inverse,
             packages,
@@ -271,7 +277,7 @@ fn still_in_post_state(
                 Err(format!("now at {current}, not {}", pkg.version))
             }
         }
-        PlanAction::Remove => match current {
+        PlanAction::Remove | PlanAction::Purge => match current {
             Some(current) => Err(format!("installed again (at {current})")),
             None => Ok(()),
         },
@@ -890,5 +896,28 @@ mod tests {
         }
         let ids: Vec<_> = candidates(&history).iter().map(|r| r.id.as_str()).collect();
         assert_eq!(ids, ["tx-1"]);
+    }
+
+    #[test]
+    fn a_purge_is_undone_by_reinstalling_with_a_note_about_lost_config() {
+        let r = rec("tx-1", PlanAction::Purge, vec![pkg("a", "1-1", None)]);
+        let w = World::new(&[], &[("a", "1-1")]);
+        let p = w.plan(&r, std::slice::from_ref(&r)).unwrap();
+        assert_eq!(p.plan.action, PlanAction::Install);
+        assert_eq!(p.files.len(), 1);
+        assert!(p.note.unwrap().contains("configuration"));
+
+        // A plain remove carries no such note.
+        let r = rec("tx-2", PlanAction::Remove, vec![pkg("a", "1-1", None)]);
+        assert!(w.plan(&r, std::slice::from_ref(&r)).unwrap().note.is_none());
+
+        // Still absent is required, same as for a remove.
+        let w = World::new(&[("a", "1-1")], &[("a", "1-1")]);
+        let r = rec("tx-3", PlanAction::Purge, vec![pkg("a", "1-1", None)]);
+        assert!(w
+            .plan(&r, std::slice::from_ref(&r))
+            .unwrap()
+            .plan
+            .is_empty());
     }
 }

@@ -15,3 +15,5 @@ Currently: [`search.rs`](./search.rs), [`info.rs`](./info.rs), [`install.rs`](./
 [`downgrade.rs`](./downgrade.rs) handles `emrac downgrade <pkg> [version]` and `--list`: plan, preview, confirm, execute via the same fetch + `pacman -U` path rollback uses, then log it as a `downgrade` transaction (so `undo` can reverse it).
 
 [`reinstall.rs`](./reinstall.rs) handles `emrac reinstall <pkg>...`: plan (each package's source is shown), confirm, execute, log as a `reinstall` transaction (which `undo` skips and `rollback` refuses, since no version changes).
+
+[`purge.rs`](./purge.rs) handles `emrac purge <pkg>...`: the `remove` flow plus a preview of the config files with local changes that will be deleted instead of kept as `.pacsave`, and a dedicated confirmation when there are any.
