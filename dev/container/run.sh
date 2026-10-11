@@ -7,8 +7,11 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
+# Use the system toolchain explicitly: a cargo/rustc earlier on PATH (e.g.
+# nix) links the binary against a loader that doesn't exist in the Arch
+# container, so the mounted binary would fail to start.
 echo "==> Building emrac (host)"
-cargo build --workspace
+PATH=/usr/bin /usr/bin/cargo build --workspace
 
 echo "==> Building test container image"
 podman build -t emrac-test -f dev/container/Containerfile dev/container
