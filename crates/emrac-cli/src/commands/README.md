@@ -10,4 +10,4 @@ Currently: [`search.rs`](./search.rs), [`info.rs`](./info.rs), [`install.rs`](./
 
 [`history.rs`](./history.rs) handles `emrac history` (alias `transactions`) and exports `record()`, which `install`/`remove`/`upgrade` call after executing to append to the transaction log; a failed write there only warns.
 
-[`rollback.rs`](./rollback.rs) handles `emrac rollback [tx]` and `emrac undo` (same code path): plan, show what will change and what is left alone, confirm, execute, then log the result with `history::record_rollback`.
+[`rollback.rs`](./rollback.rs) handles `emrac rollback [tx]`, `emrac undo` and `emrac redo` (same code path; redo is just reversing the latest undo): plan, show what will change and what is left alone, confirm, execute, then log the result with `history::record_rollback`.

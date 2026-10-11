@@ -56,7 +56,7 @@ Complete Feature Catalog
    * - 1
      - Unified Package Management
      - Partial
-     - install/remove/upgrade + dry-run/preview/confirm done; ``emrac history``/``transactions`` (append-only log of executed transactions, ``--limit``/``--since``/``--json``); ``emrac rollback [tx]``/``undo`` reverse a recorded transaction from locally cached package files (no ``redo``, no snapshots, no Archive fetch); downgrade command, purge, reinstall, verification, resume-interrupted -- not started
+     - install/remove/upgrade + dry-run/preview/confirm done; ``emrac history``/``transactions`` (append-only log of executed transactions, ``--limit``/``--since``/``--json``); ``emrac rollback [tx]``/``undo``/``redo`` reverse and re-apply recorded transactions from locally cached package files (no snapshots, no Archive fetch); downgrade command, purge, reinstall, verification, resume-interrupted -- not started
    * - 2
      - Source Build System
      - Partial

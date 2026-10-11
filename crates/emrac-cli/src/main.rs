@@ -7,6 +7,7 @@ use clap::Parser;
 use emrac_core::{Config, Result, Sources};
 
 use cli::{Cli, Commands};
+use commands::rollback::Which;
 
 fn main() {
     let cli = Cli::parse();
@@ -88,9 +89,12 @@ fn run(cli: &Cli) -> Result<()> {
             quiet,
         ),
         Commands::Rollback { tx } => {
-            commands::rollback::run(&sources, tx.as_deref(), dry_run, yes, json)
+            commands::rollback::run(&sources, Which::Rollback(tx.as_deref()), dry_run, yes, json)
         }
-        Commands::Undo => commands::rollback::run(&sources, None, dry_run, yes, json),
+        Commands::Undo => {
+            commands::rollback::run(&sources, Which::Rollback(None), dry_run, yes, json)
+        }
+        Commands::Redo => commands::rollback::run(&sources, Which::Redo, dry_run, yes, json),
         Commands::Config { .. } | Commands::Completion { .. } | Commands::History { .. } => {
             unreachable!("handled above")
         }

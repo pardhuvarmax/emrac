@@ -381,6 +381,15 @@ impl Sources {
     /// the most recent one that can still be rolled back. No root, nothing
     /// is mutated.
     pub fn plan_rollback(&self, tx: Option<&str>) -> Result<RollbackPlan> {
+        self.plan_reversal(tx, false)
+    }
+
+    /// Plans re-applying the most recent rollback — i.e. reversing it.
+    pub fn plan_redo(&self) -> Result<RollbackPlan> {
+        self.plan_reversal(None, true)
+    }
+
+    fn plan_reversal(&self, tx: Option<&str>, redo: bool) -> Result<RollbackPlan> {
         let history = History::all()?;
         let cache_dirs = self.pacman.cache_dirs()?;
         let installed = |name: &str| self.alpm.installed_version(name);
@@ -402,14 +411,23 @@ impl Sources {
         // (e.g. a locked database) leaves nothing to reverse; stepping past
         // it is what "undo the last thing" means. A committed one with
         // nothing left to reverse stops here and is reported as such.
-        for record in rollback::candidates(&history) {
+        let candidates = if redo {
+            rollback::redo_candidates(&history)
+        } else {
+            rollback::candidates(&history)
+        };
+        for record in candidates {
             let plan = rollback::plan_rollback(record, &history, &installed, &find_file)?;
             if plan.plan.is_empty() && record.status == TxStatus::Failed {
                 continue;
             }
             return Ok(plan);
         }
-        Err(Error::NoTransactionToRollBack)
+        Err(if redo {
+            Error::NoTransactionToRedo
+        } else {
+            Error::NoTransactionToRollBack
+        })
     }
 
     /// Runs a rollback plan: a removal via `sudo pacman -R`, anything else

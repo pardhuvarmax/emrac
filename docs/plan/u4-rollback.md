@@ -115,6 +115,21 @@ stops there and is reported as such. Package files are matched only with the
 compressions makepkg can produce (`.zst`, `.xz`, ...), so `.sig` and
 interrupted `.part` downloads are never picked.
 
+## Addendum: `redo` (added right after u4)
+
+`redo` needed no new machinery: reversing a rollback record *is* a redo.
+Changes: (1) "rolled back by" now means the *active* reverser — a committed
+record with `rollback_of == id` that has not itself been reversed — so
+reversing an undo revives the original and makes it rollbackable again;
+(2) rollback records are no longer refused as targets, and a `Downgrade`
+record's inverse is `Upgrade` (needs the newer file, which the original
+upgrade left in the cache); (3) `emrac redo` picks the newest committed
+rollback of a *real* transaction that nothing has reversed since, so a second
+`redo` doesn't undo the first (the history stays a consistent toggle); (4)
+`rollback tx-<rollback id>` works too and is the same thing. A failed
+rollback is neither a reverser nor redoable; re-running `undo` finishes it
+via the post-state check. Plan output reads `redo tx-T (by reversing tx-R)`.
+
 ## Open decisions (defaults chosen, easy to flip)
 
 - `--cascade`-style removal on install-rollback is **off**: if something now

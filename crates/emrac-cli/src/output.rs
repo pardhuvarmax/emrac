@@ -147,9 +147,12 @@ pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
             PlanAction::Downgrade => "downgrade",
             PlanAction::Upgrade => "upgrade",
         };
+        let what = match &rollback.reapplies {
+            Some(original) => format!("redo {original} (by reversing {})", rollback.target),
+            None => format!("roll back {}", rollback.target),
+        };
         println!(
-            "emrac plans: roll back {} — {verb} {}\n",
-            rollback.target,
+            "emrac plans: {what} — {verb} {}\n",
             plural(plan.packages.len(), "package")
         );
         for pkg in &plan.packages {

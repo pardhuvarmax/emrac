@@ -114,6 +114,9 @@ pub enum Error {
     #[error("there's nothing in your history to roll back")]
     NoTransactionToRollBack,
 
+    #[error("there's no rollback in your history to redo")]
+    NoTransactionToRedo,
+
     #[error("can't roll back {id}: {why}")]
     NotRollbackable { id: String, why: String },
 
@@ -152,6 +155,7 @@ impl Error {
             | Error::InvalidTransactionId(_)
             | Error::UnknownTransaction(_)
             | Error::NoTransactionToRollBack
+            | Error::NoTransactionToRedo
             | Error::NotRollbackable { .. }
             | Error::RollbackFilesMissing(_) => "found",
             Error::PacmanConfSpawn(_)

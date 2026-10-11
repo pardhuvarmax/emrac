@@ -132,6 +132,9 @@ pub enum Commands {
     /// Reverse the most recent transaction that can still be rolled back
     Undo,
 
+    /// Re-apply the most recent rollback
+    Redo,
+
     /// Print a shell completion script to stdout
     Completion { shell: CompletionShell },
 }

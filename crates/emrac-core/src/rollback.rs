@@ -22,6 +22,10 @@ pub struct SkippedPackage {
 pub struct RollbackPlan {
     /// The transaction being reversed.
     pub target: String,
+    /// Set when `target` was itself a rollback: reversing it re-applies this
+    /// original transaction (i.e. this is a redo).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reapplies: Option<String>,
     /// The inverse operation: `Remove` for an install, `Install` for a
     /// remove, `Downgrade` for an upgrade. Only packages still in their
     /// post-transaction state are in here.
@@ -40,14 +44,19 @@ pub fn parse_tx_id(input: &str) -> Result<String> {
     }
 }
 
-/// The record that reversed `id`, if one committed.
+/// The record currently reversing `id`: a committed record with
+/// `rollback_of == id` that has not itself been reversed since. Reversing a
+/// rollback therefore "revives" the original (that is what `redo` is), and
+/// the original becomes rollbackable again. `history` is oldest first.
 pub fn rolled_back_by<'a>(
     history: &'a [TransactionRecord],
     id: &str,
 ) -> Option<&'a TransactionRecord> {
-    history
-        .iter()
-        .find(|r| r.rollback_of.as_deref() == Some(id) && r.status == TxStatus::Committed)
+    history.iter().find(|r| {
+        r.rollback_of.as_deref() == Some(id)
+            && r.status == TxStatus::Committed
+            && rolled_back_by(history, &r.id).is_none()
+    })
 }
 
 pub fn find_record<'a>(
@@ -60,13 +69,33 @@ pub fn find_record<'a>(
         .ok_or_else(|| Error::UnknownTransaction(id.to_string()))
 }
 
-/// Records `undo`/a bare `rollback` may pick, newest first: not themselves
-/// rollbacks, and not already rolled back. `history` is oldest first.
+/// Records `undo`/a bare `rollback` may pick, newest first: real
+/// transactions (not rollbacks) that nothing is currently reversing.
+/// `history` is oldest first.
 pub fn candidates(history: &[TransactionRecord]) -> Vec<&TransactionRecord> {
     history
         .iter()
         .rev()
         .filter(|r| r.rollback_of.is_none() && rolled_back_by(history, &r.id).is_none())
+        .collect()
+}
+
+/// Records `redo` may pick, newest first: committed rollbacks of a real
+/// transaction (an "undo") that nothing has reversed since.
+pub fn redo_candidates(history: &[TransactionRecord]) -> Vec<&TransactionRecord> {
+    history
+        .iter()
+        .rev()
+        .filter(|r| {
+            r.status == TxStatus::Committed
+                && r.rollback_of.as_deref().is_some_and(|original| {
+                    history
+                        .iter()
+                        .find(|o| o.id == original)
+                        .is_some_and(|o| o.rollback_of.is_none())
+                })
+                && rolled_back_by(history, &r.id).is_none()
+        })
         .collect()
 }
 
@@ -84,20 +113,10 @@ pub fn plan_rollback(
         why,
     };
 
-    if let Some(original) = &record.rollback_of {
-        return Err(refuse(format!(
-            "it's the rollback of {original}, and redoing isn't supported yet"
-        )));
-    }
     if let Some(by) = rolled_back_by(history, &record.id) {
-        return Err(refuse(format!("it was already rolled back by {}", by.id)));
+        return Err(refuse(format!("it was already reversed by {}", by.id)));
     }
-    if record.action == PlanAction::Downgrade {
-        return Err(refuse(
-            "downgrades are only ever written as rollbacks".into(),
-        ));
-    }
-    if record.action == PlanAction::Upgrade
+    if matches!(record.action, PlanAction::Upgrade | PlanAction::Downgrade)
         && record.packages.iter().any(|p| p.previous_version.is_none())
     {
         return Err(refuse(
@@ -110,7 +129,7 @@ pub fn plan_rollback(
         PlanAction::Install => PlanAction::Remove,
         PlanAction::Remove => PlanAction::Install,
         PlanAction::Upgrade => PlanAction::Downgrade,
-        PlanAction::Downgrade => unreachable!("refused above"),
+        PlanAction::Downgrade => PlanAction::Upgrade,
     };
 
     let mut packages = Vec::new();
@@ -131,11 +150,10 @@ pub fn plan_rollback(
         let (version, previous_version) = match record.action {
             PlanAction::Install => (current.clone().unwrap_or_else(|| pkg.version.clone()), None),
             PlanAction::Remove => (pkg.version.clone(), None),
-            PlanAction::Upgrade => (
+            PlanAction::Upgrade | PlanAction::Downgrade => (
                 pkg.previous_version.clone().expect("checked above"),
                 current.clone(),
             ),
-            PlanAction::Downgrade => unreachable!("refused above"),
         };
 
         if inverse != PlanAction::Remove {
@@ -160,6 +178,7 @@ pub fn plan_rollback(
 
     Ok(RollbackPlan {
         target: record.id.clone(),
+        reapplies: record.rollback_of.clone(),
         plan: Plan {
             action: inverse,
             packages,
@@ -182,7 +201,7 @@ fn still_in_post_state(
     current: Option<&str>,
 ) -> std::result::Result<(), String> {
     match action {
-        PlanAction::Install | PlanAction::Upgrade => {
+        PlanAction::Install | PlanAction::Upgrade | PlanAction::Downgrade => {
             let Some(current) = current else {
                 return Err("no longer installed".into());
             };
@@ -202,7 +221,6 @@ fn still_in_post_state(
             Some(current) => Err(format!("installed again (at {current})")),
             None => Ok(()),
         },
-        PlanAction::Downgrade => Err("not rollbackable".into()),
     }
 }
 
@@ -466,21 +484,103 @@ mod tests {
     }
 
     #[test]
-    fn repeats_and_rollbacks_of_rollbacks_are_refused() {
+    fn a_reversed_transaction_cannot_be_reversed_again() {
         let target = rec("tx-1", PlanAction::Install, vec![pkg("a", "1-1", None)]);
         let mut undo = rec("tx-2", PlanAction::Remove, vec![pkg("a", "1-1", None)]);
         undo.rollback_of = Some("tx-1".into());
-        let history = vec![target.clone(), undo.clone()];
+        let history = vec![target.clone(), undo];
         let w = World::new(&[("a", "1-1")], &[]);
 
         match w.plan(&target, &history) {
             Err(Error::NotRollbackable { why, .. }) => assert!(why.contains("tx-2")),
             other => panic!("expected refusal, got {other:?}"),
         }
-        assert!(matches!(
-            w.plan(&undo, &history),
-            Err(Error::NotRollbackable { .. })
-        ));
+    }
+
+    #[test]
+    fn reversing_a_rollback_is_a_redo_and_revives_the_original() {
+        let t1 = rec("tx-1", PlanAction::Remove, vec![pkg("a", "1-1", None)]);
+        let mut undo = rec("tx-2", PlanAction::Install, vec![pkg("a", "1-1", None)]);
+        undo.rollback_of = Some("tx-1".into());
+        let history = vec![t1, undo.clone()];
+        // `a` is back after the undo; redoing the removal means removing it.
+        let w = World::new(&[("a", "1-1")], &[]);
+        let p = w.plan(&undo, &history).unwrap();
+        assert_eq!(p.plan.action, PlanAction::Remove);
+        assert_eq!(names(&p), ["a"]);
+        assert_eq!(p.target, "tx-2");
+        assert_eq!(p.reapplies.as_deref(), Some("tx-1"));
+    }
+
+    #[test]
+    fn redoing_a_downgrade_upgrades_again_from_the_newer_file() {
+        let t1 = rec(
+            "tx-1",
+            PlanAction::Upgrade,
+            vec![pkg("a", "2-1", Some("1-1"))],
+        );
+        let mut undo = rec(
+            "tx-2",
+            PlanAction::Downgrade,
+            vec![pkg("a", "1-1", Some("2-1"))],
+        );
+        undo.rollback_of = Some("tx-1".into());
+        let history = vec![t1, undo.clone()];
+        let w = World::new(&[("a", "1-1")], &[("a", "2-1")]);
+        let p = w.plan(&undo, &history).unwrap();
+        assert_eq!(p.plan.action, PlanAction::Upgrade);
+        assert_eq!(p.plan.packages[0].version, "2-1");
+        assert_eq!(p.plan.packages[0].previous_version.as_deref(), Some("1-1"));
+        assert_eq!(p.files, [PathBuf::from("/cache/a-2-1-x86_64.pkg.tar.zst")]);
+
+        // If the package has moved on since the undo, it is left alone.
+        let w = World::new(&[("a", "5-1")], &[("a", "2-1")]);
+        let p = w.plan(&undo, &history).unwrap();
+        assert!(p.plan.is_empty());
+        assert!(p.skipped[0].reason.contains("now at 5-1"));
+    }
+
+    #[test]
+    fn undo_redo_undo_toggles_which_records_are_candidates() {
+        let t1 = rec("tx-1", PlanAction::Install, vec![pkg("a", "1-1", None)]);
+        let ids = |v: Vec<&TransactionRecord>| v.iter().map(|r| r.id.clone()).collect::<Vec<_>>();
+        let mut history = vec![t1];
+        assert_eq!(ids(candidates(&history)), ["tx-1"]);
+        assert!(redo_candidates(&history).is_empty());
+
+        // undo -> tx-1 is reversed; the undo itself is redoable.
+        let mut undo = rec("tx-2", PlanAction::Remove, vec![pkg("a", "1-1", None)]);
+        undo.rollback_of = Some("tx-1".into());
+        history.push(undo);
+        assert!(candidates(&history).is_empty());
+        assert_eq!(ids(redo_candidates(&history)), ["tx-2"]);
+
+        // redo -> tx-2 is reversed, so tx-1 is live and undoable again, and
+        // there is nothing further to redo (a second redo must not undo the
+        // redo).
+        let mut redo = rec("tx-3", PlanAction::Install, vec![pkg("a", "1-1", None)]);
+        redo.rollback_of = Some("tx-2".into());
+        history.push(redo);
+        assert_eq!(ids(candidates(&history)), ["tx-1"]);
+        assert!(redo_candidates(&history).is_empty());
+
+        // undo again -> redoable again, and the earlier undo/redo pair stays buried.
+        let mut undo2 = rec("tx-4", PlanAction::Remove, vec![pkg("a", "1-1", None)]);
+        undo2.rollback_of = Some("tx-1".into());
+        history.push(undo2);
+        assert!(candidates(&history).is_empty());
+        assert_eq!(ids(redo_candidates(&history)), ["tx-4"]);
+    }
+
+    #[test]
+    fn failed_rollbacks_are_neither_redoable_nor_reversing() {
+        let t1 = rec("tx-1", PlanAction::Install, vec![pkg("a", "1-1", None)]);
+        let mut failed = rec("tx-2", PlanAction::Remove, vec![pkg("a", "1-1", None)]);
+        failed.rollback_of = Some("tx-1".into());
+        failed.status = TxStatus::Failed;
+        let history = vec![t1, failed];
+        assert_eq!(candidates(&history).len(), 1);
+        assert!(redo_candidates(&history).is_empty());
     }
 
     #[test]
