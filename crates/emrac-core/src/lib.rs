@@ -15,7 +15,9 @@ mod snapshot;
 mod sources;
 mod verify;
 
-pub use audit::{audit, scriptlet_name, AuditReport, Finding, Severity, Verdict};
+pub use audit::{
+    audit, scriptlet_name, AuditReport, ExtraFile, Finding, Severity, Verdict, MAX_EXTRA_FILES,
+};
 pub use backend::AurSyncOutcome;
 pub use config::Config;
 pub use deps::{DepEntry, DepsReport, Orphan, RdepsReport, WhyReport};

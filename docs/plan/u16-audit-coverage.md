@@ -50,3 +50,29 @@ Unit tests for every new rule both ways; the 67-PKGBUILD survey re-run **with
 every file in each repo** (the false-positive gate: still no high/critical on
 the official and popular AUR packages); planted malicious helper scripts and
 patches through the real review flow.
+
+## Found while testing (all fixed, all pinned by tests)
+
+- `install=$pkgname.install` (the usual form) was never resolved, so most
+  scriptlets were not being read at all. Names are now expanded from the
+  PKGBUILD's own plain assignments.
+- `x=$(curl … | sh)` at top level runs when the PKGBUILD is merely read, but
+  assignments never reached the command rules. Assignments with a command
+  substitution are now scanned.
+- A reverse shell written as `s = socket.socket()` on one line and
+  `os.dup2(...)` on another was missed; it is now decided per file from the
+  raw text.
+- Persistence is judged by where a command **writes** (redirect target, `tee`,
+  `cp`/`mv`/`ln`/`install` destination, `dd of=`, `sed -i`), not by a path
+  appearing anywhere on the line: `grep x /etc/passwd > /dev/null` is not a
+  write. Two tiers: SSH keys, `ld.so.preload`, sudoers, account files and
+  `/etc/crontab` are critical everywhere; **shell startup files** are critical
+  in a PKGBUILD but **high** in an install scriptlet or shipped script, because
+  some legitimate packages (e.g. `nvm-git`) append a `source` line there. This
+  refines the severity table in the design doc.
+- The command-word reader now understands `case`/`for` headers, array
+  assignments and `x=$(cmd …)` (where the command that runs is `cmd`), which
+  removed most `dynamic-command` noise (39 → 6 over the survey) and sharpened
+  the other rules.
+- A single-file target audited its whole parent directory, recursively; a file
+  target now looks only at the files beside it.

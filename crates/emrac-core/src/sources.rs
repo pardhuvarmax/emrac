@@ -219,10 +219,23 @@ impl Sources {
                 .read_file(name, rev, &file)
                 .map(|text| (file, text))
         });
+        // The rest of the repo: helper scripts, patches, committed binaries.
+        let extras: Vec<audit::ExtraFile> = self
+            .aur_build
+            .list_files(name, rev)
+            .into_iter()
+            .filter(|f| f != "PKGBUILD")
+            .take(audit::MAX_EXTRA_FILES)
+            .filter_map(|path| {
+                let bytes = self.aur_build.read_bytes(name, rev, &path)?;
+                Some(audit::ExtraFile { path, bytes })
+            })
+            .collect();
         audit::audit(
             name,
             pkgbuild,
             scriptlet.as_ref().map(|(f, t)| (f.as_str(), t.as_str())),
+            &extras,
         )
     }
 
@@ -1220,9 +1233,56 @@ pub fn audit_path(path: &std::path::Path) -> Result<AuditReport> {
             .ok()
             .map(|t| (name, t))
     });
+    // Auditing one file looks at the files beside it; a directory is walked.
+    let extras = collect_extras(&dir, if path.is_dir() { 3 } else { 0 });
     Ok(audit::audit(
         &file.display().to_string(),
         &pkgbuild,
         scriptlet.as_ref().map(|(f, t)| (f.as_str(), t.as_str())),
+        &extras,
     ))
+}
+
+/// The other files of a package directory, as `audit` wants them: at most
+/// `MAX_EXTRA_FILES`, `max_depth` levels deep, skipping VCS data and makepkg's own
+/// work and output (`src`, `pkg`, built packages).
+fn collect_extras(dir: &std::path::Path, max_depth: usize) -> Vec<audit::ExtraFile> {
+    fn walk(
+        root: &std::path::Path,
+        dir: &std::path::Path,
+        depth: usize,
+        max_depth: usize,
+        out: &mut Vec<audit::ExtraFile>,
+    ) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|e| e.file_name());
+        for entry in entries {
+            if out.len() >= audit::MAX_EXTRA_FILES {
+                return;
+            }
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_dir() {
+                if depth < max_depth && !matches!(name.as_str(), ".git" | "src" | "pkg") {
+                    walk(root, &path, depth + 1, max_depth, out);
+                }
+            } else if kind.is_file() && !name.contains(".pkg.tar") {
+                if let (Ok(bytes), Ok(rel)) = (std::fs::read(&path), path.strip_prefix(root)) {
+                    out.push(audit::ExtraFile {
+                        path: rel.display().to_string(),
+                        bytes,
+                    });
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, dir, 0, max_depth, &mut out);
+    out
 }

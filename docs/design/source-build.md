@@ -166,5 +166,12 @@ rootless user namespaces to run bwrap; confirm in u17.
    | high | dangerous but sometimes legitimate (pipe a download into a shell, `sudo`, setuid, `systemctl enable`, reading `~/.ssh`) | **warn and stop**: a separate explicit confirmation naming the findings; `--yes` does not bypass it, `--accept-risks` does |
    | critical | severe and able to spread or persist (writing shell startup files or `authorized_keys`, reading credentials *and* uploading, obfuscated decode-and-execute, reverse shells, destructive commands) | **blocked by emrac, no override flag**; the user can still inspect and build by hand outside emrac |
 
+   Refinement (u16): shell startup files (`.bashrc`, `.profile`, …) are
+   critical when a PKGBUILD writes them but **high** in an install scriptlet or
+   shipped script, since some legitimate packages append a `source` line there;
+   SSH key lists, `ld.so.preload`, sudoers and account files stay critical
+   everywhere. Committed executables and added-by-patch findings are high and
+   warning respectively (§ u16).
+
    The critical tier is deliberately narrow (almost no legitimate package does
    these) so that a block is rare and means something.
