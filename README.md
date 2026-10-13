@@ -6,7 +6,7 @@ A hybrid next generation package management platform for Arch Linux — an orche
 
 ---
 
-Status: **Slice i1**, heading for r1. The core loop (`search`, `info`, `install`, `remove`, `upgrade` against the official repos and the AUR) works, with a transaction preview and confirmation before every change and a PKGBUILD review for AUR builds. Still missing: the TUI, build profiles, and everything else in `SPEC.md` Part IV.
+Status: **Slice r1.** The core loop (`search`, `info`, `install`, `remove`, `upgrade` against the official repos and the AUR) works, with a transaction preview and confirmation before every change and a PKGBUILD review for AUR builds. Still missing: the TUI, build profiles, and everything else in `SPEC.md` Part IV.
 
 | Area | Commands |
 |---|---|

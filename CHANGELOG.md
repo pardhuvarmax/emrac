@@ -12,6 +12,14 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice r1 — 2026-10-13 — first release
+
+The core CLI loop MVP from `SPEC.md` Part X is complete and verified: `search`, `info`, `install`, `remove` and `upgrade` against the official repositories (libalpm for reads, `pacman` for changes) and the AUR (RPC, `git`, `makepkg`), each with a transaction preview, confirmation, `--dry-run`, `--json` and an AUR PKGBUILD review. Slices u1–u14 were built on top of it before this cut: config, shell completion, transaction history, rollback/undo/redo, Archive fetch, downgrade, reinstall, purge, verify, snapshot/restore (with an optional snapshot before upgrade), dependency inspection, pin/unpin, and the u14 hardening (broken pipe, exit codes, CLI tests, CI). The slice numbering therefore continues from `u14` rather than resetting; the next slices are `u15` onward.
+
+Final check for this release, in the podman container with the final binary and real pacman: search, info, install (dry-run and real), snapshot, remove, history, rollback/undo/redo, restore with `--prune`, verify, deps/why/orphans, downgrade from the Archive, pin with a held-back upgrade, targeted upgrade after unpin, reinstall, purge, and the exit codes (`2` for a usage error, `1` for an unknown package) all behaved as documented, and every step landed in the history. Locally: fmt, clippy `-D warnings` and 111 tests pass. The GitHub Actions workflow had not yet run when this was cut.
+
+Known gaps, by design for r1: no TUI, build profiles, sandboxed builds, `lock`, `tree`/`graph`/`impact`, or anything else in `SPEC.md` Part IV; AUR support is limited to what `makepkg -si` does.
+
 ## Slice u14 — 2026-10-13 — hardening ahead of r1
 
 No new commands. `emrac … | head` no longer panics with "Broken pipe": the default `SIGPIPE` disposition is restored at startup (`libc`), so emrac ends quietly like any Unix tool. Exit codes are now documented and pinned by tests: `0` success (including nothing to do and a declined prompt), `1` any emrac error (including `verify` finding damage), `2` usage error. The README's status paragraph, which had grown into one sentence, is now a command table with a quickstart and the exit codes.
