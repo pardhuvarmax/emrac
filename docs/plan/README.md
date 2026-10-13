@@ -36,3 +36,5 @@ Current:
   dependency inspection.
 - [`u13-pin.md`](./u13-pin.md) — `emrac pin`/`unpin`: holds with reasons and expiry,
   honoured by `upgrade`.
+- [`u14-hardening.md`](./u14-hardening.md) — broken-pipe fix, CLI integration tests, CI,
+  exit codes and quickstart ahead of r1.
