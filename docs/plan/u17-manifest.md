@@ -28,7 +28,7 @@ built package can be inspected for that.
   |---|---|
   | `etc/ld.so.preload` shipped | critical |
   | setuid file | high; setgid: warning |
-  | pacman hook (`usr/share/libalpm/hooks`) — runs as root on later transactions | high (its `Exec` line is also run through the script rules) |
+  | pacman hook (`usr/share/libalpm/hooks`) — runs as root on later transactions | warning; its `Exec` line is run through the script rules, which is what escalates it (6% of official packages ship a hook, so a blanket high would just train people to say yes) |
   | sudoers drop-in, cron entries | high |
   | files under `home/`, `root/` | high |
   | `etc/profile.d` script (runs for every login shell) | warning, content scanned |
@@ -63,3 +63,16 @@ signature checks of the built package, the sandbox (u18 onward).
   `error.rs`.
 - CLI: `commands/aur_install.rs` (shared build → manifest → install),
   `install.rs`, `upgrade.rs`, `reinstall.rs`, `audit.rs`, `output.rs`.
+
+## Found while testing (all fixed, all pinned by tests)
+
+- The script rules were quote-aware, so a payload passed as a string —
+  `sh -c 'echo k >> ~/.ssh/authorized_keys'`, `bash -c "curl … | sh"`,
+  `eval '…'` — was never read. This applies to PKGBUILDs and shipped scripts as
+  much as to hooks. The scanner now recurses into `sh -c`/`eval` strings (three
+  levels deep).
+- Calibration over the 932 official packages in a pacman cache: no critical
+  finding; the only high findings were 17 legitimate setuid helpers
+  (`fusermount`, `mount.cifs`, `chrome-sandbox`, …), and 44 packages ship a
+  pacman hook. A blanket "hook = high" would have made the prompt noise, so a
+  plain hook is a warning and only what it *runs* (scanned as code) escalates it.

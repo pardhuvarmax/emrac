@@ -10,6 +10,7 @@ pub fn run(
     dry_run: bool,
     yes: bool,
     offline: bool,
+    accept_risks: bool,
     json: bool,
 ) -> Result<()> {
     let reinstall = sources.plan_reinstall(pkgs, offline)?;
@@ -24,7 +25,12 @@ pub fn run(
         return Ok(());
     }
 
-    let result = sources.execute_reinstall(&reinstall);
+    let result = sources.execute_reinstall(&reinstall).and_then(|()| {
+        for name in &reinstall.rebuild {
+            crate::commands::aur_install::build_and_install(sources, name, accept_risks)?;
+        }
+        Ok(())
+    });
     history::record(&reinstall.plan, &result);
     result
 }

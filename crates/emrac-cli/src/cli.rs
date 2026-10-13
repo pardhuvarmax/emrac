@@ -203,6 +203,11 @@ pub enum Commands {
     Reinstall {
         #[arg(required = true)]
         pkgs: Vec<String>,
+
+        /// Don't stop to ask when a rebuilt AUR package's manifest shows
+        /// high-risk changes (critical ones are always refused)
+        #[arg(long)]
+        accept_risks: bool,
     },
 
     /// Go back to an older version of an installed package

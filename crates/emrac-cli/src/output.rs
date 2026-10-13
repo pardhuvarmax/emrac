@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::io::Write;
 
 use emrac_core::{
-    AuditReport, ConfigState, DepEntry, DepsReport, DowngradePlan, Download, IssueKind, Orphan,
-    PackageDetails, PackageSummary, Pin, Plan, PlanAction, PurgePlan, RdepsReport, ReinstallPlan,
-    ReinstallSource, RestorePlan, RestoreSource, RollbackPlan, Severity, Snapshot,
+    AuditReport, ConfigState, DepEntry, DepsReport, DowngradePlan, Download, IssueKind, Manifest,
+    Orphan, PackageDetails, PackageSummary, Pin, Plan, PlanAction, PurgePlan, RdepsReport,
+    ReinstallPlan, ReinstallSource, RestorePlan, RestoreSource, RollbackPlan, Severity, Snapshot,
     TransactionRecord, TxStatus, Verdict, VerifyReport, VersionList, WhyReport,
 };
 
@@ -774,11 +774,14 @@ fn print_findings(report: &AuditReport, out: &mut dyn std::io::Write) {
     for f in &report.findings {
         let _ = writeln!(
             out,
-            "  [{}] {} {}:{} — {}\n      {}",
+            "  [{}] {} {} — {}\n      {}",
             f.severity.label(),
             f.rule,
-            f.file,
-            f.line,
+            if f.line == 0 {
+                f.file.clone()
+            } else {
+                format!("{}:{}", f.file, f.line)
+            },
             f.message,
             f.excerpt
         );
@@ -839,4 +842,84 @@ pub fn print_audits(reports: &[AuditReport], json: bool) {
         println!();
     }
     println!("(static reading only — it can miss things and can flag legitimate code)");
+}
+
+/// What a built package would change, shown before it is installed.
+pub fn print_manifest(m: &Manifest, to_stderr: bool) {
+    let mut buf = Vec::new();
+    let _ = writeln!(
+        buf,
+        "emrac manifest: {} {} — {}, {} installed\n",
+        m.package,
+        m.version,
+        plural(m.files, "file"),
+        human_size(m.installed_size)
+    );
+    for line in &m.summary {
+        let _ = writeln!(buf, "  - {line}");
+    }
+    if !m.summary.is_empty() {
+        let _ = writeln!(buf);
+    }
+    if m.report
+        .findings
+        .iter()
+        .all(|f| f.severity == Severity::Info)
+    {
+        let _ = writeln!(buf, "  nothing here needs your attention.\n");
+    } else {
+        print_findings(&m.report, &mut buf);
+        let _ = writeln!(buf);
+    }
+    if to_stderr {
+        let _ = std::io::stderr().write_all(&buf);
+    } else {
+        let _ = std::io::stdout().write_all(&buf);
+    }
+}
+
+/// One `emrac audit` target's result: a source audit or a package manifest.
+pub enum AuditItem {
+    Source(AuditReport),
+    Package(Manifest),
+}
+
+impl AuditItem {
+    pub fn report(&self) -> &AuditReport {
+        match self {
+            AuditItem::Source(r) => r,
+            AuditItem::Package(m) => &m.report,
+        }
+    }
+}
+
+pub fn print_audit_items(items: &[AuditItem], json: bool) {
+    if json {
+        let values: Vec<serde_json::Value> = items
+            .iter()
+            .map(|i| match i {
+                AuditItem::Source(r) => serde_json::to_value(r),
+                AuditItem::Package(m) => serde_json::to_value(m),
+            })
+            .map(|v| v.unwrap())
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&values).unwrap());
+        return;
+    }
+    for item in items {
+        match item {
+            AuditItem::Source(report) => print_audits(std::slice::from_ref(report), false),
+            AuditItem::Package(m) => {
+                print_manifest(m, false);
+                let verdict = match m.report.verdict() {
+                    Verdict::Allow => None,
+                    Verdict::Confirm => Some("emrac would stop and ask before installing this"),
+                    Verdict::Block => Some("emrac would refuse to install this"),
+                };
+                if let Some(v) = verdict {
+                    println!("{v}.");
+                }
+            }
+        }
+    }
 }

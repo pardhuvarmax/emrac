@@ -98,7 +98,7 @@ resolves `ideas.md` section 6 "commit step" and "snapshot timing" (a snapshot,
 when used, is taken immediately before `-U`; emrac's package-set `snapshot`
 already exists).
 
-### 3.5 Install-time manifest
+### 3.5 Install-time manifest (built in u17)
 
 Before `pacman -U`, inspect the built package (not the PKGBUILD): list `.INSTALL`
 scriptlet actions, setuid/setgid files, systemd units, `sysusers`/`tmpfiles`,

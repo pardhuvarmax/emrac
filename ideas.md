@@ -89,7 +89,7 @@ Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress
 
 ### Install-time transparency
 
-- `[idea]` **Install-time capability manifest**: before Phase 4, show everything a package changes beyond files: `.install` scriptlets, new users and groups, setuid binaries, systemd units, sudoers or cron entries, and pacman hooks it adds. Risky items are flagged. Static analysis of scriptlets fits the AST parser work.
+- `[built u17]` **Install-time capability manifest**: before Phase 4, show everything a package changes beyond files: `.install` scriptlets, new users and groups, setuid binaries, systemd units, sudoers or cron entries, and pacman hooks it adds. Risky items are flagged. Static analysis of scriptlets fits the AST parser work.
 - `[idea]` **Config tracking tied to transactions**: git-backed history of `/etc` changes per transaction (etckeeper-style), so the effect of a given package change on config is visible and revertible on its own.
 
 ### Control and reproducibility

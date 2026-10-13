@@ -1,4 +1,5 @@
 pub mod audit;
+pub mod aur_install;
 pub mod aur_review;
 pub mod completion;
 pub mod config;

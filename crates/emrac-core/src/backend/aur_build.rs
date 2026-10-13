@@ -5,6 +5,13 @@ use std::process::{Command, Stdio};
 
 use crate::error::{Error, Result};
 
+/// makepkg's exit status for "this package was already built".
+const MAKEPKG_ALREADY_BUILT: i32 = 13;
+
+fn l_is_empty(p: &Path) -> bool {
+    p.as_os_str().is_empty()
+}
+
 /// What `AurBuildBackend::sync` found when checking a package's cached AUR
 /// git checkout against upstream.
 pub enum AurSyncOutcome {
@@ -118,13 +125,15 @@ impl AurBuildBackend {
         output.status.success().then_some(output.stdout)
     }
 
-    /// Builds and installs via `makepkg -si`, with stdio inherited so the
-    /// real build output, dependency-sync prompts, and sudo password prompt
-    /// go straight to the terminal. Never runs as root — matches emrac's
-    /// existing privilege model, and makepkg refuses root anyway.
-    pub fn build_and_install(&self, pkg: &str) -> Result<()> {
+    /// Builds the package with `makepkg -s`: build dependencies are
+    /// installed through makepkg's usual `sudo pacman` path, but the package
+    /// itself is **not** installed — emrac inspects it first. Stdio is
+    /// inherited so the build output and any sudo prompt reach the terminal.
+    /// Never runs as root (makepkg refuses root anyway). makepkg's "already
+    /// built" exit (13) is fine: the existing package file is used.
+    pub fn build(&self, pkg: &str) -> Result<()> {
         let dir = self.build_dir(pkg)?;
-        let args = ["-si", "--noconfirm", "--needed"];
+        let args = ["-s", "--noconfirm", "--needed"];
 
         let status = Command::new("makepkg")
             .args(args)
@@ -132,14 +141,42 @@ impl AurBuildBackend {
             .status()
             .map_err(|err| Error::CommandSpawn("makepkg".to_string(), err))?;
 
-        if !status.success() {
-            return Err(Error::CommandFailed {
+        match status.code() {
+            Some(0) | Some(MAKEPKG_ALREADY_BUILT) => Ok(()),
+            _ => Err(Error::CommandFailed {
                 command: format!("makepkg {} (in {})", args.join(" "), dir.display()),
                 stderr: format!("exited with {status}"),
+            }),
+        }
+    }
+
+    /// The package files `build` produced (a split package makes several),
+    /// per `makepkg --packagelist` — so a custom `PKGDEST` is honoured —
+    /// keeping those that exist (the list also names an unbuilt `-debug`
+    /// package).
+    pub fn built_files(&self, pkg: &str) -> Result<Vec<PathBuf>> {
+        let dir = self.build_dir(pkg)?;
+        let output = Command::new("makepkg")
+            .arg("--packagelist")
+            .current_dir(&dir)
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|err| Error::CommandSpawn("makepkg".to_string(), err))?;
+        if !output.status.success() {
+            return Err(Error::CommandFailed {
+                command: format!("makepkg --packagelist (in {})", dir.display()),
+                stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
             });
         }
-
-        Ok(())
+        let files: Vec<PathBuf> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(|l| PathBuf::from(l.trim()))
+            .filter(|p| !l_is_empty(p) && p.is_file())
+            .collect();
+        if files.is_empty() {
+            return Err(Error::NoBuiltPackage(pkg.to_string()));
+        }
+        Ok(files)
     }
 
     /// Whether emrac already has a git checkout of `pkg`'s AUR repo.

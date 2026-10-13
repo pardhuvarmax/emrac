@@ -50,7 +50,7 @@ pub fn run(
             sources.install_official(&official)?;
         }
         for details in &aur {
-            sources.build_aur(&details.name)?;
+            crate::commands::aur_install::build_and_install(sources, &details.name, accept_risks)?;
         }
         Ok(())
     })();

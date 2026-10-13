@@ -10,6 +10,7 @@ use crate::deps::{self, DepsReport, Orphan, RdepsReport, WhyReport};
 use crate::downgrade::{self, DowngradePlan, VersionList};
 use crate::error::{Error, Result};
 use crate::history::{now, History, TxStatus};
+use crate::manifest::{self, Manifest};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::pins::{self, Pin, PinStore};
 use crate::plan::{Plan, PlanAction, PlannedPackage};
@@ -264,11 +265,17 @@ impl Sources {
         self.aur_build.read_pkgbuild(name)
     }
 
-    /// Builds and installs an AUR package via `makepkg -si`. Prompts
-    /// interactively (build output, dependency sync, sudo password) same
-    /// as a real terminal session with `makepkg` would.
-    pub fn build_aur(&self, name: &str) -> Result<()> {
-        self.aur_build.build_and_install(name)
+    /// Builds an AUR package (`makepkg -s`) **without installing it** and
+    /// returns the package files. Prompts interactively (build output,
+    /// dependency sync, sudo password) like a real `makepkg` session.
+    pub fn build_aur_package(&self, name: &str) -> Result<Vec<PathBuf>> {
+        self.aur_build.build(name)?;
+        self.aur_build.built_files(name)
+    }
+
+    /// Installs built package files with `sudo pacman -U`.
+    pub fn install_built(&self, files: &[PathBuf]) -> Result<()> {
+        self.pacman.execute_install_files(files)
     }
 
     /// Splits explicitly-named upgrade targets into official vs. AUR.
@@ -860,9 +867,7 @@ impl Sources {
         if !reinstall.repository.is_empty() {
             self.pacman.execute_install(&reinstall.repository)?;
         }
-        for name in &reinstall.rebuild {
-            self.aur_build.build_and_install(name)?;
-        }
+        // AUR rebuilds are driven by the caller (build, manifest, install).
         Ok(())
     }
 
@@ -1285,4 +1290,19 @@ fn collect_extras(dir: &std::path::Path, max_depth: usize) -> Vec<audit::ExtraFi
     let mut out = Vec::new();
     walk(dir, dir, 0, max_depth, &mut out);
     out
+}
+
+/// Reads a built package file (`*.pkg.tar.*`) and reports what it would
+/// change on a system. Nothing is extracted or run. Needs no `Sources`.
+pub fn inspect_package(path: &std::path::Path) -> Result<Manifest> {
+    use crate::backend::PackageFile;
+    let listing = PackageFile::list(path)?;
+    let pkginfo = PackageFile::read(path, ".PKGINFO").unwrap_or_default();
+    let scriptlet = PackageFile::read(path, ".INSTALL");
+    Ok(manifest::inspect(
+        &pkginfo,
+        &listing,
+        scriptlet.as_deref(),
+        &|member| PackageFile::read(path, member),
+    ))
 }

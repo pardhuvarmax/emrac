@@ -204,6 +204,19 @@ pub enum Error {
     #[error("won't build '{package}': the audit found critical problems — {findings}. Read the PKGBUILD yourself with `emrac audit {package}`; emrac won't build it")]
     AuditBlocked { package: String, findings: String },
 
+    #[error("won't install '{package}': the built package has critical problems — {findings}. The built file is kept at {file}; emrac won't install it")]
+    ManifestBlocked {
+        package: String,
+        findings: String,
+        file: String,
+    },
+
+    #[error("didn't install '{package}': you declined after the package manifest. The built file is kept at {file} (`sudo pacman -U` installs it)")]
+    InstallDeclined { package: String, file: String },
+
+    #[error("makepkg finished but left no package file for '{0}'")]
+    NoBuiltPackage(String),
+
     #[error("high-risk or critical findings in: {0}")]
     AuditFlagged(String),
 
@@ -262,6 +275,9 @@ impl Error {
             | Error::AuditBlocked { .. }
             | Error::NoPkgbuild(_)
             | Error::AuditFlagged(_)
+            | Error::ManifestBlocked { .. }
+            | Error::InstallDeclined { .. }
+            | Error::NoBuiltPackage(_)
             | Error::NotPinned(_)
             | Error::PackagePinned { .. }
             | Error::PinsCorrupt { .. }

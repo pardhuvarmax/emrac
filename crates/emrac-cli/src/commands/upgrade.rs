@@ -85,7 +85,7 @@ pub fn run(
             sources.upgrade_official(&official_targets)?;
         }
         for name in &aur_names {
-            sources.build_aur(name)?;
+            crate::commands::aur_install::build_and_install(sources, name, accept_risks)?;
         }
         Ok(())
     })();
