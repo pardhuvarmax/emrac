@@ -51,3 +51,5 @@ Current:
   package changes, with the audit's severity policy.
 - [`u18-close-gaps.md`](./u18-close-gaps.md) — packaged scripts, cross-file exfiltration, opt-in
   inspection of official packages, and the verification gaps.
+- [`u19-sandbox.md`](./u19-sandbox.md) — bubblewrap-sandboxed AUR builds: three makepkg phases,
+  network warn-and-ask, `emrac build`.
