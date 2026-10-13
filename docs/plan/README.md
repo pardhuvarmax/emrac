@@ -53,3 +53,5 @@ Current:
   inspection of official packages, and the verification gaps.
 - [`u19-sandbox.md`](./u19-sandbox.md) — bubblewrap-sandboxed AUR builds: three makepkg phases,
   network warn-and-ask, `emrac build`.
+- [`u20-limits.md`](./u20-limits.md) — memory, process, tmpfs and time limits for sandboxed
+  builds.
