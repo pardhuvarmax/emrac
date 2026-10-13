@@ -108,6 +108,7 @@ fn run(cli: &Cli) -> Result<()> {
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
             review.accept_risks,
+            review.inspect || config.review.inspect_official,
             json,
         ),
         Commands::Remove {
@@ -129,6 +130,7 @@ fn run(cli: &Cli) -> Result<()> {
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
             review.accept_risks,
+            review.inspect || config.review.inspect_official,
             json,
             quiet,
             config.snapshot.before_upgrade,

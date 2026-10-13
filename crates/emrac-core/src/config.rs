@@ -49,6 +49,10 @@ pub struct Review {
     pub skip_pkgbuild: bool,
     #[serde(default)]
     pub skip_diff: bool,
+    /// Download official packages first and show their manifests before
+    /// installing (`--inspect`).
+    #[serde(default)]
+    pub inspect_official: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -121,6 +125,7 @@ impl Config {
             "flags.quiet" => self.flags.quiet.to_string(),
             "review.skip_pkgbuild" => self.review.skip_pkgbuild.to_string(),
             "review.skip_diff" => self.review.skip_diff.to_string(),
+            "review.inspect_official" => self.review.inspect_official.to_string(),
             "search.limit" => match self.search.limit {
                 Some(n) => n.to_string(),
                 None => "unset".to_string(),
@@ -149,6 +154,9 @@ impl Config {
             "review.skip_diff" => {
                 self.review.skip_diff = parse_bool(value).ok_or_else(invalid)?;
             }
+            "review.inspect_official" => {
+                self.review.inspect_official = parse_bool(value).ok_or_else(invalid)?;
+            }
             "search.limit" => {
                 self.search.limit = match value {
                     "unset" | "none" => None,
@@ -174,6 +182,7 @@ impl Config {
             "flags.quiet" => self.flags.quiet = false,
             "review.skip_pkgbuild" => self.review.skip_pkgbuild = false,
             "review.skip_diff" => self.review.skip_diff = false,
+            "review.inspect_official" => self.review.inspect_official = false,
             "search.limit" => self.search.limit = None,
             "search.official" => self.search.official = false,
             "search.aur" => self.search.aur = false,
@@ -221,7 +230,7 @@ mod tests {
         }
     }
 
-    const KEYS: [&str; 11] = [
+    const KEYS: [&str; 12] = [
         "flags.offline",
         "flags.yes",
         "flags.dry_run",
@@ -229,6 +238,7 @@ mod tests {
         "flags.quiet",
         "review.skip_pkgbuild",
         "review.skip_diff",
+        "review.inspect_official",
         "search.limit",
         "search.official",
         "search.aur",

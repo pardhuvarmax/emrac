@@ -11,7 +11,9 @@ const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     " (+https://github.com/pardhuvarmax/emrac)"
 );
-const TIMEOUT: Duration = Duration::from_secs(5);
+const TIMEOUT: Duration = Duration::from_secs(10);
+/// Tries after the first for a transient failure, with a growing pause.
+const RETRIES: u32 = 2;
 
 /// AUR access via the aurweb RPC v5 interface. Read-only: this only ever
 /// issues GET requests, never mutates anything.
@@ -84,19 +86,27 @@ impl AurBackend {
     where
         T: for<'de> Deserialize<'de>,
     {
-        let mut req = ureq::get(BASE_URL)
-            .header("User-Agent", USER_AGENT)
-            .config()
-            .timeout_global(Some(TIMEOUT))
-            .build();
-
-        for (key, value) in params {
-            req = req.query(*key, *value);
-        }
-
-        let mut response = req
-            .call()
-            .map_err(|err| Error::Aur(format!("request to the AUR failed: {err}")))?;
+        let mut attempt = 0;
+        let mut response = loop {
+            let mut req = ureq::get(BASE_URL)
+                .header("User-Agent", USER_AGENT)
+                .config()
+                .timeout_global(Some(TIMEOUT))
+                .build();
+            for (key, value) in params {
+                req = req.query(*key, *value);
+            }
+            match req.call() {
+                Ok(response) => break response,
+                Err(err) if attempt < RETRIES && is_transient(&err) => {
+                    attempt += 1;
+                    std::thread::sleep(Duration::from_millis(500 * u64::from(attempt)));
+                }
+                Err(err) => {
+                    return Err(Error::Aur(format!("request to the AUR failed: {err}")));
+                }
+            }
+        };
 
         let body: RpcResponse<T> = response
             .body_mut()
@@ -109,6 +119,19 @@ impl AurBackend {
         }
 
         Ok(body)
+    }
+}
+
+/// Worth another try: the network hiccuped or the server had a bad moment.
+/// A 4xx (we asked wrongly) or a malformed answer is not.
+fn is_transient(err: &ureq::Error) -> bool {
+    match err {
+        ureq::Error::StatusCode(code) => *code >= 500 || *code == 429,
+        ureq::Error::Timeout(_)
+        | ureq::Error::Io(_)
+        | ureq::Error::ConnectionFailed
+        | ureq::Error::HostNotFound => true,
+        _ => false,
     }
 }
 
@@ -158,4 +181,21 @@ struct AurInfoResult {
     popularity: f64,
     #[serde(rename = "OutOfDate")]
     out_of_date: Option<i64>,
+}
+
+#[cfg(test)]
+mod retry_tests {
+    use super::*;
+
+    #[test]
+    fn only_transient_failures_are_retried() {
+        assert!(is_transient(&ureq::Error::Timeout(ureq::Timeout::Global)));
+        assert!(is_transient(&ureq::Error::StatusCode(503)));
+        assert!(is_transient(&ureq::Error::StatusCode(429)));
+        assert!(is_transient(&ureq::Error::ConnectionFailed));
+        assert!(is_transient(&ureq::Error::HostNotFound));
+        assert!(!is_transient(&ureq::Error::StatusCode(404)));
+        assert!(!is_transient(&ureq::Error::StatusCode(400)));
+        assert!(!is_transient(&ureq::Error::BadUri("x".into())));
+    }
 }

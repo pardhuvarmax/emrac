@@ -110,6 +110,26 @@ impl PacmanBackend {
         self.run_inherited("sudo", &args)
     }
 
+    /// Downloads `pkgs` and their dependencies into the cache without
+    /// installing (`pacman -Sw`), so they can be inspected first.
+    pub fn execute_download(&self, pkgs: &[String]) -> Result<()> {
+        let mut args = vec!["pacman".to_string(), "-Sw".to_string()];
+        args.extend(pkgs.iter().cloned());
+        args.push("--noconfirm".to_string());
+
+        self.run_inherited("sudo", &args)
+    }
+
+    /// Syncs the databases and downloads every pending upgrade into the cache
+    /// without installing (`pacman -Syuw`).
+    pub fn execute_download_upgrade(&self, ignore: &[String]) -> Result<()> {
+        let mut args = vec!["pacman".to_string(), "-Syuw".to_string()];
+        args.extend(ignore_args(ignore));
+        args.push("--noconfirm".to_string());
+
+        self.run_inherited("sudo", &args)
+    }
+
     /// Actually syncs and upgrades everything. Runs under `sudo`, with
     /// stdio inherited — a real, single combined `-Syu` transaction, same
     /// as `execute_install` lets pacman own conflict/currency logic.

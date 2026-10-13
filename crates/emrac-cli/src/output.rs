@@ -923,3 +923,39 @@ pub fn print_audit_items(items: &[AuditItem], json: bool) {
         }
     }
 }
+
+/// The result of inspecting official packages before installing them: only
+/// packages with something to say are shown in full.
+pub fn print_official_manifests(manifests: &[&Manifest], missing: &[String]) {
+    let flagged: Vec<&&Manifest> = manifests
+        .iter()
+        .filter(|m| {
+            m.report
+                .findings
+                .iter()
+                .any(|f| f.severity > Severity::Info)
+        })
+        .collect();
+    let mut buf = Vec::new();
+    for m in &flagged {
+        let _ = writeln!(buf, "emrac manifest: {} {}\n", m.package, m.version);
+        print_findings(&m.report, &mut buf);
+        let _ = writeln!(buf);
+    }
+    let _ = writeln!(
+        buf,
+        "emrac inspected {}: {} with something to note, {} clean.{}",
+        plural(manifests.len(), "official package"),
+        flagged.len(),
+        manifests.len() - flagged.len(),
+        if missing.is_empty() {
+            String::new()
+        } else {
+            format!(
+                " Not found in the cache to inspect: {}.",
+                missing.join(", ")
+            )
+        }
+    );
+    let _ = std::io::stderr().write_all(&buf);
+}

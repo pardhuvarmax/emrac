@@ -15,6 +15,7 @@ pub fn run(
     skip_pkgbuild: bool,
     skip_diff: bool,
     accept_risks: bool,
+    inspect: bool,
     json: bool,
     quiet: bool,
     snapshot_first: bool,
@@ -82,6 +83,14 @@ pub fn run(
 
     let result = (|| {
         if has_official_targets {
+            if inspect {
+                if pkgs.is_empty() {
+                    sources.download_official_upgrades()?;
+                } else {
+                    sources.download_official(&official_targets)?;
+                }
+                crate::commands::official_inspect::show(sources, &upgrade.plan)?;
+            }
             sources.upgrade_official(&official_targets)?;
         }
         for name in &aur_names {

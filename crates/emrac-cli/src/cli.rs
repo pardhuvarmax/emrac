@@ -54,6 +54,11 @@ pub struct AurReviewFlags {
     /// PKGBUILD (critical ones are always refused)
     #[arg(long)]
     pub accept_risks: bool,
+
+    /// Download official packages first and show what they would change
+    /// before installing (only critical findings stop the install)
+    #[arg(long)]
+    pub inspect: bool,
 }
 
 #[derive(Subcommand)]

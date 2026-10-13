@@ -45,6 +45,14 @@ pub struct SearchResults {
     pub aur_warning: Option<String>,
 }
 
+/// What `Sources::inspect_official` found.
+pub struct OfficialInspection {
+    /// Each inspected package file with its manifest.
+    pub found: Vec<(PathBuf, Manifest)>,
+    /// Packages whose file wasn't in the cache.
+    pub missing: Vec<String>,
+}
+
 pub struct UpgradePlan {
     pub plan: Plan,
     /// Set on a full upgrade (no explicit targets) when the AUR couldn't be
@@ -201,6 +209,41 @@ impl Sources {
     /// -S`. Prompts for a password interactively if needed.
     pub fn install_official(&self, names: &[String]) -> Result<()> {
         self.pacman.execute_install(names)
+    }
+
+    /// Downloads official packages (and their dependencies) into pacman's
+    /// cache without installing them, so they can be inspected first.
+    pub fn download_official(&self, names: &[String]) -> Result<()> {
+        if names.is_empty() {
+            return Ok(());
+        }
+        self.pacman.execute_download(names)
+    }
+
+    /// The same for a full upgrade (honouring pins).
+    pub fn download_official_upgrades(&self) -> Result<()> {
+        let (active, _) = self.pins()?;
+        let ignore: Vec<String> = active.into_iter().map(|p| p.name).collect();
+        self.pacman.execute_download_upgrade(&ignore)
+    }
+
+    /// Inspects the cached package file of every official package in `plan`
+    /// (AUR entries are inspected after their own build). Returns the
+    /// manifests with their file paths, and the names whose file wasn't found.
+    pub fn inspect_official(&self, plan: &Plan) -> Result<OfficialInspection> {
+        let cache_dirs = self.pacman.cache_dirs()?;
+        let mut found = Vec::new();
+        let mut missing = Vec::new();
+        for pkg in plan.packages.iter().filter(|p| p.repo != "aur") {
+            match rollback::find_package_file(&cache_dirs, &pkg.name, &pkg.version) {
+                Some(path) => {
+                    let manifest = inspect_package(&path)?;
+                    found.push((path, manifest));
+                }
+                None => missing.push(pkg.name.clone()),
+            }
+        }
+        Ok(OfficialInspection { found, missing })
     }
 
     /// Clones (first time) or fetches (repeat) the AUR package's git
@@ -1295,14 +1338,17 @@ fn collect_extras(dir: &std::path::Path, max_depth: usize) -> Vec<audit::ExtraFi
 /// Reads a built package file (`*.pkg.tar.*`) and reports what it would
 /// change on a system. Nothing is extracted or run. Needs no `Sources`.
 pub fn inspect_package(path: &std::path::Path) -> Result<Manifest> {
-    use crate::backend::PackageFile;
+    use crate::backend::{Extracted, PackageFile};
     let listing = PackageFile::list(path)?;
     let pkginfo = PackageFile::read(path, ".PKGINFO").unwrap_or_default();
     let scriptlet = PackageFile::read(path, ".INSTALL");
+    // One extraction of just the small files worth reading, into a private
+    // temporary directory that is removed afterwards.
+    let extracted = Extracted::new(path, &manifest::wanted_members(&listing))?;
     Ok(manifest::inspect(
         &pkginfo,
         &listing,
         scriptlet.as_deref(),
-        &|member| PackageFile::read(path, member),
+        &|member| extracted.read(member),
     ))
 }

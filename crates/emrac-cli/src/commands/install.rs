@@ -15,6 +15,7 @@ pub fn run(
     skip_pkgbuild: bool,
     skip_diff: bool,
     accept_risks: bool,
+    inspect: bool,
     json: bool,
 ) -> Result<()> {
     let plan = sources.plan_install(pkgs, offline)?;
@@ -47,6 +48,10 @@ pub fn run(
 
     let result = (|| {
         if !official.is_empty() {
+            if inspect {
+                sources.download_official(&official)?;
+                crate::commands::official_inspect::show(sources, &plan)?;
+            }
             sources.install_official(&official)?;
         }
         for details in &aur {

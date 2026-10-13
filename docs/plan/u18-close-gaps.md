@@ -40,6 +40,23 @@ Run the `reinstall` AUR-rebuild branch for real (checkout present, no built
 file), and repeat the earlier container scenario several times to look for the
 unexplained blank run.
 
+## 6. Found while doing it (all fixed, all pinned by tests)
+
+- `VAR=value command args` at the top level of a script or PKGBUILD was parsed
+  as a plain assignment, so the command was never scanned
+  (`LD_PRELOAD=./x.so make`, `FOO=1 rm -rf /`). It is now a command.
+- The flake behind the blank run in u17 was real: one slow AUR RPC response
+  failed a whole `install`. The AUR client now waits 10 s (was 5) and retries
+  timeouts, connection errors and 5xx/429 twice with a short backoff; 4xx and
+  malformed answers fail immediately.
+- `obfuscated-command` fired on `$'\033[1m'` colour codes (kitty's shell
+  integration). It now needs a first word of at least three hex/octal escapes.
+- Calibration decided how shipped scripts are judged: over 932 official
+  packages, generic scanning produced ~10,000 style warnings (autotools
+  scripts) and criticals in legitimate tools (container templates write
+  `authorized_keys`). Shipped scripts therefore keep only dangerous-pattern
+  findings, never above high; credential reads and `LD_PRELOAD` are warnings.
+
 ## Still not coverable (stated, not hidden)
 
 What a compiled binary does; a sufficiently obfuscated payload; behaviour that

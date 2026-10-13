@@ -8,6 +8,7 @@ pub mod downgrade;
 pub mod history;
 pub mod info;
 pub mod install;
+pub mod official_inspect;
 pub mod pin;
 pub mod purge;
 pub mod reinstall;

@@ -9,5 +9,5 @@ pub use alpm::{version_is_newer, AlpmBackend, InstalledSource, ResolvedPackage};
 pub use archive::ArchiveBackend;
 pub use aur::AurBackend;
 pub use aur_build::{AurBuildBackend, AurSyncOutcome};
-pub use package_file::PackageFile;
+pub use package_file::{Extracted, PackageFile};
 pub use pacman::PacmanBackend;

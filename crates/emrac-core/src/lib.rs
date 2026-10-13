@@ -36,5 +36,8 @@ pub use snapshot::{
     RestoreDiff, RestoreEntry, RestoreItem, RestorePlan, RestoreSource, Snapshot, SnapshotPackage,
     SnapshotStore,
 };
-pub use sources::{audit_path, inspect_package, SearchResults, SearchScope, Sources, UpgradePlan};
+pub use sources::{
+    audit_path, inspect_package, OfficialInspection, SearchResults, SearchScope, Sources,
+    UpgradePlan,
+};
 pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};
