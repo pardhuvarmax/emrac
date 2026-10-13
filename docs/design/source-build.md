@@ -1,6 +1,6 @@
 # Design: the source-first build path
 
-Status: **proposed — for review.** Nothing here is built. It settles the open
+Status: **accepted** (owner answers recorded in §6); built slice by slice from u15. It settles the open
 questions in `ideas.md` (sections 2–3 and 6) so the next slices (u15 onward) can
 be small and unambiguous. `SPEC.md` stays the product contract; where this
 document disagrees with `ideas.md`, this one wins once accepted.
@@ -148,12 +148,23 @@ into a temp dir (build only, no `-i`, so nothing system-wide changes), plus the
 podman container for the install side. The container needs `--cap-add` or
 rootless user namespaces to run bwrap; confirm in u17.
 
-## 6. Open questions for the owner
+## 6. Decisions (owner, 2026-10-13)
 
-1. Is "sandboxed build with host `makedepends` visible read-only" an acceptable
-   first target, or is the overlay root (hiding the host's package set,
-   installing build deps into a throwaway layer) required before shipping?
-2. Is optional-dependency `bwrap` acceptable, or must the sandbox be built in?
-3. Default for `--allow-network` on packages whose `prepare()` fetches: block and
-   explain, or allow-with-warning?
-4. Should `audit` findings of high severity ever block, or only ever warn?
+1. **Host `makedepends` visible read-only is acceptable for the first sandbox.**
+   The overlay root stays a later option.
+2. **`bwrap` as an optional external dependency is acceptable.**
+3. **Package whose `prepare()`/build needs the network: warn, then ask for
+   permission** (never allow silently; `--yes` does not answer this prompt on
+   its own — see the severity table).
+4. **Audit findings are tiered; emrac does not decide for the user except at
+   the top tier.**
+
+   | Severity | Meaning | What emrac does |
+   |---|---|---|
+   | info | worth knowing (has an install scriptlet, dynamic field) | shown |
+   | warning | suspicious or sloppy (http source, `SKIP` checksum, network in `build()`) | shown with the line; build proceeds after the normal review prompt |
+   | high | dangerous but sometimes legitimate (pipe a download into a shell, `sudo`, setuid, `systemctl enable`, reading `~/.ssh`) | **warn and stop**: a separate explicit confirmation naming the findings; `--yes` does not bypass it, `--accept-risks` does |
+   | critical | severe and able to spread or persist (writing shell startup files or `authorized_keys`, reading credentials *and* uploading, obfuscated decode-and-execute, reverse shells, destructive commands) | **blocked by emrac, no override flag**; the user can still inspect and build by hand outside emrac |
+
+   The critical tier is deliberately narrow (almost no legitimate package does
+   these) so that a block is rare and means something.

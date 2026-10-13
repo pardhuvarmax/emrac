@@ -43,3 +43,5 @@ Current:
 
 - [`../design/source-build.md`](../design/source-build.md) — proposed design for the source-first
   build path (audit, fetch/build split, bubblewrap sandbox, manifest, cache).
+- [`u15-audit.md`](./u15-audit.md) — `emrac audit`: static PKGBUILD analysis with a
+  severity policy in the AUR review.
