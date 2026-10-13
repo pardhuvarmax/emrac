@@ -1,5 +1,7 @@
 # Emrac: Ideas
 
+<img align="right" width="350" src="/assets/emrac.png" alt="emrac">
+
 Running list of ideas beyond the core design in `emrac.md` (Layer 1 Shadow Tree, Layer 2 OverlayFS/namespace staging, Layer 3 Btrfs/ZFS snapshot, libalpm commit).
 
 Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress, `[dropped]`.

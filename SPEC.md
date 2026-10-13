@@ -1,6 +1,6 @@
 # Emrac 
 
-<img align="right" width="350" src="https://github.com/user-attachments/assets/3419b48f-a2c8-4a0f-b4f4-f47f0ec3988e" alt="emrac">
+<img align="right" width="350" src="/assets/emrac.png" alt="emrac">
 
 *A source-first package management platform for Arch Linux.*
 
