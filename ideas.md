@@ -9,7 +9,7 @@ Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress
 ## 1. Already queued from emrac.md
 
 - `[idea]` **PKGBUILD AST parser**: verify/security-check a PKGBUILD before Phase 1 runs.
-- `[idea]` **Config presets**: structure for automated configuration presets (optimization flags, build type, etc.). SPEC uses TOML for configuration and has build profiles and recipes, so presets should extend those rather than add a new format (see section 8).
+- `[idea]` **Config presets**: structure for automated configuration presets (optimization flags, build type, etc.). SPEC uses TOML for configuration and has build profiles and recipes, so presets should extend those rather than add a new format (see section 7).
 
 ---
 
@@ -198,7 +198,7 @@ Command style: flat `emrac <verb>` commands. Maintainer commands stay grouped un
 - `[idea]` **`emrac snapshot`**: list and prune, with a retention policy (keep last N or last N days) so snapshots don't fill the disk.
 - `[idea]` **`emrac cache`**: stats, gc, and clear for the package, source, and build caches.
 - `[idea]` **Commands for earlier ideas**: SPEC already has `why`, `news`, `audit`, `pin`/`lock`, and `explain`. Holds with reasons and expiry extend `pin`/`lock` rather than add `hold`.
-- `[idea]` **Declarative system profile** (apply or diff against the machine). Not `emrac profile`: SPEC uses `profile` for build profiles. Better fit is SPEC's collections and workspaces (see section 8).
+- `[idea]` **Declarative system profile** (apply or diff against the machine). Not `emrac profile`: SPEC uses `profile` for build profiles. Better fit is SPEC's collections and workspaces (see section 7).
 
 ### Housekeeping
 
@@ -214,16 +214,7 @@ Command style: flat `emrac <verb>` commands. Maintainer commands stay grouped un
 
 ---
 
-## 6. My own ideas (add here)
-
-<!-- Write each idea as:
-- `[idea]` Short title: one or two lines on what it does and why. -->
-
--
-
----
-
-## 7. Design concerns to revisit in emrac.md
+## 6. Design concerns to revisit in emrac.md
 
 Things I noticed while reading the current draft that are worth settling before building on it:
 
@@ -232,12 +223,12 @@ Things I noticed while reading the current draft that are worth settling before 
 - **Overlay lower dir `/`**: overlaying the whole root includes `/proc`, `/sys`, `/dev`, and other mounts, which need explicit handling inside the chroot.
 - **tmpfs upper layer**: the code uses `/tmp/emrac/upper`, which is only RAM-backed if `/tmp` is tmpfs. Large builds may need a disk-backed option.
 - **Snapshot location**: snapshotting `/` into `/var/lib/emrac/snapshots` nests the snapshot inside the subvolume being snapshotted; usually a separate snapshots subvolume is used. ZFS path is not implemented yet.
-- **Commit step**: Phase 4 extracts sandbox output via libalpm (but SPEC Part X says mutating operations shell out to real `pacman`/`makepkg`, see section 8); the mechanism for turning overlay output into proper packages (so pacman's database stays accurate) needs defining.
+- **Commit step**: Phase 4 extracts sandbox output via libalpm (but SPEC Part X says mutating operations shell out to real `pacman`/`makepkg`, see section 7); the mechanism for turning overlay output into proper packages (so pacman's database stays accurate) needs defining.
 - **Snapshot timing**: taking the snapshot before the sandbox test (Phase 2) means it may be stale if the system changes during a long build; consider taking it right before commit.
 
 ---
 
-## 8. Alignment with SPEC.md
+## 7. Alignment with SPEC.md
 
 `SPEC.md` is the product spec (CLI/TUI, Rust, hybrid libalpm + pacman/makepkg, TOML config, first milestone = core CLI loop). This section records how the ideas above relate to it.
 
