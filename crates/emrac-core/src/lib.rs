@@ -12,6 +12,7 @@ mod plan;
 mod purge;
 mod reinstall;
 mod rollback;
+mod sandbox;
 mod snapshot;
 mod sources;
 mod verify;
@@ -20,6 +21,7 @@ pub use audit::{
     audit, scriptlet_name, AuditReport, ExtraFile, Finding, Severity, Verdict, MAX_EXTRA_FILES,
 };
 pub use backend::AurSyncOutcome;
+pub use backend::BuildOptions;
 pub use config::Config;
 pub use deps::{DepEntry, DepsReport, Orphan, RdepsReport, WhyReport};
 pub use downgrade::{DowngradePlan, ListedVersion, VersionList};

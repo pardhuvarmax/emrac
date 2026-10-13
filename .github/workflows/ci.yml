@@ -14,7 +14,7 @@ jobs:
       - name: Install toolchain
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed base-devel git clang rust
+          pacman -S --noconfirm --needed base-devel git clang rust bubblewrap
 
       - uses: actions/checkout@v4
 

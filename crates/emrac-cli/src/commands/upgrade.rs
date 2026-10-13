@@ -1,5 +1,6 @@
 use emrac_core::{Result, Sources};
 
+use crate::commands::aur_install::BuildChoice;
 use crate::commands::aur_review::review_aur_package;
 use crate::commands::history;
 use crate::output;
@@ -14,7 +15,7 @@ pub fn run(
     offline: bool,
     skip_pkgbuild: bool,
     skip_diff: bool,
-    accept_risks: bool,
+    choice: BuildChoice,
     inspect: bool,
     json: bool,
     quiet: bool,
@@ -45,7 +46,14 @@ pub fn run(
         .collect();
 
     for name in &aur_names {
-        if !review_aur_package(sources, name, skip_pkgbuild, skip_diff, yes, accept_risks)? {
+        if !review_aur_package(
+            sources,
+            name,
+            skip_pkgbuild,
+            skip_diff,
+            yes,
+            choice.accept_risks,
+        )? {
             println!("emrac notes: okay, nothing upgraded.");
             return Ok(());
         }
@@ -94,7 +102,7 @@ pub fn run(
             sources.upgrade_official(&official_targets)?;
         }
         for name in &aur_names {
-            crate::commands::aur_install::build_and_install(sources, name, accept_risks)?;
+            crate::commands::aur_install::build_and_install(sources, name, choice)?;
         }
         Ok(())
     })();

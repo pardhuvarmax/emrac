@@ -1,5 +1,6 @@
 use emrac_core::{Result, Sources};
 
+use crate::commands::aur_install::BuildChoice;
 use crate::commands::history;
 use crate::output;
 use crate::prompt::confirm;
@@ -10,7 +11,7 @@ pub fn run(
     dry_run: bool,
     yes: bool,
     offline: bool,
-    accept_risks: bool,
+    choice: BuildChoice,
     json: bool,
 ) -> Result<()> {
     let reinstall = sources.plan_reinstall(pkgs, offline)?;
@@ -27,7 +28,7 @@ pub fn run(
 
     let result = sources.execute_reinstall(&reinstall).and_then(|()| {
         for name in &reinstall.rebuild {
-            crate::commands::aur_install::build_and_install(sources, name, accept_risks)?;
+            crate::commands::aur_install::build_and_install(sources, name, choice)?;
         }
         Ok(())
     });

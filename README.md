@@ -11,7 +11,7 @@ Status: **Slice r1.** The core loop (`search`, `info`, `install`, `remove`, `upg
 | Area | Commands |
 |---|---|
 | Find & inspect | `search`, `info`, `deps`, `rdeps`, `why`, `orphans` |
-| Change | `install`, `remove`, `purge`, `upgrade`, `reinstall`, `downgrade` |
+| Change | `install`, `remove`, `purge`, `upgrade`, `reinstall`, `downgrade`, `build` (AUR/PKGBUILD dir in the sandbox, no install) |
 | Undo | `history`, `rollback [tx]` / `undo`, `redo`, `snapshot`, `restore <name>` |
 | Protect | `audit` (read a PKGBUILD or inspect a built package for risky code; runs automatically before AUR builds and again on the built package before it is installed), `pin` / `unpin` (holds with a reason and expiry), `verify` (files vs. pacman's record) |
 | Setup | `config`, `completion bash\|zsh\|fish` |

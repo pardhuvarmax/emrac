@@ -4,6 +4,33 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::error::{Error, Result};
+use crate::sandbox::{self, SandboxSpec};
+
+/// How an AUR build is run.
+#[derive(Debug, Clone, Copy)]
+pub struct BuildOptions {
+    /// Run the build steps in bubblewrap (the default).
+    pub sandbox: bool,
+    /// Give the sandboxed build network access.
+    pub allow_network: bool,
+}
+
+impl Default for BuildOptions {
+    fn default() -> Self {
+        Self {
+            sandbox: true,
+            allow_network: false,
+        }
+    }
+}
+
+fn failed(phase: &str, status: &std::process::ExitStatus, hint: &str) -> Error {
+    Error::BuildFailed {
+        phase: phase.to_string(),
+        status: status.to_string(),
+        hint: hint.to_string(),
+    }
+}
 
 /// makepkg's exit status for "this package was already built".
 const MAKEPKG_ALREADY_BUILT: i32 = 13;
@@ -125,28 +152,92 @@ impl AurBuildBackend {
         output.status.success().then_some(output.stdout)
     }
 
-    /// Builds the package with `makepkg -s`: build dependencies are
-    /// installed through makepkg's usual `sudo pacman` path, but the package
-    /// itself is **not** installed — emrac inspects it first. Stdio is
-    /// inherited so the build output and any sudo prompt reach the terminal.
-    /// Never runs as root (makepkg refuses root anyway). makepkg's "already
-    /// built" exit (13) is fine: the existing package file is used.
-    pub fn build(&self, pkg: &str) -> Result<()> {
-        let dir = self.build_dir(pkg)?;
-        let args = ["-s", "--noconfirm", "--needed"];
+    /// Builds `pkg` from its cached checkout. See `build_in`.
+    pub fn build(&self, pkg: &str, opts: BuildOptions) -> Result<()> {
+        self.build_in(&self.build_dir(pkg)?, opts)
+    }
 
+    /// Builds the PKGBUILD in `dir` **without installing the package** (emrac
+    /// inspects it first). Stdio is inherited so build output and the sudo
+    /// prompt reach the terminal. Never runs as root (makepkg refuses anyway).
+    ///
+    /// Unsandboxed this is `makepkg -s`. Sandboxed it is three steps:
+    /// dependencies and verified sources on the host (the only part that needs
+    /// `sudo` and the network), then extraction/`prepare()` and
+    /// `build()`/`package()` inside bubblewrap with the network off unless
+    /// `opts.allow_network`. makepkg's "already built" exit (13) is fine: the
+    /// existing package file is used.
+    pub fn build_in(&self, dir: &Path, opts: BuildOptions) -> Result<()> {
+        if !opts.sandbox {
+            let status = Command::new("makepkg")
+                .args(["-s", "--noconfirm", "--needed"])
+                .current_dir(dir)
+                .status()
+                .map_err(|err| Error::CommandSpawn("makepkg".to_string(), err))?;
+            return match status.code() {
+                Some(0) | Some(MAKEPKG_ALREADY_BUILT) => Ok(()),
+                _ => Err(failed("build", &status, "")),
+            };
+        }
+
+        sandbox::probe().map_err(Error::SandboxUnavailable)?;
+        if self.built_files_in(dir).is_ok() {
+            return Ok(());
+        }
+
+        // 1. Dependencies and verified sources, on the host.
         let status = Command::new("makepkg")
-            .args(args)
-            .current_dir(&dir)
+            .args(["-s", "--verifysource", "--noconfirm", "--needed"])
+            .current_dir(dir)
             .status()
             .map_err(|err| Error::CommandSpawn("makepkg".to_string(), err))?;
+        if !status.success() {
+            return Err(failed("dependencies and sources", &status, ""));
+        }
 
-        match status.code() {
-            Some(0) | Some(MAKEPKG_ALREADY_BUILT) => Ok(()),
-            _ => Err(Error::CommandFailed {
-                command: format!("makepkg {} (in {})", args.join(" "), dir.display()),
-                stderr: format!("exited with {status}"),
-            }),
+        // 2 and 3, sandboxed.
+        let hint = if opts.allow_network {
+            String::new()
+        } else {
+            ". The sandbox gives the build no network; if this package downloads dependencies while building, run again with `--allow-network`".to_string()
+        };
+        let spec = self.sandbox_spec(dir, opts.allow_network);
+        let steps: [(&str, &[&str]); 2] = [
+            (
+                "extract and prepare",
+                &["--nobuild", "--nodeps", "--noconfirm", "--cleanbuild"],
+            ),
+            (
+                "build and package",
+                &["--noextract", "--nodeps", "--noconfirm"],
+            ),
+        ];
+        for (phase, args) in steps {
+            let mut command = vec!["makepkg".to_string()];
+            command.extend(args.iter().map(|a| a.to_string()));
+            let status = sandbox::run(&spec, &command)
+                .map_err(|err| Error::CommandSpawn("bwrap".to_string(), err))?;
+            match status.code() {
+                Some(0) => {}
+                Some(MAKEPKG_ALREADY_BUILT) if phase == "build and package" => {}
+                _ => return Err(failed(phase, &status, &hint)),
+            }
+        }
+        Ok(())
+    }
+
+    fn sandbox_spec(&self, dir: &Path, network: bool) -> SandboxSpec {
+        let host_env: Vec<(String, String)> = env::vars().collect();
+        let home = env::var("HOME").map(PathBuf::from).unwrap_or_default();
+        let mut extra_rw: Vec<PathBuf> = sandbox::makepkg_dirs();
+        extra_rw.retain(|d| d != dir);
+        SandboxSpec {
+            dir: dir.to_path_buf(),
+            extra_rw,
+            home,
+            network,
+            hide_run_user: Path::new("/run/user").is_dir(),
+            env: sandbox::clean_env(&host_env),
         }
     }
 
@@ -155,10 +246,14 @@ impl AurBuildBackend {
     /// keeping those that exist (the list also names an unbuilt `-debug`
     /// package).
     pub fn built_files(&self, pkg: &str) -> Result<Vec<PathBuf>> {
-        let dir = self.build_dir(pkg)?;
+        self.built_files_in(&self.build_dir(pkg)?)
+    }
+
+    /// `built_files` for a PKGBUILD directory.
+    pub fn built_files_in(&self, dir: &Path) -> Result<Vec<PathBuf>> {
         let output = Command::new("makepkg")
             .arg("--packagelist")
-            .current_dir(&dir)
+            .current_dir(dir)
             .stdin(Stdio::null())
             .output()
             .map_err(|err| Error::CommandSpawn("makepkg".to_string(), err))?;
@@ -174,7 +269,7 @@ impl AurBuildBackend {
             .filter(|p| !l_is_empty(p) && p.is_file())
             .collect();
         if files.is_empty() {
-            return Err(Error::NoBuiltPackage(pkg.to_string()));
+            return Err(Error::NoBuiltPackage(dir.display().to_string()));
         }
         Ok(files)
     }

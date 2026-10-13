@@ -62,3 +62,21 @@ the build (owner decision, `source-build.md` §6).
 `sandbox.rs` (new, core); `backend/aur_build.rs` (phases, `build_in`);
 `sources.rs`; `error.rs`; CLI `build.rs`, `aur_install.rs`, `cli.rs`,
 `output.rs`, `main.rs`.
+
+## Found while testing (all fixed)
+
+- **The availability probe lied.** In a rootless container `bwrap` can create
+  namespaces but not mount a fresh `/proc` ("Operation not permitted"); a probe
+  without `--proc` said "usable" and the build then failed halfway. The probe
+  now uses the same mounts as a real run. A host `/proc` is deliberately *not*
+  used as a fallback: with a shared `/proc` the build could read emrac's own
+  `/proc/<pid>/environ`, which would defeat the cleared environment.
+  For the test container, `--security-opt 'unmask=/proc/*'` is enough (no
+  capabilities, not `--privileged`); `dev/container/run.sh` now passes it and
+  the Containerfile installs bubblewrap.
+- `$HOME` must exist inside the sandbox (real tools expect it), so it is an
+  empty tmpfs rather than a missing directory; the path down to the build
+  directory is the only thing visible in it.
+- The static network prediction can't see `curl` hidden in `$(…)`. That is the
+  fail-closed behaviour by design: no prediction means no network, and the
+  failure message names `--allow-network`.

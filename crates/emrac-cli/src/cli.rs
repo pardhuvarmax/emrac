@@ -59,6 +59,15 @@ pub struct AurReviewFlags {
     /// before installing (only critical findings stop the install)
     #[arg(long)]
     pub inspect: bool,
+
+    /// Build AUR packages without the sandbox (they then run with your
+    /// full access)
+    #[arg(long)]
+    pub no_sandbox: bool,
+
+    /// Let the sandboxed build use the network, without asking
+    #[arg(long)]
+    pub allow_network: bool,
 }
 
 #[derive(Subcommand)]
@@ -213,6 +222,25 @@ pub enum Commands {
         /// high-risk changes (critical ones are always refused)
         #[arg(long)]
         accept_risks: bool,
+
+        /// Rebuild AUR packages without the sandbox
+        #[arg(long)]
+        no_sandbox: bool,
+
+        /// Let the sandboxed rebuild use the network, without asking
+        #[arg(long)]
+        allow_network: bool,
+    },
+
+    /// Build AUR packages or a local PKGBUILD directory in the sandbox and
+    /// show what the result would change, without installing anything
+    Build {
+        /// AUR package names, or directories containing a PKGBUILD
+        #[arg(required = true)]
+        targets: Vec<String>,
+
+        #[command(flatten)]
+        review: AurReviewFlags,
     },
 
     /// Go back to an older version of an installed package

@@ -7,6 +7,7 @@ use clap::Parser;
 use emrac_core::{Config, Result, Sources};
 
 use cli::{Cli, Commands, SnapshotCommand};
+use commands::aur_install::BuildChoice;
 use commands::rollback::Which;
 
 fn main() {
@@ -107,7 +108,7 @@ fn run(cli: &Cli) -> Result<()> {
             offline,
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
-            review.accept_risks,
+            BuildChoice::from_flags(review),
             review.inspect || config.review.inspect_official,
             json,
         ),
@@ -129,7 +130,7 @@ fn run(cli: &Cli) -> Result<()> {
             offline,
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
-            review.accept_risks,
+            BuildChoice::from_flags(review),
             review.inspect || config.review.inspect_official,
             json,
             quiet,
@@ -153,9 +154,28 @@ fn run(cli: &Cli) -> Result<()> {
             commands::restore::run(&sources, name, *prune, dry_run, yes, offline, json)
         }
         Commands::Verify { pkgs } => commands::verify::run(&sources, pkgs, json),
-        Commands::Reinstall { pkgs, accept_risks } => {
-            commands::reinstall::run(&sources, pkgs, dry_run, yes, offline, *accept_risks, json)
+        Commands::Reinstall {
+            pkgs,
+            accept_risks,
+            no_sandbox,
+            allow_network,
+        } => {
+            let choice = BuildChoice {
+                accept_risks: *accept_risks,
+                no_sandbox: *no_sandbox,
+                allow_network: *allow_network,
+            };
+            commands::reinstall::run(&sources, pkgs, dry_run, yes, offline, choice, json)
         }
+        Commands::Build { targets, review } => commands::build::run(
+            &sources,
+            targets,
+            review.skip_pkgbuild || config.review.skip_pkgbuild,
+            review.skip_diff || config.review.skip_diff,
+            yes,
+            BuildChoice::from_flags(review),
+            json,
+        ),
         Commands::Downgrade { pkg, version, list } => {
             if *list {
                 commands::downgrade::list(&sources, pkg, offline, json)

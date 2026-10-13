@@ -1,5 +1,6 @@
 use emrac_core::{Result, Sources};
 
+use crate::commands::aur_install::BuildChoice;
 use crate::commands::aur_review::review_aur_package;
 use crate::commands::history;
 use crate::output;
@@ -14,7 +15,7 @@ pub fn run(
     offline: bool,
     skip_pkgbuild: bool,
     skip_diff: bool,
-    accept_risks: bool,
+    choice: BuildChoice,
     inspect: bool,
     json: bool,
 ) -> Result<()> {
@@ -34,7 +35,7 @@ pub fn run(
             skip_pkgbuild,
             skip_diff,
             yes,
-            accept_risks,
+            choice.accept_risks,
         )? {
             println!("emrac notes: okay, nothing installed.");
             return Ok(());
@@ -55,7 +56,7 @@ pub fn run(
             sources.install_official(&official)?;
         }
         for details in &aur {
-            crate::commands::aur_install::build_and_install(sources, &details.name, accept_risks)?;
+            crate::commands::aur_install::build_and_install(sources, &details.name, choice)?;
         }
         Ok(())
     })();

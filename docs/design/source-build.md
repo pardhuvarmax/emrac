@@ -47,7 +47,7 @@ cannot answer dynamic questions), and executing the PKGBUILD "just to read
 metadata" (the exact thing we are avoiding). `makepkg --printsrcinfo` also runs
 the file, so it is not used for analysis of untrusted input.
 
-### 3.2 Phases: fetch → build → package, with network only early
+### 3.2 Phases: fetch → build → package, with network only early (built in u19)
 
 `makepkg` already separates source download/verify/extract from building.
 Plan: (1) fetch and verify checksums/PGP with network; (2) `prepare()`; (3)
@@ -61,7 +61,7 @@ the audit report flags as a finding. The exact `makepkg` flags for the split
 (`--nobuild`, `--noextract`, `--noprepare`) are verified on the target version
 in u16 before relying on them.
 
-### 3.3 Sandbox mechanism: bubblewrap
+### 3.3 Sandbox mechanism: bubblewrap (built in u19)
 
 Options considered:
 

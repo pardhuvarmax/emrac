@@ -604,3 +604,150 @@ fn audit_reads_scripts_shipped_in_a_package_and_cleans_up() {
         "the extraction directory was removed: {left:?}"
     );
 }
+
+/// A PKGBUILD whose build records what it can see, reach and touch. The
+/// package it makes is the evidence. `port` is a local listener standing in
+/// for "the network".
+fn probe_pkgbuild(port: u16) -> String {
+    format!(
+        r#"pkgname=sbprobe
+pkgver=1
+pkgrel=1
+arch=(any)
+license=(MIT)
+build() {{
+  curl -s -m 3 -o /dev/null http://127.0.0.1:{port}/ || true
+  {{
+    echo "token=${{GITHUB_TOKEN:-none}}"
+    echo "agent=${{SSH_AUTH_SOCK:-none}}"
+    echo "home=[$(ls -A "$HOME" 2>/dev/null | tr '\n' ' ')]"
+    echo "etc=$(echo x > /etc/emrac-probe 2>/dev/null && echo writable || echo readonly)"
+    echo x > "$HOME/emrac-probe-leak"
+  }} > "$srcdir/report.txt"
+}}
+package() {{
+  install -Dm644 "$srcdir/report.txt" "$pkgdir/usr/share/sbprobe/report.txt"
+}}
+"#
+    )
+}
+
+/// Can a sandbox and makepkg run here at all? (CI containers often can't.)
+fn sandbox_usable() -> bool {
+    let bwrap = Command::new("bwrap")
+        .args([
+            "--unshare-all",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "true",
+        ])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    bwrap
+        && Command::new("makepkg")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+}
+
+#[test]
+fn the_sandbox_hides_the_network_secrets_and_home_from_a_build() {
+    use std::net::TcpListener;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    if !sandbox_usable() {
+        eprintln!("bwrap/makepkg not usable here; skipping");
+        return;
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let hits = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&hits);
+    std::thread::spawn(move || {
+        for conn in listener.incoming().flatten() {
+            counter.fetch_add(1, Ordering::SeqCst);
+            drop(conn);
+        }
+    });
+
+    let home = Home::new("sandbox");
+    let build = |extra: &[&str]| {
+        let dir = home.0.join("pkg");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        write(&dir.join("PKGBUILD"), &probe_pkgbuild(port));
+        let mut args = vec!["build", dir.to_str().unwrap()];
+        args.extend_from_slice(extra);
+        let out = home
+            .command(&args)
+            .env("GITHUB_TOKEN", "secret-token")
+            .env("SSH_AUTH_SOCK", "/run/user/0/agent")
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        (out, dir)
+    };
+    let report = |dir: &Path| {
+        let pkg = fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .find(|p| p.to_string_lossy().contains(".pkg.tar"))
+            .expect("a package was built");
+        let out = Command::new("bsdtar")
+            .arg("-xOf")
+            .arg(&pkg)
+            .arg("usr/share/sbprobe/report.txt")
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+
+    // Sandboxed: no network, no secrets, an empty home, a read-only /etc,
+    // and nothing written to the real home.
+    let (out, dir) = build(&[]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
+    let r = report(&dir);
+    assert!(r.contains("token=none"), "{r}");
+    assert!(r.contains("agent=none"), "{r}");
+    // Only the path down to the writable build directory is visible in $HOME.
+    assert!(r.contains("home=[pkg ]"), "{r}");
+    assert!(r.contains("etc=readonly"), "{r}");
+    assert_eq!(
+        hits.load(Ordering::SeqCst),
+        0,
+        "the build reached the network"
+    );
+    assert!(
+        !home.0.join("emrac-probe-leak").exists(),
+        "a write escaped to the real home"
+    );
+
+    // With the network allowed it can reach the listener, and still sees no secrets.
+    let (out, dir) = build(&["--allow-network"]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
+    assert!(
+        hits.load(Ordering::SeqCst) >= 1,
+        "--allow-network did not give network"
+    );
+    assert!(report(&dir).contains("token=none"));
+    assert!(!home.0.join("emrac-probe-leak").exists());
+}

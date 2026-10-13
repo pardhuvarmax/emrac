@@ -17,6 +17,9 @@ echo "==> Building test container image"
 podman build -t emrac-test -f dev/container/Containerfile dev/container
 
 echo "==> Starting container (emrac mounted at /usr/local/bin/emrac, read-only)"
+# unmask=/proc/* lets bubblewrap mount a fresh /proc inside the container, which
+# emrac's build sandbox needs (no extra capabilities, not --privileged).
 exec podman run --rm -it \
+    --security-opt 'unmask=/proc/*' \
     -v "$repo_root/target/debug/emrac:/usr/local/bin/emrac:ro" \
     emrac-test

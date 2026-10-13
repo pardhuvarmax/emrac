@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use crate::audit::{self, AuditReport};
 use crate::backend::{
     version_is_newer, AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome,
-    InstalledSource, PacmanBackend, ResolvedPackage,
+    BuildOptions, InstalledSource, PacmanBackend, ResolvedPackage,
 };
 use crate::deps::{self, DepsReport, Orphan, RdepsReport, WhyReport};
 use crate::downgrade::{self, DowngradePlan, VersionList};
@@ -17,6 +17,7 @@ use crate::plan::{Plan, PlanAction, PlannedPackage};
 use crate::purge::PurgePlan;
 use crate::reinstall::{self, ReinstallItem, ReinstallPlan, ReinstallSource};
 use crate::rollback::{self, Download, RemoteFile, RollbackPlan};
+use crate::sandbox;
 use crate::snapshot::{
     self, RestoreEntry, RestorePlan, RestoreSource, Snapshot, SnapshotPackage, SnapshotStore,
 };
@@ -311,9 +312,36 @@ impl Sources {
     /// Builds an AUR package (`makepkg -s`) **without installing it** and
     /// returns the package files. Prompts interactively (build output,
     /// dependency sync, sudo password) like a real `makepkg` session.
-    pub fn build_aur_package(&self, name: &str) -> Result<Vec<PathBuf>> {
-        self.aur_build.build(name)?;
+    pub fn build_aur_package(&self, name: &str, opts: BuildOptions) -> Result<Vec<PathBuf>> {
+        self.aur_build.build(name, opts)?;
         self.aur_build.built_files(name)
+    }
+
+    /// Builds the PKGBUILD in a local directory the same way (no install).
+    pub fn build_dir_package(
+        &self,
+        dir: &std::path::Path,
+        opts: BuildOptions,
+    ) -> Result<Vec<PathBuf>> {
+        self.aur_build.build_in(dir, opts)?;
+        self.aur_build.built_files_in(dir)
+    }
+
+    /// Is a build sandbox usable here? The error says what to do.
+    pub fn sandbox_check(&self) -> Result<()> {
+        sandbox::probe().map_err(Error::SandboxUnavailable)
+    }
+
+    /// Whether the audit expects this checkout's build to use the network
+    /// (`network-in-*` findings), so the user can be asked before it runs.
+    pub fn predicts_network(&self, name: &str) -> bool {
+        let Ok(pkgbuild) = self.aur_build.read_pkgbuild(name) else {
+            return false;
+        };
+        self.audit_aur_text(name, &pkgbuild, None)
+            .findings
+            .iter()
+            .any(|f| f.file == "PKGBUILD" && f.rule.starts_with("network-in-"))
     }
 
     /// Installs built package files with `sudo pacman -U`.

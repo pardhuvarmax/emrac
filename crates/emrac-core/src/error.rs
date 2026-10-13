@@ -214,6 +214,16 @@ pub enum Error {
     #[error("didn't install '{package}': you declined after the package manifest. The built file is kept at {file} (`sudo pacman -U` installs it)")]
     InstallDeclined { package: String, file: String },
 
+    #[error("can't build in a sandbox: {0}. Install it, or build unsandboxed with `--no-sandbox` (the build then runs with your full access)")]
+    SandboxUnavailable(String),
+
+    #[error("the build failed in the {phase} step ({status}){hint}")]
+    BuildFailed {
+        phase: String,
+        status: String,
+        hint: String,
+    },
+
     #[error("makepkg finished but left no package file for '{0}'")]
     NoBuiltPackage(String),
 
@@ -278,6 +288,8 @@ impl Error {
             | Error::ManifestBlocked { .. }
             | Error::InstallDeclined { .. }
             | Error::NoBuiltPackage(_)
+            | Error::SandboxUnavailable(_)
+            | Error::BuildFailed { .. }
             | Error::NotPinned(_)
             | Error::PackagePinned { .. }
             | Error::PinsCorrupt { .. }
