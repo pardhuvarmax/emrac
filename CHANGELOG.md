@@ -12,6 +12,14 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u14 — 2026-10-13 — hardening ahead of r1
+
+No new commands. `emrac … | head` no longer panics with "Broken pipe": the default `SIGPIPE` disposition is restored at startup (`libc`), so emrac ends quietly like any Unix tool. Exit codes are now documented and pinned by tests: `0` success (including nothing to do and a declined prompt), `1` any emrac error (including `verify` finding damage), `2` usage error. The README's status paragraph, which had grown into one sentence, is now a command table with a quickstart and the exit codes.
+
+The CLI crate gained its first integration tests (`crates/emrac-cli/tests/cli.rs`, 8 tests): they run the real binary against a scratch `$HOME`, using only commands that need no pacman or network — `--version`/`--help`, usage errors, `completion`, `config` round trip and errors, `history` (empty, a log with a corrupt line, `--json`, bad `--since`), `snapshot list/show/delete` (including an invalid name), `pin` list/`unpin` (expired marker, all-or-nothing unpin, corrupt file), and the closed-pipe case, which fails when the `SIGPIPE` fix is removed. New CI (`.github/workflows/ci.yml`, in an `archlinux` container because libalpm is needed): `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`. `backend/mod.rs` was reformatted so `fmt --check` passes. Design in `docs/plan/u14-hardening.md`.
+
+Verified locally with the same three commands CI runs: fmt clean, clippy clean with `-D warnings`, 111 tests passing (102 core, 8 CLI integration, 1 CLI unit). The workflow itself has not run on GitHub yet.
+
 ## Slice u13 — 2026-10-13 — pin and unpin
 
 New `emrac pin <pkg>... [--reason TEXT] [--until YYYY-MM-DD]` holds installed packages back from `emrac upgrade`, with an optional note and expiry (from the "holds with reasons and expiry" idea in `ideas.md`, on top of the spec's `pin`/`unpin`). `--until` is the day the hold ends: it is in force until 00:00 UTC of that date. `emrac pin` with no packages lists the pins (expired ones are marked), `emrac unpin <pkg>...` removes them (a name that isn't pinned is an error and nothing is removed), `--json` on the listing. Stored in `~/.local/share/emrac/pins.json`, written via a temp file and rename; a corrupt file is an error rather than silently empty. Not installed → refused; re-pinning replaces the old note and expiry.

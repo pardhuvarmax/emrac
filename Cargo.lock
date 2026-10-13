@@ -291,6 +291,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "emrac-core",
+ "libc",
  "serde_json",
 ]
 

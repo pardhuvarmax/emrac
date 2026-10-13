@@ -10,6 +10,13 @@ use cli::{Cli, Commands, SnapshotCommand};
 use commands::rollback::Which;
 
 fn main() {
+    // Rust ignores SIGPIPE by default, which turns `emrac … | head` into a
+    // panic inside `println!`. Restore the default so the process just ends,
+    // like any other Unix tool.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+
     let cli = Cli::parse();
 
     if let Err(err) = run(&cli) {

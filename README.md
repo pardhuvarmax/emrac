@@ -6,10 +6,40 @@ A hybrid next generation package management platform for Arch Linux — an orche
 
 ---
 
-Status: **Slice i1.** `search`/`info`/`install`/`remove`/`upgrade` all work against official repos (via libalpm/pacman) and the AUR (via RPC API + `git`/`makepkg`). Slice u1 adds `emrac config` — a persisted `~/.config/emrac/config.toml` for default flags, and `emrac completion bash|zsh|fish` prints a shell completion script, and `emrac history` lists past install/remove/upgrade transactions, and `emrac rollback [tx]` / `emrac undo` / `emrac redo` reverse and re-apply them (fetching old versions from the Arch Linux Archive if they're no longer cached), `emrac downgrade <pkg> [version]` goes back to an older version, `emrac reinstall <pkg>...` puts the installed version back, and `emrac purge <pkg>...` removes packages along with their modified config files, and `emrac verify <pkg>...` checks installed files against pacman's record, and `emrac snapshot` / `emrac restore <name>` save and return to named package-set restore points, and `emrac deps` / `rdeps` / `why` / `orphans` inspect dependencies.
+Status: **Slice i1**, heading for r1. The core loop (`search`, `info`, `install`, `remove`, `upgrade` against the official repos and the AUR) works, with a transaction preview and confirmation before every change and a PKGBUILD review for AUR builds. Still missing: the TUI, build profiles, and everything else in `SPEC.md` Part IV.
 
-Every mutating command shows a transaction preview and a confirmation prompt first; AUR builds additionally show the PKGBUILD (or a diff, on rebuilds/upgrades) with their own review step. Still missing: the TUI, build profiles, and everything else in `SPEC.md` Part IV. 
+| Area | Commands |
+|---|---|
+| Find & inspect | `search`, `info`, `deps`, `rdeps`, `why`, `orphans` |
+| Change | `install`, `remove`, `purge`, `upgrade`, `reinstall`, `downgrade` |
+| Undo | `history`, `rollback [tx]` / `undo`, `redo`, `snapshot`, `restore <name>` |
+| Protect | `pin` / `unpin` (holds with a reason and expiry), `verify` (files vs. pacman's record) |
+| Setup | `config`, `completion bash\|zsh\|fish` |
 
+Global flags: `--dry-run`, `--yes`, `--offline`, `--json`, `--quiet`. Defaults can be set with `emrac config`.
+
+### Quickstart
+
+```sh
+emrac search ripgrep            # official repos + AUR
+emrac install ripgrep           # preview, confirm, install
+emrac snapshot                  # save the installed set as a restore point
+emrac upgrade                   # full upgrade (with `snapshot.before_upgrade`, snapshots first)
+emrac undo                      # reverse the last transaction
+emrac verify ripgrep            # are its files still intact?
+```
+
+Every mutating command supports `--dry-run`, and the first thing it does is show you the plan.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success, including "nothing to do" and a declined confirmation |
+| `1` | emrac reported an error (including `verify` finding damaged files) |
+| `2` | Command-line usage error (unknown command, missing argument, bad value) |
+
+Errors go to stderr as `emrac found: …` (something you can fix) or `emrac says: …` (something failed underneath); normal output, including `--json`, goes to stdout.
 
 > Emrac uses "Slice i/r/u\<N\>" instead of semver — see `CHANGELOG.md`.
 
