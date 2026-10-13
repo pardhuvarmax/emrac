@@ -49,3 +49,5 @@ Current:
   repo and catches more obfuscation.
 - [`u17-manifest.md`](./u17-manifest.md) — build/install split and a manifest of what a built
   package changes, with the audit's severity policy.
+- [`u18-close-gaps.md`](./u18-close-gaps.md) — packaged scripts, cross-file exfiltration, opt-in
+  inspection of official packages, and the verification gaps.
