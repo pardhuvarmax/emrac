@@ -47,3 +47,5 @@ Current:
   severity policy in the AUR review.
 - [`u16-audit-coverage.md`](./u16-audit-coverage.md) — audit reads every file in an AUR
   repo and catches more obfuscation.
+- [`u17-manifest.md`](./u17-manifest.md) — build/install split and a manifest of what a built
+  package changes, with the audit's severity policy.
