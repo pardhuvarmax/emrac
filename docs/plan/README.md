@@ -45,3 +45,5 @@ Current:
   build path (audit, fetch/build split, bubblewrap sandbox, manifest, cache).
 - [`u15-audit.md`](./u15-audit.md) — `emrac audit`: static PKGBUILD analysis with a
   severity policy in the AUR review.
+- [`u16-audit-coverage.md`](./u16-audit-coverage.md) — audit reads every file in an AUR
+  repo and catches more obfuscation.
