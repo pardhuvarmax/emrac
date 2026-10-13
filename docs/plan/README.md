@@ -38,3 +38,8 @@ Current:
   honoured by `upgrade`.
 - [`u14-hardening.md`](./u14-hardening.md) — broken-pipe fix, CLI integration tests, CI,
   exit codes and quickstart ahead of r1.
+
+## Design
+
+- [`../design/source-build.md`](../design/source-build.md) — proposed design for the source-first
+  build path (audit, fetch/build split, bubblewrap sandbox, manifest, cache).
