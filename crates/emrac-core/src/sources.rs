@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use crate::audit::{self, AuditReport};
 use crate::backend::{
     version_is_newer, AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome,
     InstalledSource, PacmanBackend, ResolvedPackage,
@@ -207,6 +208,36 @@ impl Sources {
     /// confirms a `Changed` diff.
     pub fn aur_sync(&self, name: &str) -> Result<AurSyncOutcome> {
         self.aur_build.sync(name)
+    }
+
+    /// Audits a PKGBUILD that came from `name`'s checkout: `pkgbuild` is its
+    /// text, and the `install=` scriptlet (if any) is read from the working
+    /// tree or, with `rev`, from that git revision.
+    pub fn audit_aur_text(&self, name: &str, pkgbuild: &str, rev: Option<&str>) -> AuditReport {
+        let scriptlet = audit::scriptlet_name(pkgbuild).and_then(|file| {
+            self.aur_build
+                .read_file(name, rev, &file)
+                .map(|text| (file, text))
+        });
+        audit::audit(
+            name,
+            pkgbuild,
+            scriptlet.as_ref().map(|(f, t)| (f.as_str(), t.as_str())),
+        )
+    }
+
+    /// `emrac audit <aur package>`: audits what upstream has now (fetching,
+    /// but never advancing, the checkout).
+    pub fn audit_aur(&self, name: &str) -> Result<AuditReport> {
+        Ok(match self.aur_build.sync(name)? {
+            AurSyncOutcome::Changed { new_pkgbuild, .. } => {
+                self.audit_aur_text(name, &new_pkgbuild, Some("FETCH_HEAD"))
+            }
+            AurSyncOutcome::FirstClone | AurSyncOutcome::UpToDate => {
+                let pkgbuild = self.aur_build.read_pkgbuild(name)?;
+                self.audit_aur_text(name, &pkgbuild, None)
+            }
+        })
     }
 
     /// Fast-forwards the cached checkout to what `aur_sync` last fetched.
@@ -1169,4 +1200,29 @@ fn build_plan(
         total_download_size,
         total_installed_size_delta,
     }
+}
+
+/// `emrac audit <path>`: a PKGBUILD file, or a directory holding one (its
+/// `install=` scriptlet is read from beside it). Needs no `Sources`.
+pub fn audit_path(path: &std::path::Path) -> Result<AuditReport> {
+    let (dir, file) = if path.is_dir() {
+        (path.to_path_buf(), path.join("PKGBUILD"))
+    } else {
+        (
+            path.parent().map(PathBuf::from).unwrap_or_default(),
+            path.to_path_buf(),
+        )
+    };
+    let pkgbuild = std::fs::read_to_string(&file)
+        .map_err(|_| Error::NoPkgbuild(file.display().to_string()))?;
+    let scriptlet = audit::scriptlet_name(&pkgbuild).and_then(|name| {
+        std::fs::read_to_string(dir.join(&name))
+            .ok()
+            .map(|t| (name, t))
+    });
+    Ok(audit::audit(
+        &file.display().to_string(),
+        &pkgbuild,
+        scriptlet.as_ref().map(|(f, t)| (f.as_str(), t.as_str())),
+    ))
 }

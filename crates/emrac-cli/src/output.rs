@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::io::Write;
 
 use emrac_core::{
-    ConfigState, DepEntry, DepsReport, DowngradePlan, Download, IssueKind, Orphan, PackageDetails,
-    PackageSummary, Pin, Plan, PlanAction, PurgePlan, RdepsReport, ReinstallPlan, ReinstallSource,
-    RestorePlan, RestoreSource, RollbackPlan, Snapshot, TransactionRecord, TxStatus, VerifyReport,
-    VersionList, WhyReport,
+    AuditReport, ConfigState, DepEntry, DepsReport, DowngradePlan, Download, IssueKind, Orphan,
+    PackageDetails, PackageSummary, Pin, Plan, PlanAction, PurgePlan, RdepsReport, ReinstallPlan,
+    ReinstallSource, RestorePlan, RestoreSource, RollbackPlan, Severity, Snapshot,
+    TransactionRecord, TxStatus, Verdict, VerifyReport, VersionList, WhyReport,
 };
 
 pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
@@ -767,4 +768,75 @@ pub fn print_pin_notes(held: &[Pin], expired: &[Pin], quiet: bool) {
             );
         }
     }
+}
+
+fn print_findings(report: &AuditReport, out: &mut dyn std::io::Write) {
+    for f in &report.findings {
+        let _ = writeln!(
+            out,
+            "  [{}] {} {}:{} — {}\n      {}",
+            f.severity.label(),
+            f.rule,
+            f.file,
+            f.line,
+            f.message,
+            f.excerpt
+        );
+    }
+}
+
+/// One-line list of the critical findings, for the refusal message.
+pub fn critical_summary(report: &AuditReport) -> String {
+    report
+        .of_severity(Severity::Critical)
+        .map(|f| format!("{} ({}:{})", f.rule, f.file, f.line))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The audit shown during a build review: only when there is something to
+/// say, on stderr so structured stdout stays clean.
+pub fn print_audit(report: &AuditReport, to_stderr: bool) {
+    if report.findings.iter().all(|f| f.severity == Severity::Info) {
+        return;
+    }
+    let mut buf = Vec::new();
+    let _ = writeln!(buf, "emrac audit: findings for '{}'\n", report.target);
+    print_findings(report, &mut buf);
+    let _ = writeln!(
+        buf,
+        "\n(static reading only — it can miss things and can flag legitimate code)\n"
+    );
+    if to_stderr {
+        let _ = std::io::stderr().write_all(&buf);
+    } else {
+        let _ = std::io::stdout().write_all(&buf);
+    }
+}
+
+pub fn print_audits(reports: &[AuditReport], json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(reports).unwrap());
+        return;
+    }
+    for report in reports {
+        if report.findings.is_empty() {
+            println!("emrac found: no findings in '{}'.", report.target);
+            continue;
+        }
+        let verdict = match report.verdict() {
+            Verdict::Allow => "nothing that blocks or needs a decision",
+            Verdict::Confirm => "high-risk: emrac would stop and ask before building",
+            Verdict::Block => "critical: emrac would refuse to build this",
+        };
+        println!(
+            "emrac found: {} in '{}' — {verdict}\n",
+            plural(report.findings.len(), "finding"),
+            report.target
+        );
+        let mut out = std::io::stdout();
+        print_findings(report, &mut out);
+        println!();
+    }
+    println!("(static reading only — it can miss things and can flag legitimate code)");
 }

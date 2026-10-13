@@ -30,7 +30,7 @@ Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress
 ### Ideas that come out of this
 
 - `[idea]` **Landlock + OverlayFS together** in the staging layer (defense in depth inside Layer 2).
-- `[idea]` **Static PKGBUILD analysis** (no bash execution) feeding a risk report in the TUI before the user approves anything.
+- `[built u15]` **Static PKGBUILD analysis** (no bash execution) feeding a risk report before the user approves anything (`emrac audit`; TUI view still open).
 - `[idea]` **Declarative profile file** (pacdef/decman style) that Emrac diffs against the installed system and turns into a Shadow Tree plan.
 - `[idea]` **Rollback history** that ties each transaction ID to its snapshot and package set, browsable in the TUI.
 - `[idea]` **Persistent build cache** keyed by PKGBUILD hash + flags, so identical builds are not repeated.

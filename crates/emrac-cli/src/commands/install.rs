@@ -14,6 +14,7 @@ pub fn run(
     offline: bool,
     skip_pkgbuild: bool,
     skip_diff: bool,
+    accept_risks: bool,
     json: bool,
 ) -> Result<()> {
     let plan = sources.plan_install(pkgs, offline)?;
@@ -26,7 +27,14 @@ pub fn run(
     let (official, aur) = sources.classify_install(pkgs, offline)?;
 
     for details in &aur {
-        if !review_aur_package(sources, &details.name, skip_pkgbuild, skip_diff, yes)? {
+        if !review_aur_package(
+            sources,
+            &details.name,
+            skip_pkgbuild,
+            skip_diff,
+            yes,
+            accept_risks,
+        )? {
             println!("emrac notes: okay, nothing installed.");
             return Ok(());
         }

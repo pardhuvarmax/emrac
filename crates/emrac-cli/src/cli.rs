@@ -49,6 +49,11 @@ pub struct AurReviewFlags {
     /// what was reviewed last time
     #[arg(long)]
     pub skip_diff: bool,
+
+    /// Don't stop to ask when the audit finds high-risk problems in a
+    /// PKGBUILD (critical ones are always refused)
+    #[arg(long)]
+    pub accept_risks: bool,
 }
 
 #[derive(Subcommand)]
@@ -143,6 +148,12 @@ pub enum Commands {
     Unpin {
         #[arg(required = true)]
         pkgs: Vec<String>,
+    },
+
+    /// Read a PKGBUILD for risky code without running it (AUR package or path)
+    Audit {
+        #[arg(required = true)]
+        targets: Vec<String>,
     },
 
     /// Show a package's dependencies

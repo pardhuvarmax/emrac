@@ -201,6 +201,15 @@ pub enum Error {
         source: io::Error,
     },
 
+    #[error("won't build '{package}': the audit found critical problems — {findings}. Read the PKGBUILD yourself with `emrac audit {package}`; emrac won't build it")]
+    AuditBlocked { package: String, findings: String },
+
+    #[error("high-risk or critical findings in: {0}")]
+    AuditFlagged(String),
+
+    #[error("can't read a PKGBUILD at '{0}'")]
+    NoPkgbuild(String),
+
     #[error("there's no rollback in your history to redo")]
     NoTransactionToRedo,
 
@@ -250,6 +259,9 @@ impl Error {
             | Error::NotOlder { .. }
             | Error::NoOlderVersion(_)
             | Error::VersionUnavailable { .. }
+            | Error::AuditBlocked { .. }
+            | Error::NoPkgbuild(_)
+            | Error::AuditFlagged(_)
             | Error::NotPinned(_)
             | Error::PackagePinned { .. }
             | Error::PinsCorrupt { .. }

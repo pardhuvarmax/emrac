@@ -1,3 +1,4 @@
+mod audit;
 mod backend;
 mod config;
 mod deps;
@@ -14,6 +15,7 @@ mod snapshot;
 mod sources;
 mod verify;
 
+pub use audit::{audit, scriptlet_name, AuditReport, Finding, Severity, Verdict};
 pub use backend::AurSyncOutcome;
 pub use config::Config;
 pub use deps::{DepEntry, DepsReport, Orphan, RdepsReport, WhyReport};
@@ -30,5 +32,5 @@ pub use snapshot::{
     RestoreDiff, RestoreEntry, RestoreItem, RestorePlan, RestoreSource, Snapshot, SnapshotPackage,
     SnapshotStore,
 };
-pub use sources::{SearchResults, SearchScope, Sources, UpgradePlan};
+pub use sources::{audit_path, SearchResults, SearchScope, Sources, UpgradePlan};
 pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};

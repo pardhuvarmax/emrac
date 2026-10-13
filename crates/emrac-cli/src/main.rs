@@ -58,6 +58,13 @@ fn run(cli: &Cli) -> Result<()> {
         return commands::pin::unpin(pkgs, cli.json);
     }
 
+    // Auditing files on disk needs no pacman or libalpm.
+    if let Commands::Audit { targets } = &cli.command {
+        if targets.iter().all(|t| commands::audit::is_path(t)) {
+            return commands::audit::run(None, targets, cli.json);
+        }
+    }
+
     // `config` doesn't need a working pacman/alpm setup — handle it before
     // paying for `Sources::init()`.
     if let Commands::Config { command } = &cli.command {
@@ -100,6 +107,7 @@ fn run(cli: &Cli) -> Result<()> {
             offline,
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
+            review.accept_risks,
             json,
         ),
         Commands::Remove {
@@ -120,6 +128,7 @@ fn run(cli: &Cli) -> Result<()> {
             offline,
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
+            review.accept_risks,
             json,
             quiet,
             config.snapshot.before_upgrade,
@@ -130,6 +139,7 @@ fn run(cli: &Cli) -> Result<()> {
             until,
         } => commands::pin::pin(&sources, pkgs, reason.as_deref(), until.as_deref(), json),
         Commands::Unpin { .. } => unreachable!("handled above"),
+        Commands::Audit { targets } => commands::audit::run(Some(&sources), targets, json),
         Commands::Deps { pkg, recursive } => commands::deps::deps(&sources, pkg, *recursive, json),
         Commands::Rdeps { pkg } => commands::deps::rdeps(&sources, pkg, json),
         Commands::Why { pkg } => commands::deps::why(&sources, pkg, json),

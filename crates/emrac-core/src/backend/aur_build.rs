@@ -81,6 +81,18 @@ impl AurBuildBackend {
         })
     }
 
+    /// A file of the package's repo, from the working tree or (`rev`) from
+    /// a git revision such as `FETCH_HEAD`. `None` if it isn't there.
+    pub fn read_file(&self, pkg: &str, rev: Option<&str>, name: &str) -> Option<String> {
+        let dir = self.build_dir(pkg).ok()?;
+        match rev {
+            None => fs::read_to_string(dir.join(name)).ok(),
+            Some(rev) => self
+                .git_output(Some(&dir), &["show", &format!("{rev}:{name}")])
+                .ok(),
+        }
+    }
+
     /// Builds and installs via `makepkg -si`, with stdio inherited so the
     /// real build output, dependency-sync prompts, and sudo password prompt
     /// go straight to the terminal. Never runs as root — matches emrac's
