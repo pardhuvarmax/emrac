@@ -34,3 +34,5 @@ Current:
   restore point before `emrac upgrade`.
 - [`u12-deps.md`](./u12-deps.md) — `emrac deps`/`rdeps`/`why`/`orphans`: read-only
   dependency inspection.
+- [`u13-pin.md`](./u13-pin.md) — `emrac pin`/`unpin`: holds with reasons and expiry,
+  honoured by `upgrade`.
