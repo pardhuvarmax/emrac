@@ -93,7 +93,7 @@ Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress
 ### Control and reproducibility
 
 - `[idea]` **Time-travel installs**: resolve a plan "as of a date" using the Arch Linux Archive. Combined with `emrac.lock`, this reproduces or rolls back to a known-good package set without a filesystem snapshot.
-- `[idea]` **Holds with reasons and expiry**: pin a package with a note (e.g. "breaks my driver") and an expiry date, so holds don't silently outlive their purpose. The TUI reminds when one expires.
+- `[built u13]` **Holds with reasons and expiry**: pin a package with a note (e.g. "breaks my driver") and an expiry date, so holds don't silently outlive their purpose. The TUI reminds when one expires.
 - `[idea]` **Cleanup simulation**: before removal, show what would be orphaned, how much disk is freed, and what depends on it, as a Shadow Tree plan. Also a bloat view of unused or oversized packages.
 
 ### Performance and supportability

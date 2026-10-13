@@ -41,6 +41,16 @@ fn run(cli: &Cli) -> Result<()> {
         return commands::snapshot::run_stored(command, cli.json);
     }
 
+    // Listing and removing pins only touch emrac's own file.
+    if let Commands::Pin { pkgs, .. } = &cli.command {
+        if pkgs.is_empty() {
+            return commands::pin::list(cli.json);
+        }
+    }
+    if let Commands::Unpin { pkgs } = &cli.command {
+        return commands::pin::unpin(pkgs, cli.json);
+    }
+
     // `config` doesn't need a working pacman/alpm setup — handle it before
     // paying for `Sources::init()`.
     if let Commands::Config { command } = &cli.command {
@@ -107,6 +117,12 @@ fn run(cli: &Cli) -> Result<()> {
             quiet,
             config.snapshot.before_upgrade,
         ),
+        Commands::Pin {
+            pkgs,
+            reason,
+            until,
+        } => commands::pin::pin(&sources, pkgs, reason.as_deref(), until.as_deref(), json),
+        Commands::Unpin { .. } => unreachable!("handled above"),
         Commands::Deps { pkg, recursive } => commands::deps::deps(&sources, pkg, *recursive, json),
         Commands::Rdeps { pkg } => commands::deps::rdeps(&sources, pkg, json),
         Commands::Why { pkg } => commands::deps::why(&sources, pkg, json),

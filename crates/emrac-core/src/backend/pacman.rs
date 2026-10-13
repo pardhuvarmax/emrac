@@ -81,13 +81,14 @@ impl PacmanBackend {
     /// truly fresh one — same "may be a little stale" caveat previews
     /// already carry elsewhere. The real upgrade (`execute_full_upgrade`)
     /// still does a genuine `-Syu`.
-    pub fn resolve_full_upgrade(&self) -> Result<Vec<String>> {
-        let args = vec![
-            "-Su".to_string(),
+    pub fn resolve_full_upgrade(&self, ignore: &[String]) -> Result<Vec<String>> {
+        let mut args = vec!["-Su".to_string()];
+        args.extend(ignore_args(ignore));
+        args.extend([
             "--print".to_string(),
             "--print-format".to_string(),
             "%n".to_string(),
-        ];
+        ]);
 
         let output = self.spawn_captured("pacman", &args)?;
 
@@ -112,12 +113,10 @@ impl PacmanBackend {
     /// Actually syncs and upgrades everything. Runs under `sudo`, with
     /// stdio inherited — a real, single combined `-Syu` transaction, same
     /// as `execute_install` lets pacman own conflict/currency logic.
-    pub fn execute_full_upgrade(&self) -> Result<()> {
-        let args = vec![
-            "pacman".to_string(),
-            "-Syu".to_string(),
-            "--noconfirm".to_string(),
-        ];
+    pub fn execute_full_upgrade(&self, ignore: &[String]) -> Result<()> {
+        let mut args = vec!["pacman".to_string(), "-Syu".to_string()];
+        args.extend(ignore_args(ignore));
+        args.push("--noconfirm".to_string());
 
         self.run_inherited("sudo", &args)
     }
@@ -225,6 +224,15 @@ impl PacmanBackend {
 impl Default for PacmanBackend {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// `--ignore a,b` (nothing for an empty list).
+fn ignore_args(ignore: &[String]) -> Vec<String> {
+    if ignore.is_empty() {
+        Vec::new()
+    } else {
+        vec!["--ignore".to_string(), ignore.join(",")]
     }
 }
 

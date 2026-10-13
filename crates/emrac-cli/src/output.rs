@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use emrac_core::{
     ConfigState, DepEntry, DepsReport, DowngradePlan, Download, IssueKind, Orphan, PackageDetails,
-    PackageSummary, Plan, PlanAction, PurgePlan, RdepsReport, ReinstallPlan, ReinstallSource,
+    PackageSummary, Pin, Plan, PlanAction, PurgePlan, RdepsReport, ReinstallPlan, ReinstallSource,
     RestorePlan, RestoreSource, RollbackPlan, Snapshot, TransactionRecord, TxStatus, VerifyReport,
     VersionList, WhyReport,
 };
@@ -694,4 +694,77 @@ pub fn print_orphans(orphans: &[Orphan], json: bool) {
     }
     let total: u64 = orphans.iter().map(|o| o.installed_size).sum();
     println!("\n{} in total.", human_size(total));
+}
+
+pub fn print_pinned(pins: &[Pin], json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(pins).unwrap());
+        return;
+    }
+    for pin in pins {
+        match pin.describe() {
+            d if d.is_empty() => println!("emrac notes: pinned {}.", pin.name),
+            d => println!("emrac notes: pinned {} ({d}).", pin.name),
+        }
+    }
+    let at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    if pins.iter().any(|p| p.is_active(at)) {
+        println!("`emrac upgrade` will now hold back what you pinned; `emrac unpin` releases it.");
+    } else {
+        println!("emrac warns: that expiry date has already passed, so nothing is held back.");
+    }
+}
+
+pub fn print_pins(pins: &[Pin], json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(pins).unwrap());
+        return;
+    }
+    if pins.is_empty() {
+        println!("emrac notes: nothing is pinned — `emrac pin <pkg>` holds a package back.");
+        return;
+    }
+    println!("emrac found: {}\n", plural(pins.len(), "pin"));
+    let at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    for pin in pins {
+        let state = if pin.is_active(at) { "" } else { "  [expired]" };
+        match pin.describe() {
+            d if d.is_empty() => println!("  {}{state}", pin.name),
+            d => println!("  {}  {d}{state}", pin.name),
+        }
+    }
+}
+
+/// Said alongside an upgrade plan, on stderr so `--json` stays parseable.
+pub fn print_pin_notes(held: &[Pin], expired: &[Pin], quiet: bool) {
+    if !held.is_empty() {
+        let list: Vec<String> = held
+            .iter()
+            .map(|p| match p.describe() {
+                d if d.is_empty() => p.name.clone(),
+                d => format!("{} ({d})", p.name),
+            })
+            .collect();
+        eprintln!(
+            "emrac notes: holding back {}: {}",
+            plural(held.len(), "pinned package"),
+            list.join(", ")
+        );
+    }
+    if !quiet {
+        for pin in expired {
+            eprintln!(
+                "emrac notes: the pin on {} expired{} and is no longer holding it back — `emrac unpin {}` clears it.",
+                pin.name,
+                pin.until_date().map(|d| format!(" on {d}")).unwrap_or_default(),
+                pin.name
+            );
+        }
+    }
 }

@@ -126,6 +126,25 @@ pub enum Commands {
         command: ConfigCommand,
     },
 
+    /// Hold installed packages back from `upgrade` (no packages: list pins)
+    Pin {
+        pkgs: Vec<String>,
+
+        /// Why it is held (shown whenever the hold applies)
+        #[arg(long)]
+        reason: Option<String>,
+
+        /// The hold ends on this date, YYYY-MM-DD (UTC)
+        #[arg(long, value_name = "DATE")]
+        until: Option<String>,
+    },
+
+    /// Let held packages upgrade again
+    Unpin {
+        #[arg(required = true)]
+        pkgs: Vec<String>,
+    },
+
     /// Show a package's dependencies
     #[command(visible_alias = "depends")]
     Deps {

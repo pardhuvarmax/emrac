@@ -185,6 +185,22 @@ pub enum Error {
     #[error("'{0}' isn't installed")]
     NotInstalled(String),
 
+    #[error("'{0}' isn't pinned")]
+    NotPinned(String),
+
+    #[error("'{name}' is pinned{detail} — `emrac unpin {name}` first if you want to upgrade it")]
+    PackagePinned { name: String, detail: String },
+
+    #[error("your pins at {path} can't be read: {why}")]
+    PinsCorrupt { path: String, why: String },
+
+    #[error("couldn't write your pins to {path}: {source}")]
+    PinWrite {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+
     #[error("there's no rollback in your history to redo")]
     NoTransactionToRedo,
 
@@ -234,6 +250,9 @@ impl Error {
             | Error::NotOlder { .. }
             | Error::NoOlderVersion(_)
             | Error::VersionUnavailable { .. }
+            | Error::NotPinned(_)
+            | Error::PackagePinned { .. }
+            | Error::PinsCorrupt { .. }
             | Error::NoSuchPackage(_)
             | Error::NotInstalled(_)
             | Error::InvalidSnapshotName(_)
@@ -258,6 +277,7 @@ impl Error {
             | Error::ConfigParse { .. }
             | Error::ConfigWrite { .. }
             | Error::NoDataDir
+            | Error::PinWrite { .. }
             | Error::SnapshotWrite { .. }
             | Error::HistoryWrite { .. } => "says",
         }

@@ -8,8 +8,9 @@ use crate::backend::{
 use crate::deps::{self, DepsReport, Orphan, RdepsReport, WhyReport};
 use crate::downgrade::{self, DowngradePlan, VersionList};
 use crate::error::{Error, Result};
-use crate::history::{History, TxStatus};
+use crate::history::{now, History, TxStatus};
 use crate::package::{PackageDetails, PackageSummary};
+use crate::pins::{self, Pin, PinStore};
 use crate::plan::{Plan, PlanAction, PlannedPackage};
 use crate::purge::PurgePlan;
 use crate::reinstall::{self, ReinstallItem, ReinstallPlan, ReinstallSource};
@@ -50,6 +51,11 @@ pub struct UpgradePlan {
     /// treats the same failure as a hard error instead, same distinction
     /// `search` vs. `info` already draw.
     pub aur_warning: Option<String>,
+    /// Pinned packages that have an update waiting and are being held back
+    /// (full upgrade only).
+    pub held: Vec<Pin>,
+    /// Pins whose expiry has passed; they are not enforced.
+    pub expired_pins: Vec<Pin>,
 }
 
 /// The single entry point the CLI (and, later, the TUI) should use: merges
@@ -250,8 +256,23 @@ impl Sources {
         }
     }
 
+    /// `(active, expired)` pins.
+    fn pins(&self) -> Result<(Vec<Pin>, Vec<Pin>)> {
+        Ok(pins::partition(PinStore::list()?, now()))
+    }
+
     fn plan_full_upgrade(&self, offline: bool) -> Result<UpgradePlan> {
-        let names = self.pacman.resolve_full_upgrade()?;
+        let (active, expired_pins) = self.pins()?;
+        let ignore: Vec<String> = active.iter().map(|p| p.name.clone()).collect();
+        let names = self.pacman.resolve_full_upgrade(&ignore)?;
+        let mut held_names: Vec<String> = if ignore.is_empty() {
+            Vec::new()
+        } else {
+            // What would be upgraded without the pins: the difference is
+            // what they hold back.
+            let all = self.pacman.resolve_full_upgrade(&[])?;
+            all.into_iter().filter(|n| ignore.contains(n)).collect()
+        };
         let (mut packages, total_download_size, total_installed_size_delta) =
             self.official_upgrade_packages(&names);
 
@@ -269,6 +290,10 @@ impl Sources {
                                 continue;
                             };
                             if version_is_newer(&current.version, &details.version) {
+                                if ignore.contains(&details.name) {
+                                    held_names.push(details.name);
+                                    continue;
+                                }
                                 packages.push(PlannedPackage {
                                     name: details.name,
                                     version: details.version,
@@ -292,10 +317,26 @@ impl Sources {
                 total_installed_size_delta,
             },
             aur_warning,
+            held: active
+                .into_iter()
+                .filter(|p| held_names.contains(&p.name))
+                .collect(),
+            expired_pins,
         })
     }
 
     fn plan_targeted_upgrade(&self, pkgs: &[String]) -> Result<UpgradePlan> {
+        let (active, _) = self.pins()?;
+        if let Some(pin) = active.iter().find(|p| pkgs.contains(&p.name)) {
+            let detail = match pin.describe() {
+                d if d.is_empty() => String::new(),
+                d => format!(" ({d})"),
+            };
+            return Err(Error::PackagePinned {
+                name: pin.name.clone(),
+                detail,
+            });
+        }
         let (official, aur) = self.classify_upgrade(pkgs)?;
 
         let names = if official.is_empty() {
@@ -328,6 +369,8 @@ impl Sources {
                 total_installed_size_delta,
             },
             aur_warning: None,
+            held: Vec::new(),
+            expired_pins: Vec::new(),
         })
     }
 
@@ -337,7 +380,9 @@ impl Sources {
     /// installed package upgrades it).
     pub fn upgrade_official(&self, pkgs: &[String]) -> Result<()> {
         if pkgs.is_empty() {
-            self.pacman.execute_full_upgrade()
+            let (active, _) = self.pins()?;
+            let ignore: Vec<String> = active.into_iter().map(|p| p.name).collect();
+            self.pacman.execute_full_upgrade(&ignore)
         } else {
             self.pacman.execute_install(pkgs)
         }
@@ -800,6 +845,24 @@ impl Sources {
                 self.pacman.execute_install_files(&files)
             }
         }
+    }
+
+    /// `emrac pin`: holds installed packages back from `upgrade`.
+    pub fn pin(
+        &self,
+        names: &[String],
+        reason: Option<&str>,
+        until: Option<u64>,
+    ) -> Result<Vec<Pin>> {
+        let missing: Vec<&str> = names
+            .iter()
+            .filter(|n| self.alpm.installed_version(n).is_none())
+            .map(String::as_str)
+            .collect();
+        if !missing.is_empty() {
+            return Err(Error::NotInstalled(missing.join(", ")));
+        }
+        PinStore::pin(names, reason, until)
     }
 
     /// `emrac deps`: direct dependencies, optionally the whole closure.

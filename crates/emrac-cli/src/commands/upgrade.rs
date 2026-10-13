@@ -27,6 +27,7 @@ pub fn run(
     }
 
     output::print_plan(&upgrade.plan, json);
+    output::print_pin_notes(&upgrade.held, &upgrade.expired_pins, quiet);
 
     if upgrade.plan.is_empty() || dry_run {
         return Ok(());
