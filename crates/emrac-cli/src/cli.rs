@@ -4,7 +4,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 #[command(
     name = "emrac",
     version,
-    about = "A source-first package management platform for Arch Linux"
+    about = "A hybrid package management platform for Arch Linux"
 )]
 pub struct Cli {
     #[command(subcommand)]
