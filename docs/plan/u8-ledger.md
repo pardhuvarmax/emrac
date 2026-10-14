@@ -1,6 +1,6 @@
-# Slice u7 — an immutable place for the history
+# Slice u8 — an immutable place for the history
 
-u6 makes tampering with `history.jsonl` visible, but the file is still in the user's home,
+u7 makes tampering with `history.jsonl` visible, but the file is still in the user's home,
 so whatever shows the tampering can be edited too. This slice keeps a second copy where
 the user's own programs cannot rewrite it: a root-owned, append-only file. emrac's history
 stays the working copy; the ledger is the record to compare it against.
@@ -22,7 +22,7 @@ deliberate, privileged act that does not look like anything emrac does.
   (`chattr +a`), so even a root process can only add lines until the flag is cleared.
   Where the filesystem has no such attribute (overlayfs, tmpfs, some network mounts) it
   is left out and `doctor` says "root-owned, but not append-only here".
-- **What goes in:** the same chained lines as the user's log (u6): every transaction that
+- **What goes in:** the same chained lines as the user's log (u7): every transaction that
   reached `sudo pacman`, and the markers (archive, acknowledge). A transaction that failed
   before touching the system (an AUR build that never got to `pacman -U`) stays in the
   user's log only: nothing system-side happened.
@@ -52,7 +52,7 @@ so the append uses it too, right after the change, while the sudo credential is 
 - `emrac history verify --repair` rebuilds the user's log from the ledger after asking
   (default no, `--yes` does not answer), keeping the broken file as `history.jsonl.broken`.
   Archived records are not restored into the live log; the markers say where they went.
-- `history archive` (u6) changes only the user's log. The ledger keeps every record for
+- `history archive` (u7) changes only the user's log. The ledger keeps every record for
   good; at about 500 bytes each, ten thousand transactions is a few megabytes. Rotating it
   is an administrator's job and is not offered.
 

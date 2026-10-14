@@ -1,10 +1,10 @@
-# Slice u6 — history that can be archived, acknowledged and checked
+# Slice u7 — history that can be archived, acknowledged and checked
 
 `emrac history` is an append-only file, `~/.local/share/emrac/history.jsonl`, written by
 emrac and nothing else. "Append-only" is a convention: the file is the user's own, so
 the user or any program running as the user can edit or delete it, and emrac would not
 notice. `undo`, `redo` and the cache policy all trust what is in it. This slice adds
-three things at the user level; u7 adds a second, tamper-resistant copy.
+three things at the user level; u8 adds a second, tamper-resistant copy.
 
 ## What stays true
 
@@ -60,7 +60,7 @@ like any other, so hiding a failure leaves a trace.
 
 ## Not covered
 
-A second copy that the user cannot edit (u7); signing records with a key; editing the
+A second copy that the user cannot edit (u8); signing records with a key; editing the
 archive files (they are hashed in the marker, so a change is detected, but not prevented);
 `history ack` of anything but failed transactions.
 

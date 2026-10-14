@@ -1,4 +1,4 @@
-# Slice u9 — emrac's voice
+# Slice u6 — emrac's voice
 
 emrac talks to people in a few places and says almost everything in the same flat way:
 57 lines begin `emrac notes:`, 28 `emrac found:`, 10 `emrac warns:`, 8 `emrac plans:`.
@@ -8,7 +8,7 @@ kind of statement its own verb, so the verb tells the reader how much to trust t
 and what to do with it. It changes wording and the stream a line goes to, never behaviour,
 exit codes or `--json`.
 
-(Independent of u6 to u8. If it is built first, the numbers of those plans shift by one.)
+(Independent of the history slices u7 to u9 (archive and chain, ledger, ledger watch). They were planned first and numbered u6 to u8; they moved up by one so that this slice is built first.)
 
 ## The voices
 

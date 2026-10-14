@@ -1,10 +1,10 @@
-# Slice u8 — the ledger watches itself
+# Slice u9 — the ledger watches itself
 
-u7 puts the history where only root can write it. Root can still change it, and the
+u8 puts the history where only root can write it. Root can still change it, and the
 usual way to do that leaves no trace. A file cannot log what is done to it, but the
 kernel can: the audit system records who touched a path, with which program, when, and
 the journal keeps it. This slice makes emrac set that watch up, read it back, and say so
-when something other than emrac wrote to the ledger. It builds on u6 (the chain) and u7
+when something other than emrac wrote to the ledger. It builds on u7 (the chain) and u8
 (the ledger).
 
 ## What this does and does not give
@@ -39,7 +39,7 @@ the rules load are covered) and the `audit` package for `auditctl` / `augenrules
 
 ## 2. emrac's own appends are witnessed too
 
-The helper that appends to the ledger (u7) also writes one line to the journal as it does:
+The helper that appends to the ledger (u8) also writes one line to the journal as it does:
 `SYSLOG_IDENTIFIER=emrac-ledger`, with the record's `seq`, id and hash. These are the
 legitimate writes; the audit events are the full picture; the two should agree.
 

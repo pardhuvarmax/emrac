@@ -74,12 +74,16 @@ Current:
 - [`u29-lean-cache.md`](./u29-lean-cache.md) — a lean cache policy that keeps one rollback set.
 - [`u30-pacnew-revert.md`](./u30-pacnew-revert.md) — `pacnew`: validate before applying, record
   every change, revert, edit by hand.
-- [`u6-history-integrity.md`](./u6-history-integrity.md) — history you can archive, acknowledge and
-  check: `history archive`, a hash chain, `history ack`.
-- [`u7-ledger.md`](./u7-ledger.md) — a second, root-owned append-only copy of the history that the
-  user's own programs cannot rewrite.
-- [`u8-ledger-watch.md`](./u8-ledger-watch.md) — the kernel audit system watches the ledger, emrac
-  reports any write that is not its own, and chain anchors catch a rewrite.
-- [`u9-voice.md`](./u9-voice.md) — emrac's voice: twelve verbs (says, found, notes, plans, asks,
+
+Slices after `r2` are numbered again from `u1` against r2 (see the root `CHANGELOG.md`); the plans for
+u6 onward are below, in build order. (`u1`–`u5` after r2 had no plan of their own.)
+
+- [`u6-voice.md`](./u6-voice.md) — emrac's voice: twelve verbs (says, found, notes, plans, asks,
   warns, suspects, thinks, suggests, refuses, confirms, remembers) that tell the reader how sure
   emrac is and what to do with a line.
+- [`u7-history-integrity.md`](./u7-history-integrity.md) — history you can archive, acknowledge and
+  check: `history archive`, a hash chain, `history ack`.
+- [`u8-ledger.md`](./u8-ledger.md) — a second, root-owned append-only copy of the history that the
+  user's own programs cannot rewrite.
+- [`u9-ledger-watch.md`](./u9-ledger-watch.md) — the kernel audit system watches the ledger, emrac
+  reports any write that is not its own, and chain anchors catch a rewrite.
