@@ -55,3 +55,5 @@ Current:
   network warn-and-ask, `emrac build`.
 - [`u20-limits.md`](./u20-limits.md) — memory, process, tmpfs and time limits for sandboxed
   builds.
+- [`u21-doctor.md`](./u21-doctor.md) — `emrac doctor`: read-only system health checks with a
+  sanitized `--report`.
