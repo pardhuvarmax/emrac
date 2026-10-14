@@ -207,18 +207,23 @@ dl.layers div:last-child{border-bottom:0}
 dl.layers dt{color:var(--head);font-weight:700}
 dl.layers dt small{display:block;color:var(--muted);font-weight:400;font-size:12px}
 dl.layers dd{margin:0}
-/* under development: caution tape around what is planned but not built */
-.devzone{border:2px solid #f2c200;background:var(--box);margin:14px 0}
+/* under development: caution tape around what is planned but not built (sidebar) */
+.devzone{border:2px solid #f2c200;background:var(--box);margin-bottom:16px}
 .devzone .tape{height:14px;background:repeating-linear-gradient(-45deg,#f2c200 0 12px,#111 12px 24px)}
-.devzone .devhead{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;padding:10px 14px;border-bottom:1px dashed var(--line2)}
-.devzone .devhead b{color:var(--head);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
-.devzone .devhead span{color:var(--muted);font-size:12.5px}
-.devzone ul{list-style:none;margin:0;padding:0}
-.devzone li{display:grid;grid-template-columns:230px 1fr;gap:14px;padding:10px 14px 10px 36px;border-bottom:1px dashed var(--line);position:relative}
-.devzone li:last-child{border-bottom:0}
-.devzone li::before{content:"";position:absolute;left:14px;top:15px;width:12px;height:12px;background:repeating-linear-gradient(-45deg,#f2c200 0 3px,#111 3px 6px);border:1px solid #111}
-.devzone li b{color:var(--head)}
-.devzone li span{color:var(--text)}
+.devzone .devhead{padding:10px 14px;border-bottom:1px dashed var(--line2)}
+.devzone .devhead b{display:block;color:var(--head);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+.devzone .devhead span{color:var(--muted);font-size:12px}
+.devzone details{border-bottom:1px dashed var(--line)}
+.devzone details:last-of-type{border-bottom:0}
+.devzone summary{cursor:pointer;padding:8px 14px;color:var(--head);font-weight:700;font-size:12.5px;display:flex;justify-content:space-between;gap:8px;list-style:none}
+.devzone summary::-webkit-details-marker{display:none}
+.devzone summary::after{content:"+";color:var(--muted);font-weight:400}
+.devzone details[open] summary::after{content:"\2212"}
+.devzone summary em{font-style:normal;color:var(--muted);font-weight:400}
+aside .devzone ul{padding:0 0 8px}
+aside .devzone li{position:relative;padding:3px 14px 3px 34px;border-bottom:0;font-size:12.5px;line-height:1.5}
+aside .devzone li::before{content:"";position:absolute;left:15px;top:8px;width:9px;height:9px;background:repeating-linear-gradient(-45deg,#f2c200 0 2.5px,#111 2.5px 5px);border:1px solid #111}
+aside .devzone li small{display:inline;color:var(--muted);font-size:12px}
 
 /* checklist */
 .checks label{display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer}
@@ -258,7 +263,6 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
   #page{grid-template-columns:1fr}
   #nav a{padding:10px 12px}
   dl.layers div{grid-template-columns:1fr;gap:2px}
-  .devzone li{grid-template-columns:1fr;gap:2px}
   .tagline{display:none}
 }
 @media (max-width:560px){
@@ -375,24 +379,7 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
       <tr><td><code>cache</code></td><td>Source, build, binary and pacman caches: list, stats, clean, trim, purge (<code>cc</code> and <code>cs</code> shortcuts). <code>clean</code> keeps what <code>undo</code> needs; <code>--lean</code> keeps one rollback set and drops the rest.</td></tr>
     </tbody>
   </table>
-  <h3>Not built yet</h3>
-  <div class="devzone" role="group" aria-label="Under development">
-    <div class="tape" aria-hidden="true"></div>
-    <div class="devhead"><b>Under development</b><span>planned, not built yet</span></div>
-    <ul>
-      <li><b>Terminal interface</b><span>The same functions as the commands, in a full-screen browser.</span></li>
-      <li><b>Build profiles</b><span>Reusable compiler, linker and optimization settings. Builds use the <code>makepkg</code> defaults today.</span></li>
-      <li><b>Build queue</b><span>Queue, pause and resume. Builds run one at a time, in the foreground.</span></li>
-      <li><b>Source-or-binary scoring</b><span>A recommendation with its reasons. Plans do not recommend yet.</span></li>
-      <li><b>News and advisories</b><span>Manual-intervention notices before an upgrade. The next small step; <code>doctor</code> does not read the Arch news yet.</span></li>
-      <li><b><code>locate</code></b><span>Which package owns a file or a command.</span></li>
-      <li><b><code>lock</code> / <code>unlock</code></b><span>Stricter than <code>pin</code>, which holds a package back from <code>upgrade</code> and is built.</span></li>
-      <li><b>Filesystem snapshots</b><span>Btrfs and ZFS. <code>snapshot</code> saves the installed package set only.</span></li>
-      <li><b>Landlock layer</b><span>A second sandbox layer. The bubblewrap sandbox is built.</span></li>
-      <li><b>Graph and impact views</b><span>Dependency graphs and what a removal would affect. <code>deps</code>, <code>rdeps</code> and <code>why</code> print text.</span></li>
-    </ul>
-    <div class="tape" aria-hidden="true"></div>
-  </div>
+
 
   <h2 id="features">Planned features</h2>
   <p>The design goals from <code>SPEC.md</code>. Those not listed under <a href="#built">Available now</a> are not built yet.</p>
@@ -574,6 +561,7 @@ use_agent = true</pre>
     <div class="bh">Links</div>
     <ul>
       <li><a href="#built">Available now</a></li>
+      <li><a href="#planned">Planned, not built</a></li>
       <li><a href="#changes">Changes</a></li>
       <li><a href="#features">Planned features</a></li>
       <li><a href="#safety">How safety works</a></li>
@@ -582,6 +570,102 @@ use_agent = true</pre>
       <li><a href="#top">Documentation</a></li>
       <li><a href="#top">Report a bug</a></li>
     </ul>
+  </div>
+
+  <div class="devzone" id="planned" role="group" aria-label="Under development">
+    <div class="tape" aria-hidden="true"></div>
+    <div class="devhead"><b>Under development</b><span>planned, not built yet: 62 items from SPEC.md, ideas.md and cross-distro-feat.md</span></div>
+    <details open><summary>Interface and setup <em>9</em></summary>
+      <ul>
+        <li>Terminal interface <small>(package browser, dependency explorer, build monitor, news reader, PKGBUILD editor, cache manager, command palette)</small></li>
+        <li>First-run <code>setup</code> wizard</li>
+        <li><code>self-test</code> and <code>sandbox shell</code></li>
+        <li>Man pages; <code>emrac self</code> <small>(update check, clean uninstall)</small></li>
+        <li>Structured per-transaction logs; documented exit codes</li>
+        <li>Themes, keybindings, aliases</li>
+        <li>Layered config <small>(system, user, per-project)</small>; <code>config export</code>, <code>import</code>, <code>migrate</code>, <code>diff</code></li>
+        <li>Shell <code>alias</code> and <code>integrate</code>; <code>env</code>, <code>paths</code>, <code>diagnostics</code></li>
+        <li>Help commands: <code>man</code>, <code>docs</code>, <code>license</code>, <code>credits</code>, <code>bug-report</code></li>
+      </ul>
+    </details>
+    <details open><summary>Build system <em>10</em></summary>
+      <ul>
+        <li>Build profiles with inheritance; build recipes</li>
+        <li>Compiler, linker and optimization flags <small>(LTO, PGO, CPU tuning)</small></li>
+        <li>Build queue <small>(background, pause, resume, cancel)</small></li>
+        <li>Build monitoring: stages, progress, ETA prediction</li>
+        <li>Persistent build cache keyed by PKGBUILD hash and flags</li>
+        <li>ccache, sccache, distcc; compile farm; shared artifact library</li>
+        <li>Smoke test: start the built binary in the sandbox</li>
+        <li>Reproducible-build check <small>(build twice, compare)</small></li>
+        <li>Build diff and benchmark <small>(binary vs source)</small>; build statistics</li>
+        <li>Local repository of verified builds</li>
+      </ul>
+    </details>
+    <details open><summary>Recommendations and policy <em>6</em></summary>
+      <ul>
+        <li>Source-or-binary scoring and recommendation</li>
+        <li><code>explain</code> for decisions; package score; package advisor</li>
+        <li>Smart updates: rule-based skipping</li>
+        <li>Policy engine <small>(&ldquo;always build Rust from source&rdquo;)</small></li>
+        <li>Vulnerability-aware planning <small>(CVEs against pending upgrades)</small></li>
+        <li>Safe unattended updates</li>
+      </ul>
+    </details>
+    <details open><summary>Safety and recovery <em>13</em></summary>
+      <ul>
+        <li>Filesystem snapshots <small>(Btrfs, ZFS, snapper)</small> and bootable snapshots</li>
+        <li>Landlock layer</li>
+        <li>Privilege separation <small>(unprivileged front end, small privileged helper)</small></li>
+        <li>Post-commit health check with automatic rollback</li>
+        <li>Partial-upgrade guard</li>
+        <li>DKMS and kernel-module test; boot test in a throwaway VM</li>
+        <li>Resume an interrupted transaction</li>
+        <li>Timeline of transactions</li>
+        <li>Signed, tamper-evident log; SBOM and provenance per build</li>
+        <li><code>/etc</code> change tracking per transaction</li>
+        <li>Saved plans <small>(<code>plan</code>, <code>apply</code>, plan diff)</small>; <code>emrac.lock</code></li>
+        <li>Time-travel installs <small>(resolve as of a date)</small></li>
+        <li>Cleanup simulation and bloat view</li>
+      </ul>
+    </details>
+    <details open><summary>Packages and repositories <em>13</em></summary>
+      <ul>
+        <li>News and advisories <small>(an Arch news check before upgrades is the next small step)</small></li>
+        <li><code>locate</code>: which package owns a file or command</li>
+        <li>Fuzzy and regex search; categories; popular and recent</li>
+        <li>Changelogs and security advisories in <code>info</code></li>
+        <li>AUR trust signals in the preview <small>(maintainer changes, orphaned, age)</small></li>
+        <li><code>lock</code> / <code>unlock</code></li>
+        <li>Dependency tree, graph, impact and cycle views; removal impact preview</li>
+        <li>Repository management: custom, local and git repos; mirror ranking and health</li>
+        <li>Package collections; workspace mode</li>
+        <li>Declarative system profile <small>(diff against the machine)</small></li>
+        <li>Flatpak and systemd-unit backends</li>
+        <li>Wandrover: cross-distro <code>search</code>, <code>resolve</code>, <code>alternatives</code>, <code>map</code>, <code>audit</code>; migration mode</li>
+        <li>Export, import and bundle</li>
+      </ul>
+    </details>
+    <details open><summary>For AUR maintainers <em>6</em></summary>
+      <ul>
+        <li><code>maintain check</code>: lint, <code>.SRCINFO</code>, clean-room build, install and upgrade tests, guideline checks</li>
+        <li>Upstream watcher <small>(bump, checksums, test build)</small>; maintainer dashboard</li>
+        <li>Safe push: your own SSH key by reference, agent, host-key pinning, confirmation</li>
+        <li>Capability-based workflow files; restricted scripting layer</li>
+        <li>CI template generation; local test repository</li>
+        <li>Orphan adoption and flag handling; verified-provenance marker</li>
+      </ul>
+    </details>
+    <details open><summary>Platform and analytics <em>5</em></summary>
+      <ul>
+        <li>Backend plugin interface <small>(WASM)</small> and a public API</li>
+        <li>Remote build workers; distributed compilation</li>
+        <li>Shareable, signed config presets</li>
+        <li>Analytics: build, install and download statistics, resource reports, usage history</li>
+        <li>Search index for sub-millisecond lookups</li>
+      </ul>
+    </details>
+    <div class="tape" aria-hidden="true"></div>
   </div>
 </aside>
 </div>
