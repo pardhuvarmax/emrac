@@ -48,7 +48,7 @@ Errors go to stderr as `emrac found: …` (something you can fix) or `emrac says
 
 ## Highlights
 
-- **Hybrid** — builds from PKGBUILD locally when it's worthwhile, installs binaries when it isn't, and tells you why.
+- **Emrac is a hybrid package manager.** It builds from PKGBUILD locally when it's worthwhile, installs binaries when it isn't, and tells you why.
 - **Source Suitability Score & ETA engine** — estimates build time, download size, and performance gain per package before you commit, refined by local build history.
 - **One interface, every source** — official repos, AUR, local/custom repos, and locally built packages all searched, inspected, and installed the same way.
 - **CLI and TUI parity** — no capability is exclusive to either interface.
