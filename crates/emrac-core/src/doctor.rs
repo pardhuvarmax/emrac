@@ -136,6 +136,16 @@ pub fn human(bytes: u64) -> String {
     }
 }
 
+/// "today", "yesterday", "N days ago"; "an unknown time ago" without a date.
+fn age_phrase(days: Option<u64>) -> String {
+    match days {
+        None => "an unknown time ago".into(),
+        Some(0) => "today".into(),
+        Some(1) => "yesterday".into(),
+        Some(d) => format!("{d} days ago"),
+    }
+}
+
 /// `first` entries, then "and N more".
 fn listed(items: &[String]) -> Vec<String> {
     let mut out: Vec<String> = items.iter().take(MAX_DETAIL).cloned().collect();
@@ -286,21 +296,46 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
         ),
     });
 
-    // Pending upgrades.
+    // Pending upgrades. This is only ever as good as the sync database it
+    // was computed from, so it is never reported as plain "up to date" unless
+    // that database was refreshed today or yesterday.
     if let Some(n) = i.pending_upgrades {
-        checks.push(if n == 0 {
-            check("upgrades", "Pending upgrades", Status::Ok, "up to date")
-        } else {
-            check(
+        let fresh = i.sync_db_age_days.is_some_and(|d| d <= 1);
+        let as_of = age_phrase(i.sync_db_age_days);
+        const REFRESH: &str = "emrac upgrade (it refreshes the databases first, and shows the plan before changing anything)";
+        let count = plural(n, "package can be upgraded", "packages can be upgraded");
+        checks.push(match (n, fresh) {
+            (0, true) => check(
+                "upgrades",
+                "Pending upgrades",
+                Status::Ok,
+                format!("none, according to the database refreshed {as_of}"),
+            ),
+            (0, false) => check(
                 "upgrades",
                 "Pending upgrades",
                 Status::Note,
                 format!(
-                    "{} (from the database as last refreshed)",
-                    plural(n, "package can be upgraded", "packages can be upgraded")
+                    "can't tell — the package list was refreshed {as_of}, so \"nothing to upgrade\" only describes the repositories as they were then"
                 ),
             )
-            .fix("emrac upgrade")
+            .fix(REFRESH),
+            (_, true) => check(
+                "upgrades",
+                "Pending upgrades",
+                Status::Note,
+                format!("{count} (database refreshed {as_of})"),
+            )
+            .fix(REFRESH),
+            (_, false) => check(
+                "upgrades",
+                "Pending upgrades",
+                Status::Note,
+                format!(
+                    "{count} according to a package list refreshed {as_of}; there are probably more"
+                ),
+            )
+            .fix(REFRESH),
         });
     }
 
@@ -745,6 +780,84 @@ mod tests {
             .starts_with("1 package can"));
         i.pending_upgrades = None;
         assert!(find(&evaluate(&i), "upgrades").is_empty());
+    }
+
+    #[test]
+    fn nothing_to_upgrade_is_only_reassuring_when_the_package_list_is_fresh() {
+        let mut i = healthy();
+        i.pending_upgrades = Some(0);
+        for days in [0, 1] {
+            i.sync_db_age_days = Some(days);
+            let c = one(&evaluate(&i), "upgrades").clone();
+            assert_eq!(c.status, Status::Ok, "{days} days");
+            assert!(c.summary.starts_with("none, according to"), "{}", c.summary);
+        }
+        // A stale list says nothing about what is available now: never "ok",
+        // never the words "up to date", and it says how old the list is.
+        for days in [2, 10, 400] {
+            i.sync_db_age_days = Some(days);
+            let c = one(&evaluate(&i), "upgrades").clone();
+            assert_eq!(c.status, Status::Note, "{days} days");
+            assert!(
+                c.summary.contains(&format!("{days} days ago")),
+                "{}",
+                c.summary
+            );
+            assert!(c.summary.starts_with("can't tell"), "{}", c.summary);
+            assert!(!c.summary.contains("up to date"), "{}", c.summary);
+            assert!(c
+                .fix
+                .as_deref()
+                .unwrap()
+                .contains("refreshes the databases"));
+        }
+        // No database date at all is stale too.
+        i.sync_db_age_days = None;
+        let c = one(&evaluate(&i), "upgrades").clone();
+        assert_eq!(c.status, Status::Note);
+        assert!(c.summary.contains("an unknown time ago"));
+    }
+
+    #[test]
+    fn a_stale_list_with_upgrades_says_there_are_probably_more() {
+        let mut i = healthy();
+        i.pending_upgrades = Some(3);
+        i.sync_db_age_days = Some(10);
+        let c = one(&evaluate(&i), "upgrades").clone();
+        assert!(
+            c.summary.starts_with(
+                "3 packages can be upgraded according to a package list refreshed 10 days ago"
+            ),
+            "{}",
+            c.summary
+        );
+        assert!(c.summary.contains("probably more"));
+        i.sync_db_age_days = Some(0);
+        let c = one(&evaluate(&i), "upgrades").clone();
+        assert!(
+            c.summary.contains("database refreshed today"),
+            "{}",
+            c.summary
+        );
+        assert!(!c.summary.contains("probably more"));
+    }
+
+    #[test]
+    fn no_report_claims_up_to_date_from_an_old_database() {
+        // The whole report, not one check: nothing anywhere may say
+        // "up to date" when the package list is old.
+        let mut i = healthy();
+        i.pending_upgrades = Some(0);
+        i.sync_db_age_days = Some(11);
+        let r = evaluate(&i);
+        for c in &r.checks {
+            assert!(!c.summary.contains("up to date"), "{}: {}", c.id, c.summary);
+        }
+        assert_eq!(
+            one(&r, "sync-db").status,
+            Status::Warning,
+            "and the age is flagged"
+        );
     }
 
     #[test]
