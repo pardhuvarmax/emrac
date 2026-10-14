@@ -2,6 +2,10 @@
 
 Development/test infrastructure — not part of the shipped `emrac` product.
 
+## release-build.sh
+
+A release build (`target/release/emrac`) that does not embed the builder's paths: it passes `--remap-path-prefix` for the home directory, the cargo registry and the checkout, since `profile.release.trim-paths` is not stable yet. Run it from anywhere: `dev/release-build.sh`.
+
 ## container/
 
 A disposable Arch Linux [podman](https://podman.io/) container for testing emrac's mutating commands (`install`, `remove`, `upgrade`, AUR building) without ever touching this host's real pacman state. The container gets its own independent, freshly-synced package database at build time — it's never given access to the host's `/var/lib/pacman`. It also carries `git` and `base-devel` (compiler toolchain, `fakeroot`, etc.), needed for `makepkg` to actually build AUR packages. Only the compiled `emrac` binary is mounted in (read-only), from `target/debug/emrac`.

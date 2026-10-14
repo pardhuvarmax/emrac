@@ -103,6 +103,8 @@ cargo run --bin emrac -- install ripgrep --dry-run   # preview only, safe on any
 cargo run --bin emrac -- upgrade --dry-run           # preview only, safe on any machine
 ```
 
+For a release build that does not embed your home directory or the cargo registry path in the binary, use `dev/release-build.sh` (it passes `--remap-path-prefix` for you).
+
 `install`/`remove`/`upgrade` preview (`--dry-run`) is read-only and safe to run directly. Actually running them mutates real system state via `sudo pacman`/`makepkg` — see [`dev/README.md`](./dev/README.md) for the disposable container used to test that without touching your host.
 
 ## License

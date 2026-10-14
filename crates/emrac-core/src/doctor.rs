@@ -1113,14 +1113,14 @@ mod tests {
     #[test]
     fn scrubbing_removes_the_home_user_and_host_names() {
         let s = Scrub {
-            home: "/home/sicmundus",
-            user: "sicmundus",
+            home: "/home/emracus",
+            user: "emracus",
             host: "archbox",
         };
-        let t = "cache /home/sicmundus/.cache/emrac on archbox for sicmundus";
+        let t = "cache /home/emracus/.cache/emrac on archbox for emracus";
         let out = scrub(t, &s);
         assert_eq!(out, "cache ~/.cache/emrac on <host> for <user>");
-        assert!(!out.contains("sicmundus") && !out.contains("archbox"));
+        assert!(!out.contains("emracus") && !out.contains("archbox"));
         // Too-short names are left alone rather than mangling the text.
         let short = Scrub {
             home: "/",
