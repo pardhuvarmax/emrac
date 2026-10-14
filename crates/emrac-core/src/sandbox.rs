@@ -233,6 +233,11 @@ pub fn clean_env(host: &[(String, String)]) -> Vec<(String, String)> {
     let mut env: Vec<(String, String)> = vec![
         ("PATH".into(), SANDBOX_PATH.into()),
         ("SHELL".into(), "/bin/bash".into()),
+        // Inside the sandbox's user namespace only the caller's own id is
+        // mapped, so fakeroot's real chown to root fails with EINVAL (and
+        // `cp -a` or `chown` in a package() aborts). The ownership fakeroot
+        // records for the package is all that matters.
+        ("FAKEROOTDONTTRYCHOWN".into(), "1".into()),
     ];
     env.extend(
         host.iter()
@@ -680,6 +685,11 @@ mod tests {
         ] {
             assert!(!keys.contains(&dropped), "{dropped}");
         }
+        assert!(
+            env.iter()
+                .any(|(k, v)| k == "FAKEROOTDONTTRYCHOWN" && v == "1"),
+            "fakeroot must not really chown inside the user namespace"
+        );
         let path = env.iter().find(|(k, _)| k == "PATH").unwrap();
         assert_eq!(
             path.1, SANDBOX_PATH,
