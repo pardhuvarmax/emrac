@@ -2,10 +2,16 @@ Feature Status
 ================
 
 Every category in ``SPEC.md`` Parts III, IV and V, checked against
-what is actually shipped as of **Slice i1 -> r1** (commit
-``196141a``). The core CLI loop -- ``search`` / ``info`` / ``install``
-/ ``remove`` / ``upgrade``, official repos + AUR -- is complete;
-everything else is scoped for later by the spec itself.
+what is actually shipped as of **Slice u30** (release ``r1`` plus the
+updates ``u1`` to ``u30``; the last commit before this refresh is
+``10ae7bd``). The core CLI loop -- ``search`` / ``info`` / ``install``
+/ ``remove`` / ``upgrade``, official repos + AUR -- has been complete
+since ``r1``. Since then the work has gone into making a real upgrade
+safe and recoverable: audited and sandboxed AUR builds, plans that match
+what pacman will do, history with rollback, health checks, cache and
+config-file management. ``CHANGELOG.md`` has the detail slice by slice;
+the TUI, build profiles, build queue and news/advisory items remain
+unstarted.
 
 MVP Core Loop
 --------------
@@ -40,6 +46,70 @@ around, and it is finished.
 
 Milestone complete as of ``196141a``.
 
+Commands Available Today
+--------------------------
+
+Everything a user can run, with the slice that introduced it. All of
+these were exercised against a real pacman (in a container for anything
+that changes the system) as well as unit-tested; ``CHANGELOG.md`` says
+what was seen for each.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 10 66
+
+   * - Command
+     - Since
+     - What it does
+   * - ``search`` / ``info``
+     - i1
+     - Official repositories (libalpm) and the AUR (RPC, with retries) behind one interface
+   * - ``install`` / ``remove`` / ``upgrade``
+     - i1, r1
+     - Preview, confirm, run; pacman asks its own questions unless ``--yes`` (u23); plans come from freshly synced repositories (u22) and list conflict removals, replacements and provider choices (u24, u25)
+   * - ``build <pkg|dir>``
+     - u19
+     - Builds an AUR package or a local PKGBUILD folder without installing; sandboxed, with limits (u20)
+   * - ``audit <pkg|path|file>``
+     - u15-u18
+     - Static reading of a PKGBUILD, scriptlets and shipped files; inspects a built package file; runs automatically before AUR builds and again on the built package
+   * - ``doctor [--online] [--report]``
+     - u21
+     - Read-only health checks with a fix for each finding; a sanitized bug report
+   * - ``history``
+     - u3
+     - Append-only log of executed transactions, failures and conflict removals included
+   * - ``rollback`` / ``undo`` / ``redo``
+     - u4, u5
+     - Reverse and re-apply recorded transactions from the pacman cache, the AUR build folder or the Arch Linux Archive
+   * - ``downgrade`` / ``reinstall`` / ``purge``
+     - u6-u8
+     - One package back to an older version; the same version again; remove with its modified configs
+   * - ``verify`` / ``check``
+     - u9
+     - Installed files against pacman's record
+   * - ``snapshot`` / ``restore``
+     - u10, u11
+     - Named restore points of the installed package set; optional automatic one before ``upgrade``
+   * - ``deps`` / ``rdeps`` / ``why`` / ``orphans``
+     - u12
+     - Read-only dependency inspection
+   * - ``pin`` / ``unpin``
+     - u13
+     - Hold a package back from ``upgrade`` with a reason and an expiry
+   * - ``pacnew [diff|resolve|revert|status]``
+     - u27, u30
+     - Tells your edits from upstream's in ``.pacnew`` files by a three-way comparison, keeps/takes/merges/edits each after checking the result, records every change and can revert it
+   * - ``cache [list|stats|clean|purge|trim]``
+     - u28, u29
+     - Source, build, binary and pacman caches; ``--lean`` keeps one rollback set; ``cc``/``cs`` shortcuts
+   * - ``config``
+     - u1
+     - Persisted defaults in ``~/.config/emrac/config.toml``
+   * - ``completion``
+     - u2
+     - bash, zsh and fish completion scripts
+
 Complete Feature Catalog
 --------------------------
 
@@ -56,11 +126,11 @@ Complete Feature Catalog
    * - 1
      - Unified Package Management
      - Partial
-     - install/remove/upgrade + dry-run/preview/confirm done; ``emrac history``/``transactions`` (append-only log of executed transactions, ``--limit``/``--since``/``--json``); ``emrac rollback [tx]``/``undo``/``redo`` reverse and re-apply recorded transactions from cached package files, fetching missing official versions from the Arch Linux Archive (no snapshots); ``emrac downgrade <pkg> [version]``/``--list`` (one package, official from cache or Archive, AUR from local files only); ``emrac reinstall <pkg>...`` (same installed version again; no build options); ``emrac purge <pkg>...`` (``pacman -Rn``, previews the modified configs it will delete; `$HOME` and old ``.pacsave`` files untouched); ``emrac verify``/``check <pkg>...`` (files vs. pacman's mtree: missing, type, size, SHA-256, permissions, symlink target; edited configs reported separately; no owner/mtime check, no signature check); ``emrac snapshot [create|list|show|delete]``/``emrac restore <name> [--prune]`` (named package-set restore points; restore installs/up/downgrades from cache, repositories or the Archive, removes extras only with ``--prune``; no filesystem snapshots, no config contents; opt-in ``snapshot.before_upgrade`` takes one before ``upgrade``, keeping the newest 5); ``emrac deps``/``rdeps``/``why``/``orphans`` (read-only dependency inspection; no tree/graph/impact/cycles); ``emrac pin <pkg>... [--reason] [--until]``/``unpin`` (holds with note and expiry, honoured by ``upgrade``; no ``lock``); ``emrac audit <aur-pkg|path>...`` (static PKGBUILD + scriptlet reading, severity tiers; ``install``/``upgrade`` stop on high-risk findings and refuse critical ones; no scan of extra repo files); AUR builds are now ``makepkg -s`` then a manifest of the built package (setuid files, hooks, sudoers, scriptlet, units, accounts) then ``pacman -U``, with the audit's stop/refuse policy; ``emrac audit <file.pkg.tar.*>`` inspects any package file; ``--inspect`` (or ``review.inspect_official``) on ``install``/``upgrade`` shows manifests of official packages before installing (only critical findings stop it); shipped scripts, cross-file exfiltration and AUR-RPC retries added; AUR builds run in a bubblewrap sandbox (read-only root, empty home, cleared environment, no network unless allowed; ``--no-sandbox``/``--allow-network``); ``emrac build <aur-pkg|dir>`` builds without installing; memory/process/size/time limits via ``build.*`` config (cgroup scope when a systemd user session exists, time and size caps otherwise); no Landlock/throwaway root yet; ``emrac pacnew [diff <file>|resolve|revert [file]|status]`` (finds pending ``.pacnew``/``.pacsave`` files, compares the live file with the version the old package shipped to tell your edits from upstream's, offers keep/take/clean-merge/edit-by-hand per file; checks the candidate (sudoers, sshd_config, pacman.conf, fstab, mirrorlist, JSON, shell-sourced files), saves both files, records every change and can revert it unless the file was edited since; asks every time; no two-way merge, no semantic judgement); ``emrac doctor [--report]`` (read-only health checks; ``--online`` checks pending upgrades against freshly synced repositories; unmet dependencies, stale lock/databases, .pacnew files, failed units, stale kernel, disk, caches, orphans, pins, tools, sandbox; problems exit 1; sanitized bug report); resume-interrupted -- not started
+     - ``install``/``remove``/``upgrade`` with ``--dry-run``, a preview and a confirmation; every executed change is recorded (``history``) and can be reversed (``rollback``/``undo``/``redo``). The plan is built from freshly synced repositories (u22), lists what conflicts and replacements will remove and which provider pacman will pick (u24, u25), and warns when an AUR rebuild will hit a dependency conflict (u26). pacman asks its own questions unless ``--yes``; silence on stdin is never consent (u23). ``upgrade`` covers official packages and the AUR, holds back pins (``pin``/``unpin``), and can save a package-set snapshot first (``snapshot.before_upgrade``). Also ``downgrade``, ``reinstall``, ``purge`` and ``snapshot``/``restore``. No transaction queue, no resume of an interrupted transaction, no ``lock``
    * - 2
      - Source Build System
      - Partial
-     - PKGBUILD build via ``makepkg -si`` with a persistent checkout cache; no queue, background/pause/cancel, log collection/replay, PKGBUILD editing/validation
+     - AUR packages are fetched (a split package from its base's repo), reviewed (PKGBUILD or diff), audited, then built in two steps: dependencies and sources on the host (signatures verified with your keyring), the rest in a bubblewrap sandbox (read-only root, empty home, cleared environment, no network unless allowed, memory/process/size/time limits); the built package is inspected (manifest) before ``pacman -U``. ``emrac build <pkg|dir>`` builds without installing. A failure that looks like a blocked download offers a retry with the network on. No build queue, background/pause/cancel, log replay or PKGBUILD editing, no Landlock or throwaway root
    * - 3
      - Intelligent Recommendation Engine
      - Not started
@@ -76,11 +146,11 @@ Complete Feature Catalog
    * - 6
      - Package Inspection
      - Partial
-     - ``info`` covers metadata, version, license, homepage, deps, AUR stats; no changelog, installed-files, security advisories, reverse deps
+     - ``info`` covers metadata, version, license, homepage, dependencies and AUR stats; ``rdeps`` and ``why`` list who needs a package; ``audit <aur-pkg|path|file.pkg.tar.*>`` reads a PKGBUILD or inspects a built package; ``--inspect`` shows manifests of official packages before install; ``verify`` checks installed files against pacman's record. No changelog, no security advisories
    * - 7
      - Dependency Intelligence
-     - Not started
-     - No tree/graph/why/impact commands
+     - Partial
+     - ``deps [-r]``, ``rdeps``, ``why`` and ``orphans`` (read-only, from libalpm). No tree/graph rendering, impact preview or cycle detection
    * - 8
      - Repository Management
      - Partial
@@ -100,23 +170,23 @@ Complete Feature Catalog
    * - 12
      - Build Monitoring
      - Partial
-     - Live inherited stdio from makepkg/pacman; no structured progress, stage tracking, summaries
+     - Sandboxed build output is shown live and its tail is kept to recognise network failures (no terminal inside the sandbox: no colours or progress bars); resource limits report why a build was killed; no structured progress, stage tracking or summaries
    * - 13
      - Cache Management
      - Partial
      - ``emrac cache [list|stats|clean|purge|trim]`` (``cc``/``cs`` shortcuts) over four categories: downloaded sources, build trees, built/fetched package files and pacman's cache; keeps the installed and previous versions and anything a recent transaction needs (``--lean``/``cache.policy``: only what undoing the last ``cache.keep_days`` days needs plus AUR builds and held-back packages); dry-run, confirmation, ``--older-than``, size limit; no ``verify``/``export``/``import``/interactive manager/automatic cleanup
    * - 14
      - History & Recovery
-     - Not started
-     - --
+     - Partial
+     - ``history`` (append-only log with failures and conflict removals), ``rollback [tx]``/``undo``/``redo`` (post-state checked, files from the pacman cache, the AUR build folder or the Arch Linux Archive), ``downgrade``, ``reinstall``, ``snapshot``/``restore`` (package sets, no files), ``pin``/``unpin``, and ``pacnew`` config backups with ``pacnew revert``. No filesystem snapshots, no resume of an interrupted transaction
    * - 15
      - Security & Integrity
      - Partial
-     - Inherits pacman/makepkg's own signature/checksum verification; nothing emrac-level yet
+     - emrac-level checks before anything is installed: ``audit`` (static PKGBUILD, scriptlet and shipped-file analysis with info/warning/high/critical tiers: high needs ``--accept-risks``, critical is refused), the package manifest (setuid files, hooks, sudoers, accounts, units), the build sandbox and limits, signatures verified on the host, and the untouched pacman/makepkg verification underneath. Compiled binaries inside a package are only counted. No Landlock layer, no Arch news gate, no advisory feed
    * - 16
      - Package Health
-     - Not started
-     - No ``doctor``/health checks
+     - Partial
+     - ``doctor [--online] [--report]``: unmet dependencies, lock and database age, pending upgrades against freshly synced repositories, kernel and modules, disk, caches, orphans, ``.pacnew`` files, failed units, pins, tools, config and sandbox, with a fix for each; ``--report`` writes a sanitized bug report. ``verify`` and ``orphans`` complement it. No mirror health or duplicate-library checks
    * - 17
      - Analytics
      - Not started
@@ -128,7 +198,7 @@ Complete Feature Catalog
    * - 19
      - Configuration
      - Partial
-     - ``~/.config/emrac/config.toml`` with ``emrac config show/get/set/unset/edit/validate``; persists defaults for existing global/search/review flags only. No theming, keybindings, aliases, profiles, system-wide or per-repo config
+     - ``~/.config/emrac/config.toml`` with ``emrac config show/get/set/unset/edit/validate``; persists defaults for the global, search and review flags, ``snapshot.before_upgrade``, the build limits (``build.timeout_minutes``, ``memory_percent``, ``max_tasks``, ``tmpfs_gib``) and the cache policy (``cache.policy``, ``cache.keep_days``). ``--no-sandbox`` is deliberately a command-line flag only. No theming, keybindings, aliases, profiles, system-wide or per-repo config
    * - 20
      - Performance
      - Partial
@@ -156,7 +226,7 @@ here are not slippage, they are on schedule.
    * - 1
      - Install Planner
      - Partial
-     - Transaction preview (packages, download size, installed-size delta) shown pre-execution; no compile time, conflicts, services, disk-required fields
+     - The preview shows packages, download size and installed-size delta, what the transaction will also remove (conflicts, replacements), provider choices and warnings, computed from freshly synced repositories. No compile time, services or disk-required fields
    * - 2
      - Explain Decisions
      - Not started
@@ -191,20 +261,20 @@ here are not slippage, they are on schedule.
      - --
    * - 10
      - Rollback Snapshots
-     - Not started
-     - --
+     - Partial
+     - Package-set snapshots (``snapshot``, ``restore``, optional before ``upgrade``) and per-transaction rollback exist; no Btrfs/ZFS filesystem snapshots
    * - 11
      - Interactive Conflict Resolver
      - Partial
      - Conflict removals and provider choices are listed in plans (u24, u25); a dependency conflict that stops an AUR build is explained and a safe-looking package swap is offered, default no (u26). Other conflicts still surface as pacman's own text
    * - 12
      - Dependency Graph Explorer
-     - Not started
-     - Needs the TUI
+     - Partial
+     - ``deps -r`` prints the transitive closure as text; no graph view (that needs the TUI)
    * - 13
      - Package Inspector
      - Partial
-     - ``info`` is a basic version of this, not the full aggregated view
+     - ``info``, ``rdeps``, ``audit``/manifest and ``verify`` together; not the single aggregated view the spec describes
    * - 14
      - Repository Analytics
      - Not started
@@ -215,12 +285,12 @@ here are not slippage, they are on schedule.
      - Needs the TUI
    * - 16
      - Health Center (doctor)
-     - Not started
-     - --
+     - Partial
+     - ``emrac doctor`` (see Package Health above); not an interactive center
    * - 17
      - Smart Updates
-     - Not started
-     - ``upgrade`` exists but has no rule-based skip logic
+     - Partial
+     - ``pin``/``unpin`` hold packages back from ``upgrade`` with a reason and an expiry; no rule-based skip logic
    * - 18
      - Build Statistics
      - Not started
@@ -234,7 +304,8 @@ here are not slippage, they are on schedule.
      - Not started
      - --
 
-Totals: 6 done / 15 partial / 25 not started, of 46 tracked.
+Totals: 5 done / 23 partial / 18 not started, of 46 tracked (the five
+MVP commands plus the 21 categories and 20 signature features above).
 Everything outside the MVP row is explicitly post-milestone per the
 spec -- not slippage.
 
@@ -298,11 +369,11 @@ corresponding Part III/IV row.
      - Status
      - Notes
    * - Shell Integration (``completion``, ``alias``, ``integrate``)
-     - Not started
-     - No shell completion generation yet
+     - Partial
+     - ``emrac completion bash|zsh|fish`` (static); no ``alias`` or ``integrate``
    * - System (``version``, ``about``, ``env``, ``paths``, ``diagnostics``)
-     - Not started
-     - No ``--version``/introspection commands yet
+     - Partial
+     - ``--version`` and ``--help``; no ``env``, ``paths`` or ``diagnostics`` (``doctor --report`` covers the bug-report part)
    * - Development (``dev``, ``sandbox``, ``test``, ``trace``, ``debug``)
      - Not started
      - Internal dev/debug tooling
@@ -313,15 +384,16 @@ corresponding Part III/IV row.
      - Not started
      - Only clap's auto-generated ``--help`` exists today
    * - ``lock``/``unlock``, ``pin``/``unpin`` (under Package Management)
-     - Not started
-     - Version-pinning, not covered by any Part III/IV row
+     - Partial
+     - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
 
 ----
 
 With these two groups included, the running total is **53 tracked
-items** (46 from Parts III/IV + 7 Additional Distinguishing Ideas),
-plus the 6 CLI-plumbing groups above tracked separately since they
-are not product features. The completed count is unchanged: 6 done.
+items** (46 from Parts III/IV + 7 Additional Distinguishing Ideas):
+5 done / 23 partial / 25 not started. The 6 CLI-plumbing groups above
+are tracked separately since they are not product features: 3 partial
+(shell integration, system, pin/unpin), 3 not started.
 
 Source: ``SPEC.md`` Parts III, IV, V and X, checked against
-``crates/`` and ``CHANGELOG.md`` as of commit ``03e0781``.
+``crates/`` and ``CHANGELOG.md`` as of Slice u30.

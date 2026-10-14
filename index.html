@@ -275,11 +275,13 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
 <div id="nav">
   <ul>
     <li><a class="cur" href="#top">Home</a></li>
-    <li><a href="#features">Features</a></li>
+    <li><a href="#built">Available now</a></li>
+    <li><a href="#features">Planned</a></li>
     <li><a href="#source">Source or binary</a></li>
     <li><a href="#safety">Safety</a></li>
     <li><a href="#maintainers">Maintainers</a></li>
     <li><a href="#theming">Theming</a></li>
+    <li><a href="#changes">Changes</a></li>
     <li><a href="#install">Download</a></li>
     <li class="push"><button type="button" id="themeBtn" aria-expanded="false" aria-controls="themePanel"><i aria-hidden="true"></i>Theme</button></li>
   </ul>
@@ -297,7 +299,8 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
     <li><b>Plan first.</b> Every change is previewed with sizes, time estimates, conflicts, and the reasons behind each decision.</li>
     <li><b>Reversible.</b> Builds run in a sandbox, transactions are logged, and rollback is built in.</li>
   </ul>
-  <p><a class="btn" href="#install">Download</a> &nbsp; <a class="btn alt" href="#features">Read about the features</a></p>
+  <p><b>Where it stands.</b> The core commands and everything under <a href="#built">Available now</a> work today. The source-or-binary scoring, build profiles, queue, news and terminal interface under <a href="#features">Planned features</a> are design goals, not shipped.</p>
+  <p><a class="btn" href="#built">What works today</a> &nbsp; <a class="btn alt" href="#changes">What changed</a></p>
 
   <h3>Try the planner</h3>
   <div class="box" id="planner">
@@ -310,7 +313,60 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
     <div class="hint">Figures are illustrative. Choose a package to see how the recommendation changes.</div>
   </div>
 
-  <h2 id="features">Features</h2>
+  <h2 id="built">Available now</h2>
+  <p>Release <b>r1</b> plus thirty updates (<b>u1</b> to <b>u30</b>). Everything below runs today. Each command that changes the system was also tried against a real pacman in a container, and <a href="#changes">the change list</a> says what was seen for each slice.</p>
+  <h3>Everyday commands</h3>
+  <table class="box resp">
+    <tbody>
+      <tr><td><code>search</code> / <code>info</code></td><td>Official repositories (libalpm) and the AUR (RPC, with retries) behind one interface. <code>--official</code>, <code>--aur</code>, <code>--offline</code>, <code>--json</code>.</td></tr>
+      <tr><td><code>install</code> / <code>remove</code> / <code>upgrade</code></td><td>Preview, confirm, run. <code>upgrade</code> covers official packages and the AUR, holds back pins, and can save a snapshot first. <code>--dry-run</code> changes nothing.</td></tr>
+      <tr><td><code>build &lt;pkg|dir&gt;</code></td><td>Builds an AUR package or a local PKGBUILD folder without installing it, in the sandbox.</td></tr>
+      <tr><td><code>config</code> / <code>completion</code></td><td>Persisted defaults in <code>~/.config/emrac/config.toml</code>; bash, zsh and fish completion.</td></tr>
+    </tbody>
+  </table>
+  <h3>Plans that match what pacman does</h3>
+  <table class="box resp">
+    <tbody>
+      <tr><td>Fresh previews</td><td>The upgrade plan comes from a throwaway copy of the databases synced just now, so it lists what <code>pacman -Syu</code> will really do. An old package list is called out; an empty plan is never reported as &ldquo;up to date&rdquo; from stale data.</td></tr>
+      <tr><td>What will also go</td><td>Packages removed to resolve conflicts or replacements, and which provider pacman will pick for a dependency, are listed before you confirm, and recorded in the history.</td></tr>
+      <tr><td>pacman&rsquo;s own questions</td><td>Without <code>--yes</code> pacman asks its own questions. Silence on standard input is never consent: a closed terminal declines.</td></tr>
+      <tr><td>Dependency conflicts</td><td>When an AUR build stops because one package conflicts with another that something still requires, emrac explains which, why, and whether the swap looks safe &mdash; and offers it, default no. The plan warns beforehand.</td></tr>
+    </tbody>
+  </table>
+  <h3>Building AUR packages safely</h3>
+  <table class="box resp">
+    <tbody>
+      <tr><td><code>audit</code></td><td>Reads a PKGBUILD, its scriptlets and shipped files, and inspects any built package file. Findings are info, warning, <b>high</b> (a default-no prompt that <code>--yes</code> does not answer; <code>--accept-risks</code> does) or <b>critical</b> (refused, no override).</td></tr>
+      <tr><td>Package manifest</td><td>The built package is inspected before <code>pacman -U</code>: setuid files, hooks, sudoers, accounts, units, scripts, and which installed packages it would remove.</td></tr>
+      <tr><td>Sandbox</td><td>bubblewrap: read-only root, empty home, cleared environment, no network unless you allow it. Dependencies and sources are fetched on the host (signatures checked with your keyring); extraction, build and packaging run inside. <code>--no-sandbox</code> exists as a flag only, never a config key.</td></tr>
+      <tr><td>Limits</td><td>Memory, process count, temporary size and time are capped (<code>build.*</code> in the config); the kernel&rsquo;s own counters say which limit stopped a build.</td></tr>
+      <tr><td>Real-world fixes</td><td>Split packages are fetched from their base&rsquo;s repository; fakeroot works inside the sandbox; a failed build offers a retry with the network on only when its output shows a blocked download.</td></tr>
+    </tbody>
+  </table>
+  <h3>Undo, downgrade and restore</h3>
+  <table class="box resp">
+    <tbody>
+      <tr><td><code>history</code></td><td>An append-only log of every executed transaction, failures and conflict removals included.</td></tr>
+      <tr><td><code>rollback</code> / <code>undo</code> / <code>redo</code></td><td>Reverse and re-apply recorded transactions. Files come from the pacman cache, the AUR build folder, the repositories or the Arch Linux Archive; the current state is checked first.</td></tr>
+      <tr><td><code>downgrade</code> / <code>reinstall</code> / <code>purge</code></td><td>One package back to an older version; the same version again; remove a package with its modified configs.</td></tr>
+      <tr><td><code>snapshot</code> / <code>restore</code></td><td>Named restore points of the installed package set (not files), optionally saved before every <code>upgrade</code>.</td></tr>
+      <tr><td><code>pin</code> / <code>unpin</code></td><td>Hold a package back from <code>upgrade</code> with a reason and an expiry.</td></tr>
+    </tbody>
+  </table>
+  <h3>Health and housekeeping</h3>
+  <table class="box resp">
+    <tbody>
+      <tr><td><code>doctor</code></td><td>Read-only checks with a fix for each finding: dependencies, databases, pending upgrades against fresh repositories, kernel, disk, caches, orphans, <code>.pacnew</code> files, failed units, pins, tools, sandbox. <code>--report</code> writes a sanitized bug report.</td></tr>
+      <tr><td><code>verify</code> &middot; <code>deps</code> / <code>rdeps</code> / <code>why</code> / <code>orphans</code></td><td>Installed files against pacman&rsquo;s record; read-only dependency inspection.</td></tr>
+      <tr><td><code>pacnew</code></td><td>Finds <code>.pacnew</code> and <code>.pacsave</code> files and compares the file the old package shipped, your live file and the new one, so your edits are told from upstream&rsquo;s. Keep, take, merge or edit each; the result is checked first (sudoers, sshd_config, pacman.conf, fstab, mirrorlist, JSON, shell files), both files are saved, every change is recorded and <code>pacnew revert</code> puts it back.</td></tr>
+      <tr><td><code>cache</code></td><td>Source, build, binary and pacman caches: list, stats, clean, trim, purge (<code>cc</code> and <code>cs</code> shortcuts). <code>clean</code> keeps what <code>undo</code> needs; <code>--lean</code> keeps one rollback set and drops the rest.</td></tr>
+    </tbody>
+  </table>
+  <h3>Not built yet</h3>
+  <p><span class="tag mute">terminal interface</span> <span class="tag mute">build profiles</span> <span class="tag mute">build queue</span> <span class="tag mute">source-or-binary scoring</span> <span class="tag mute">news and advisories</span> <span class="tag mute"><code>locate</code></span> <span class="tag mute"><code>lock</code>/<code>unlock</code></span> <span class="tag mute">filesystem snapshots</span> <span class="tag mute">Landlock layer</span> <span class="tag mute">dependency graph and impact views</span></p>
+
+  <h2 id="features">Planned features</h2>
+  <p>The design goals from <code>SPEC.md</code>. Those not listed under <a href="#built">Available now</a> are not built yet.</p>
   <table class="box resp">
     <tbody>
       <tr><td>Search and inspect</td><td>Fast local index, fuzzy and regex search, file ownership lookup, dependency and reverse-dependency trees, and <code>emrac why</code> to explain why a package is installed.</td></tr>
@@ -349,7 +405,7 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
       <span class="s" role="listitem">Executing</span><span class="a">&rarr;</span>
       <span class="s end" role="listitem">Committed</span>
     </div>
-    <div class="flownote"><b>Declined or <code>--dry-run</code>:</b> nothing is changed. <b>Failed:</b> resume the step with <code>emrac queue resume</code>, or roll back.</div>
+    <div class="flownote"><b>Declined or <code>--dry-run</code>:</b> nothing is changed. <b>Failed:</b> roll back with <code>emrac undo</code> (resuming an interrupted step is planned).</div>
   </div>
 
   <h3>Four layers between a request and your system</h3>
@@ -357,7 +413,7 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
     <dl class="layers">
       <div><dt>Plan<small>in memory</small></dt><dd>A virtual transaction tree is computed first: files, sizes, disk impact, and services. Nothing is written.</dd></div>
       <div><dt>Sandbox build<small>isolated</small></dt><dd>Sources are built in an isolated overlay. A failed build leaves no artifacts on the host.</dd></div>
-      <div><dt>Snapshot<small>Btrfs or ZFS</small></dt><dd>Where supported, a filesystem snapshot is taken before commit as a fallback for power loss or a failed write.</dd></div>
+      <div><dt>Snapshot<small>Btrfs or ZFS</small></dt><dd>Planned: where supported, a filesystem snapshot before commit as a fallback for power loss or a failed write. Today <code>emrac snapshot</code> saves the installed package set, not files.</dd></div>
       <div><dt>Commit<small>pacman</small></dt><dd>The verified package is installed by pacman itself, so pacman's own conflict and safety logic stays in charge.</dd></div>
     </dl>
   </div>
@@ -405,8 +461,48 @@ use_agent = true</pre>
   </div>
   <p>Backgrounds are separate from themes: <code>peaks</code>, <code>grid</code>, <code>schematic</code>, <code>scan</code>, or <code>none</code>. Choose one from the Theme menu. There are a few more that are not listed.</p>
 
+  <h2 id="changes">Changes</h2>
+  <p>Emrac numbers its work in slices, not semver: <b>i</b> for incubation before a release, <b>r</b> for releases, <b>u</b> for updates within one. This is the short list, newest first; <code>CHANGELOG.md</code> has what each slice found and verified. 271 tests run on every change, and each command that changes the system was also run against a real pacman in a container.</p>
+  <table class="box resp">
+    <thead><tr><th>Slice</th><th>Date</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td><b>u30</b></td><td>2026-10-14</td><td><code>pacnew</code> checks a file before applying it, records every change, can <code>revert</code> it, shows <code>status</code> and lets you edit a conflicted merge by hand.</td></tr>
+      <tr><td><b>u29</b></td><td>2026-10-14</td><td><code>cache clean --lean</code> (or <code>cache.policy = "lean"</code>) keeps one rollback set: what undoing the last <code>cache.keep_days</code> days needs, AUR builds and held-back packages. Rollback now fetches current versions from the repositories.</td></tr>
+      <tr><td><b>u28</b></td><td>2026-10-14</td><td><code>emrac cache</code>: list, stats, clean, trim and purge over source, build, binary and pacman caches; keeps what <code>undo</code> needs; dry-run summarizes what stays.</td></tr>
+      <tr><td><b>u27</b></td><td>2026-10-14</td><td><code>emrac pacnew</code>: a three-way comparison tells your edits from upstream&rsquo;s; keep, take or merge each file with a backup and <code>sudo</code>.</td></tr>
+      <tr><td><b>u26</b></td><td>2026-10-14</td><td>Dependency conflicts that stop an AUR build are explained and a swap is offered; also fixed: split packages, fakeroot in the sandbox, signature check, network retry only on real network failures.</td></tr>
+      <tr><td><b>u25</b></td><td>2026-10-14</td><td>Provider choices, replacements and conflicts of built packages appear in plans and manifests.</td></tr>
+      <tr><td><b>u24</b></td><td>2026-10-14</td><td>Plans list the removals conflict resolution will cause.</td></tr>
+      <tr><td><b>u23</b></td><td>2026-10-14</td><td>pacman&rsquo;s own prompts pass through; silence is never consent.</td></tr>
+      <tr><td><b>u22</b></td><td>2026-10-14</td><td>Upgrade previews come from a freshly synced throwaway database.</td></tr>
+      <tr><td><b>u21</b></td><td>2026-10-14</td><td><code>emrac doctor</code>, <code>--online</code> and a sanitized <code>--report</code>.</td></tr>
+      <tr><td><b>u20</b></td><td>2026-10-14</td><td>Memory, process, size and time limits for sandboxed builds.</td></tr>
+      <tr><td><b>u19</b></td><td>2026-10-13</td><td>bubblewrap sandbox for AUR builds; <code>emrac build</code>.</td></tr>
+      <tr><td><b>u18</b></td><td>2026-10-13</td><td>Shipped scripts, <code>--inspect</code> for official packages, AUR RPC retries.</td></tr>
+      <tr><td><b>u17</b></td><td>2026-10-13</td><td>Build/install split and the package manifest.</td></tr>
+      <tr><td><b>u16</b></td><td>2026-10-13</td><td>Audit covers extra repository files, obfuscation and cross-file exfiltration.</td></tr>
+      <tr><td><b>u15</b></td><td>2026-10-13</td><td><code>emrac audit</code>: static PKGBUILD analysis with severity tiers.</td></tr>
+      <tr><td><b>r1</b></td><td>2026-10-13</td><td>First release: the core loop over official repositories and the AUR.</td></tr>
+      <tr><td><b>u14</b></td><td>2026-10-13</td><td>Hardening and CI ahead of r1.</td></tr>
+      <tr><td><b>u13</b></td><td>2026-10-13</td><td><code>pin</code> and <code>unpin</code>.</td></tr>
+      <tr><td><b>u12</b></td><td>2026-10-11</td><td><code>deps</code>, <code>rdeps</code>, <code>why</code>, <code>orphans</code>.</td></tr>
+      <tr><td><b>u11</b></td><td>2026-10-11</td><td>Automatic snapshot before <code>upgrade</code>.</td></tr>
+      <tr><td><b>u10</b></td><td>2026-10-11</td><td><code>snapshot</code> and <code>restore</code>.</td></tr>
+      <tr><td><b>u9</b></td><td>2026-10-11</td><td><code>verify</code>.</td></tr>
+      <tr><td><b>u8</b></td><td>2026-10-11</td><td><code>purge</code>.</td></tr>
+      <tr><td><b>u7</b></td><td>2026-10-11</td><td><code>reinstall</code>.</td></tr>
+      <tr><td><b>u6</b></td><td>2026-10-11</td><td><code>downgrade</code>.</td></tr>
+      <tr><td><b>u5</b></td><td>2026-10-11</td><td>Arch Linux Archive fetch for rollback.</td></tr>
+      <tr><td><b>u4</b></td><td>2026-10-11</td><td><code>rollback</code>, <code>undo</code> and <code>redo</code>.</td></tr>
+      <tr><td><b>u3</b></td><td>2026-10-11</td><td>Transaction history.</td></tr>
+      <tr><td><b>u2</b></td><td>2026-10-11</td><td>Shell completion.</td></tr>
+      <tr><td><b>u1</b></td><td>2026-10-11</td><td>Config file.</td></tr>
+      <tr><td><b>i1</b></td><td>2026-07-17</td><td>Search and info, install and remove, AUR building, <code>upgrade</code>: the core loop.</td></tr>
+    </tbody>
+  </table>
+
   <h2 id="install">Download</h2>
-  <p>Emrac is in incubation (slice i1). The commands below show the intended installation. Packages are not published yet.</p>
+  <p>Emrac is at release r1 with updates through u30. It has not been published to the AUR or a repository yet, so the commands below show the intended installation.</p>
   <div class="tabs" role="tablist" aria-label="Installation method">
     <button type="button" role="tab" aria-selected="true" data-tab="aur">AUR</button>
     <button type="button" role="tab" aria-selected="false" data-tab="pacman">pacman</button>
@@ -422,7 +518,7 @@ use_agent = true</pre>
   <div class="box">
     <div class="dl">
       <a class="btn" href="#install">Download Emrac</a>
-      <p>Release i1 (incubation)</p>
+      <p>Release r1 + updates u1&ndash;u30</p>
     </div>
   </div>
 
@@ -431,7 +527,7 @@ use_agent = true</pre>
     <ul>
       <li><div class="kv"><b>i1</b><span>incubation</span></div><small>Read-only search and info against official repositories</small></li>
       <li><div class="kv"><b>r1</b><span>first release</span></div><small>search, info, install, remove, upgrade; official repositories and AUR</small></li>
-      <li><div class="kv"><b>u1</b><span>update</span></div><small>Incremental updates within r1</small></li>
+      <li><div class="kv"><b>u1&ndash;u30</b><span>updates</span></div><small>History and rollback, audit and sandbox, doctor, plans that match pacman, pacnew, cache</small></li>
     </ul>
   </div>
 
@@ -448,7 +544,9 @@ use_agent = true</pre>
   <div class="box">
     <div class="bh">Links</div>
     <ul>
-      <li><a href="#features">Features</a></li>
+      <li><a href="#built">Available now</a></li>
+      <li><a href="#changes">Changes</a></li>
+      <li><a href="#features">Planned features</a></li>
       <li><a href="#safety">How safety works</a></li>
       <li><a href="#maintainers">Publishing to the AUR</a></li>
       <li><a href="#theming">Themes</a></li>
