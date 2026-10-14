@@ -81,6 +81,15 @@ fn run(cli: &Cli) -> Result<()> {
     let json = cli.json || config.flags.json;
     let quiet = cli.quiet || config.flags.quiet;
 
+    let cache_settings = || commands::cache::Settings {
+        dry_run,
+        yes,
+        json,
+        verbose: cli.verbose,
+        lean: config.cache.is_lean(),
+        keep: config.cache.keep_days,
+    };
+
     let mut sources = Sources::init()?;
     // Without --yes, pacman asks its own questions (conflicts, provider
     // choices, replacements); with it, every question takes its default.
@@ -140,23 +149,17 @@ fn run(cli: &Cli) -> Result<()> {
             config.snapshot.before_upgrade,
         ),
         Commands::Cache { command } => {
-            commands::cache::run(&sources, command.as_ref(), dry_run, yes, json, cli.verbose)
+            commands::cache::run(&sources, command.as_ref(), cache_settings())
         }
         Commands::CacheClean(args) => commands::cache::run(
             &sources,
             Some(&cli::CacheCommand::Clean(args.clone())),
-            dry_run,
-            yes,
-            json,
-            cli.verbose,
+            cache_settings(),
         ),
         Commands::CacheStats(scopes) => commands::cache::run(
             &sources,
             Some(&cli::CacheCommand::Stats(scopes.clone())),
-            dry_run,
-            yes,
-            json,
-            cli.verbose,
+            cache_settings(),
         ),
         Commands::Pacnew { fetch, command } => commands::pacnew::run(
             &sources,

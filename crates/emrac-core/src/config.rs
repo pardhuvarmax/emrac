@@ -22,6 +22,44 @@ pub struct Config {
     pub snapshot: SnapshotConfig,
     #[serde(default)]
     pub build: BuildConfig,
+    #[serde(default)]
+    pub cache: CacheConfig,
+}
+
+/// What `emrac cache clean` keeps. See `docs/plan/u29-lean-cache.md`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheConfig {
+    /// `"standard"` keeps the installed and the previous version of every
+    /// package; `"lean"` keeps only what undoing the last transactions needs
+    /// and what cannot be downloaded again.
+    #[serde(default = "default_cache_policy")]
+    pub policy: String,
+    /// With `lean`: everything done in the last this-many days must stay
+    /// undoable (the newest change is kept however old it is).
+    #[serde(default = "default_keep_days")]
+    pub keep_days: u32,
+}
+
+fn default_cache_policy() -> String {
+    "standard".to_string()
+}
+fn default_keep_days() -> u32 {
+    14
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            policy: default_cache_policy(),
+            keep_days: default_keep_days(),
+        }
+    }
+}
+
+impl CacheConfig {
+    pub fn is_lean(&self) -> bool {
+        self.policy == "lean"
+    }
 }
 
 /// Limits on sandboxed AUR builds. `0` turns a limit off. Unlike
@@ -181,6 +219,8 @@ impl Config {
             "build.memory_percent" => self.build.memory_percent.to_string(),
             "build.max_tasks" => self.build.max_tasks.to_string(),
             "build.tmpfs_gib" => self.build.tmpfs_gib.to_string(),
+            "cache.policy" => self.cache.policy.clone(),
+            "cache.keep_days" => self.cache.keep_days.to_string(),
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         })
     }
@@ -232,6 +272,15 @@ impl Config {
             "build.tmpfs_gib" => {
                 self.build.tmpfs_gib = value.parse().map_err(|_| invalid())?;
             }
+            "cache.policy" => {
+                if !matches!(value, "standard" | "lean") {
+                    return Err(invalid());
+                }
+                self.cache.policy = value.to_string();
+            }
+            "cache.keep_days" => {
+                self.cache.keep_days = value.parse().map_err(|_| invalid())?;
+            }
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         }
         Ok(())
@@ -255,6 +304,8 @@ impl Config {
             "build.memory_percent" => self.build.memory_percent = default_memory_percent(),
             "build.max_tasks" => self.build.max_tasks = default_max_tasks(),
             "build.tmpfs_gib" => self.build.tmpfs_gib = default_tmpfs_gib(),
+            "cache.policy" => self.cache.policy = default_cache_policy(),
+            "cache.keep_days" => self.cache.keep_days = default_keep_days(),
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         }
         Ok(())
@@ -338,6 +389,31 @@ mod tests {
             "a percentage"
         );
         config.set("build.memory_percent", "100").unwrap();
+    }
+
+    #[test]
+    fn the_cache_policy_is_standard_or_lean_and_keeps_at_least_nothing_invalid() {
+        let mut config = Config::default();
+        assert_eq!(config.get("cache.policy").unwrap(), "standard");
+        assert!(!config.cache.is_lean());
+        assert_eq!(config.get("cache.keep_days").unwrap(), "14");
+        config.set("cache.policy", "lean").unwrap();
+        assert!(config.cache.is_lean());
+        for bad in ["Lean", "tight", ""] {
+            assert!(config.set("cache.policy", bad).is_err(), "{bad:?}");
+        }
+        config.set("cache.keep_days", "3").unwrap();
+        assert_eq!(config.get("cache.keep_days").unwrap(), "3");
+        for bad in ["-1", "two", "1.5"] {
+            assert!(config.set("cache.keep_days", bad).is_err(), "{bad:?}");
+        }
+        config.unset("cache.policy").unwrap();
+        config.unset("cache.keep_days").unwrap();
+        assert_eq!(config.get("cache.policy").unwrap(), "standard");
+        assert_eq!(config.get("cache.keep_days").unwrap(), "14");
+        let partial: Config = toml::from_str("[cache]\npolicy = \"lean\"\n").unwrap();
+        assert!(partial.cache.is_lean());
+        assert_eq!(partial.cache.keep_days, 14);
     }
 
     #[test]

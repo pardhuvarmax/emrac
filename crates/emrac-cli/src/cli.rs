@@ -355,6 +355,11 @@ pub struct CacheScopes {
     /// pacman's package cache
     #[arg(long)]
     pub package: bool,
+
+    /// Keep only what undoing the latest transaction needs and what can't
+    /// be downloaded again (config: cache.policy = "lean")
+    #[arg(long)]
+    pub lean: bool,
 }
 
 #[derive(Args, Clone)]

@@ -501,6 +501,30 @@ impl AlpmBackend {
             .collect()
     }
 
+    /// Where the repositories serve `name` at exactly `version` (the file in
+    /// the first `Server` of its repository), or `None` if they offer a
+    /// different version now.
+    pub fn sync_download_url(&self, name: &str, version: &str) -> Option<String> {
+        self.handle.syncdbs().into_iter().find_map(|db| {
+            let pkg = db
+                .pkg(name)
+                .ok()
+                .filter(|p| p.version().as_str() == version)?;
+            let filename = pkg.filename()?.to_string();
+            let out = Command::new("pacman-conf")
+                .args(["--repo", db.name(), "Server"])
+                .output()
+                .ok()?;
+            let server = String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .next()?
+                .trim()
+                .trim_end_matches('/')
+                .to_string();
+            (!server.is_empty()).then(|| format!("{server}/{filename}"))
+        })
+    }
+
     /// Looks up `names` in the local database (currently installed
     /// packages) — used to enrich a removal plan with the size that will
     /// actually be freed.

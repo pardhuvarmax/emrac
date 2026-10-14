@@ -104,7 +104,7 @@ Complete Feature Catalog
    * - 13
      - Cache Management
      - Partial
-     - ``emrac cache [list|stats|clean|purge|trim]`` (``cc``/``cs`` shortcuts) over four categories: downloaded sources, build trees, built/fetched package files and pacman's cache; keeps the installed and previous versions and anything a recent transaction needs; dry-run, confirmation, ``--older-than``, size limit; no ``verify``/``export``/``import``/interactive manager/automatic cleanup
+     - ``emrac cache [list|stats|clean|purge|trim]`` (``cc``/``cs`` shortcuts) over four categories: downloaded sources, build trees, built/fetched package files and pacman's cache; keeps the installed and previous versions and anything a recent transaction needs (``--lean``/``cache.policy``: only what undoing the last ``cache.keep_days`` days needs plus AUR builds and held-back packages); dry-run, confirmation, ``--older-than``, size limit; no ``verify``/``export``/``import``/interactive manager/automatic cleanup
    * - 14
      - History & Recovery
      - Not started

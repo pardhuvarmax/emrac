@@ -8,33 +8,36 @@ use crate::cli::{CacheArgs, CacheCommand, CacheScopes};
 use crate::output::human_size;
 use crate::prompt::confirm_default_no;
 
-pub fn run(
-    sources: &Sources,
-    command: Option<&CacheCommand>,
-    dry_run: bool,
-    yes: bool,
-    json: bool,
-    verbose: bool,
-) -> Result<()> {
+/// The global flags and config values the cache commands depend on.
+#[derive(Clone, Copy)]
+pub struct Settings {
+    pub dry_run: bool,
+    pub yes: bool,
+    pub json: bool,
+    pub verbose: bool,
+    /// `cache.policy = "lean"` in the config.
+    pub lean: bool,
+    /// `cache.keep_days`.
+    pub keep: u32,
+}
+
+impl Settings {
+    /// `Some(days)`: the lean policy, keeping the last `days` days undoable.
+    fn lean_for(&self, scopes: &CacheScopes) -> Option<u32> {
+        (self.lean || scopes.lean).then_some(self.keep)
+    }
+}
+
+pub fn run(sources: &Sources, command: Option<&CacheCommand>, s: Settings) -> Result<()> {
     match command {
-        None => overview(sources, &CacheScopes::default(), false, json),
-        Some(CacheCommand::List(scopes)) => overview(sources, scopes, true, json),
-        Some(CacheCommand::Stats(scopes)) => overview(sources, scopes, false, json),
-        Some(CacheCommand::Clean(args)) => {
-            change(sources, args, CacheOp::Clean, dry_run, yes, json, verbose)
+        None => overview(sources, &CacheScopes::default(), false, s),
+        Some(CacheCommand::List(scopes)) => overview(sources, scopes, true, s),
+        Some(CacheCommand::Stats(scopes)) => overview(sources, scopes, false, s),
+        Some(CacheCommand::Clean(args)) => change(sources, args, CacheOp::Clean, s),
+        Some(CacheCommand::Purge(args)) => change(sources, args, CacheOp::Purge, s),
+        Some(CacheCommand::Trim { size_limit, args }) => {
+            change(sources, args, CacheOp::Trim(parse_size(size_limit)?), s)
         }
-        Some(CacheCommand::Purge(args)) => {
-            change(sources, args, CacheOp::Purge, dry_run, yes, json, verbose)
-        }
-        Some(CacheCommand::Trim { size_limit, args }) => change(
-            sources,
-            args,
-            CacheOp::Trim(parse_size(size_limit)?),
-            dry_run,
-            yes,
-            json,
-            verbose,
-        ),
     }
 }
 
@@ -69,9 +72,10 @@ fn scopes_of(s: &CacheScopes, default: &[CacheScope]) -> Result<Vec<CacheScope>>
     })
 }
 
-fn overview(sources: &Sources, scopes: &CacheScopes, largest: bool, json: bool) -> Result<()> {
-    let scopes = scopes_of(scopes, &CacheScope::ALL)?;
-    let decisions = sources.cache_plan(&scopes, CacheOp::Clean, None)?;
+fn overview(sources: &Sources, named: &CacheScopes, largest: bool, s: Settings) -> Result<()> {
+    let json = s.json;
+    let scopes = scopes_of(named, &CacheScope::ALL)?;
+    let decisions = sources.cache_plan(&scopes, CacheOp::Clean, None, s.lean_for(named))?;
     let mut rows: BTreeMap<CacheScope, (usize, u64, u64)> = BTreeMap::new();
     for d in &decisions {
         let row = rows.entry(d.entry.scope).or_default();
@@ -154,15 +158,14 @@ fn overview(sources: &Sources, scopes: &CacheScopes, largest: bool, json: bool) 
     Ok(())
 }
 
-fn change(
-    sources: &Sources,
-    args: &CacheArgs,
-    op: CacheOp,
-    dry_run: bool,
-    yes: bool,
-    json: bool,
-    verbose: bool,
-) -> Result<()> {
+fn change(sources: &Sources, args: &CacheArgs, op: CacheOp, s: Settings) -> Result<()> {
+    let Settings {
+        dry_run,
+        yes,
+        json,
+        verbose,
+        ..
+    } = s;
     let default: &[CacheScope] = match op {
         CacheOp::Purge => &CacheScope::ALL,
         _ => &[CacheScope::Build, CacheScope::Binary, CacheScope::Package],
@@ -177,7 +180,7 @@ fn change(
         named
     };
     let older_than = args.older_than.as_deref().map(parse_duration).transpose()?;
-    let decisions = sources.cache_plan(&scopes, op, older_than)?;
+    let decisions = sources.cache_plan(&scopes, op, older_than, s.lean_for(&args.scopes))?;
     let doomed: Vec<&CacheDecision> = decisions.iter().filter(|d| d.remove).collect();
 
     if json {

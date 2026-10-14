@@ -440,6 +440,7 @@ impl Sources {
         scopes: &[cache::Scope],
         op: cache::Op,
         older_than: Option<u64>,
+        lean: Option<u32>,
     ) -> Result<Vec<cache::Decision>> {
         let home = std::env::var("HOME").map_err(|_| Error::NoHomeDir)?;
         let dirs = self.pacman.cache_dirs().unwrap_or_default();
@@ -456,6 +457,42 @@ impl Sources {
             source_age: cache::DEFAULT_SOURCE_AGE,
             ..cache::Facts::default()
         };
+        if let Some(days) = lean {
+            facts.lean = true;
+            let snapshot = self.alpm.installed_snapshot();
+            facts.foreign = snapshot
+                .iter()
+                .filter(|p| p.foreign)
+                .map(|p| p.name.clone())
+                .collect();
+            let official: Vec<String> = snapshot
+                .iter()
+                .filter(|p| !p.foreign)
+                .map(|p| p.name.clone())
+                .collect();
+            facts.in_repo = self
+                .alpm
+                .sync_resolved(&official)
+                .into_iter()
+                .map(|r| (r.name, r.version))
+                .collect();
+            // What undoing anything from the last `days` days needs, whatever
+            // each record's status says: a failed upgrade can have changed
+            // packages before an AUR build failed. The newest change counts
+            // however old it is.
+            let cutoff = now().saturating_sub(u64::from(days) * 86_400);
+            let mut newest_done = false;
+            for record in History::list(None, None).unwrap_or_default() {
+                let needs = undo_needs(&record, &facts.installed);
+                if needs.is_empty() {
+                    continue;
+                }
+                if record.timestamp >= cutoff || !newest_done {
+                    facts.undo_needs.extend(needs);
+                }
+                newest_done = true;
+            }
+        }
         // Versions the last transactions name are what `undo` and `redo` need.
         for record in History::list(Some(20), None).unwrap_or_default() {
             for p in &record.packages {
@@ -1222,7 +1259,8 @@ impl Sources {
         rollback::find_package_file(&dirs, name, version)
     }
 
-    /// The same file in the Arch Linux Archive (read-only lookup), unless
+    /// The same file from the repositories (when they still offer exactly that
+    /// version) or the Arch Linux Archive (read-only lookups), unless
     /// `offline`.
     fn locate_remote(
         &self,
@@ -1232,6 +1270,16 @@ impl Sources {
     ) -> Result<Option<RemoteFile>> {
         if offline {
             return Ok(None);
+        }
+        // The current version is on the mirrors; the Archive may not have it
+        // yet. This is what lets a lean cache drop it (`docs/plan/u29`).
+        if let Some(url) = self.alpm.sync_download_url(name, version) {
+            if let Some(filename) = url.rsplit('/').next() {
+                return Ok(Some(RemoteFile {
+                    dest: self.archive.cache_dir(name)?.join(filename),
+                    url,
+                }));
+            }
         }
         let Some(file) = self.archive.find(name, version)? else {
             return Ok(None);
@@ -2102,6 +2150,42 @@ fn build_plan(
     }
 }
 
+/// The package versions it takes to put things back as they were before
+/// `record`: what an upgrade replaced, and what a removal took away. Only for
+/// packages the record really changed (the installed version is the one it
+/// installed, or the package is gone), so a failed record counts for exactly
+/// what it did. An install needs nothing (undoing it removes the package).
+fn undo_needs(
+    record: &crate::history::TransactionRecord,
+    installed: &std::collections::HashMap<String, String>,
+) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for p in &record.packages {
+        match record.action {
+            PlanAction::Remove | PlanAction::Purge => {
+                if !installed.contains_key(&p.name) {
+                    out.push((p.name.clone(), p.version.clone()));
+                }
+            }
+            PlanAction::Upgrade | PlanAction::Downgrade => {
+                if let (Some(v), true) = (
+                    &p.previous_version,
+                    installed.get(&p.name) == Some(&p.version),
+                ) {
+                    out.push((p.name.clone(), v.clone()));
+                }
+            }
+            PlanAction::Install | PlanAction::Reinstall => {}
+        }
+    }
+    for r in &record.removed {
+        if !installed.contains_key(&r.name) {
+            out.push((r.name.clone(), r.version.clone()));
+        }
+    }
+    out
+}
+
 /// The dependency lines of a `.SRCINFO` (`depends`, `makedepends`,
 /// `checkdepends`, with or without an `_arch` suffix), deduplicated. Only
 /// used to explain a failure or warn in a plan, never to decide what to build.
@@ -2424,6 +2508,81 @@ mod freshness_tests {
 #[cfg(test)]
 mod srcinfo_tests {
     use super::*;
+    use crate::history::{TransactionRecord, TxStatus};
+    use crate::plan::{PlannedPackage, PlannedRemoval};
+
+    fn record(
+        action: PlanAction,
+        status: TxStatus,
+        packages: &[(&str, &str, Option<&str>)],
+    ) -> TransactionRecord {
+        TransactionRecord {
+            id: "tx-1".into(),
+            timestamp: 0,
+            action,
+            packages: packages
+                .iter()
+                .map(|(n, v, p)| PlannedPackage {
+                    name: n.to_string(),
+                    version: v.to_string(),
+                    repo: "extra".into(),
+                    explicit: true,
+                    previous_version: p.map(str::to_string),
+                })
+                .collect(),
+            removed: vec![PlannedRemoval {
+                name: "dropped".into(),
+                version: "1-1".into(),
+                reason: "conflicts with new".into(),
+            }],
+            status,
+            error: None,
+            rollback_of: None,
+        }
+    }
+
+    #[test]
+    fn undoing_needs_the_old_versions_of_only_what_the_record_really_changed() {
+        let installed: std::collections::HashMap<String, String> = [
+            ("applied".to_string(), "2-1".to_string()),
+            ("never".to_string(), "1-1".to_string()), // the build failed: still old
+        ]
+        .into();
+        // A failed upgrade that changed one package and not the other.
+        let failed = record(
+            PlanAction::Upgrade,
+            TxStatus::Failed,
+            &[
+                ("applied", "2-1", Some("1-1")),
+                ("never", "2-1", Some("1-1")),
+            ],
+        );
+        let mut got = undo_needs(&failed, &installed);
+        got.sort();
+        assert_eq!(
+            got,
+            [
+                ("applied".into(), "1-1".into()),
+                ("dropped".into(), "1-1".into())
+            ]
+        );
+        // A removal needs the removed version; an install needs nothing.
+        let removal = record(
+            PlanAction::Remove,
+            TxStatus::Committed,
+            &[("gone", "3-1", None)],
+        );
+        assert!(undo_needs(&removal, &installed).contains(&("gone".into(), "3-1".into())));
+        let install = record(
+            PlanAction::Install,
+            TxStatus::Committed,
+            &[("new", "1-1", None)],
+        );
+        assert_eq!(
+            undo_needs(&install, &installed),
+            [("dropped".to_string(), "1-1".to_string())]
+        );
+    }
 
     #[test]
     fn dependencies_come_from_every_dependency_key_once() {

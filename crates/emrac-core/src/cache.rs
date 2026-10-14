@@ -90,6 +90,17 @@ pub struct Facts {
     pub now: u64,
     /// How many seconds old a source file must be to go (default 30 days).
     pub source_age: u64,
+    /// The lean policy (`docs/plan/u29-lean-cache.md`): package files are kept
+    /// only for what undoing the last transactions needs and what cannot be
+    /// downloaded again.
+    pub lean: bool,
+    /// Versions needed to undo the last committed transactions.
+    pub undo_needs: HashSet<(String, String)>,
+    /// Installed packages that are not in any repository (AUR builds).
+    pub foreign: HashSet<String>,
+    /// The version of each installed official package that the repositories
+    /// currently offer.
+    pub in_repo: HashMap<String, String>,
 }
 
 pub const DEFAULT_SOURCE_AGE: u64 = 30 * 86_400;
@@ -277,6 +288,52 @@ fn protected(
         }
     }
     let mut kept = HashMap::new();
+    if facts.lean {
+        for (name, versions) in by_name {
+            let Some(installed) = facts.installed.get(name) else {
+                continue;
+            };
+            // Anything newer is a pending upgrade (a download kept for the
+            // next install).
+            for v in versions.iter().filter(|v| newer(v, installed)) {
+                kept.insert(
+                    (name.to_string(), v.to_string()),
+                    "newer than the installed version: a pending upgrade",
+                );
+            }
+            if facts.foreign.contains(name) {
+                // The Archive has no AUR packages: the builds are the only copy.
+                kept.insert(
+                    (name.to_string(), installed.clone()),
+                    "an AUR build; the installed one can't be downloaded again",
+                );
+                let previous = versions
+                    .iter()
+                    .filter(|v| **v != installed.as_str() && newer(installed, v))
+                    .fold(None::<&str>, |best, v| match best {
+                        Some(b) if newer(v, b) => Some(v),
+                        None => Some(v),
+                        keep => keep,
+                    });
+                if let Some(v) = previous {
+                    kept.insert(
+                        (name.to_string(), v.to_string()),
+                        "an AUR build; the previous one can't be downloaded again",
+                    );
+                }
+            } else if facts.in_repo.get(name).is_some_and(|v| v != installed) {
+                kept.insert(
+                    (name.to_string(), installed.clone()),
+                    "no longer in the repositories (held back or not yet upgraded)",
+                );
+            }
+        }
+        for (name, version) in &facts.undo_needs {
+            kept.entry((name.clone(), version.clone()))
+                .or_insert("needed to undo a recent transaction");
+        }
+        return kept;
+    }
     for (name, versions) in by_name {
         if let Some(installed) = facts.installed.get(name) {
             kept.insert(
@@ -613,6 +670,85 @@ mod tests {
             .collect();
         assert!(kept.iter().any(|r| r.contains("installed version")));
         assert!(kept.iter().any(|r| r.contains("previous version")));
+    }
+
+    fn lean() -> Facts {
+        let mut f = facts();
+        f.lean = true;
+        f.installed.insert("aur".into(), "5-1".into());
+        f.installed.insert("held".into(), "1-1".into());
+        f.foreign.insert("aur".into());
+        // the repositories offer foo 3-1 (installed), but held 2-1 (installed is older)
+        f.in_repo.insert("foo".into(), "3-1".into());
+        f.in_repo.insert("held".into(), "2-1".into());
+        f
+    }
+
+    #[test]
+    fn lean_drops_the_installed_copy_of_an_up_to_date_official_package() {
+        let entries = [
+            file(Scope::Package, "foo", "2-1", 10, 1), // previous, but not the last upgrade's
+            file(Scope::Package, "foo", "3-1", 10, 2), // installed, current in the repos
+        ];
+        let d = plan(&entries, &[Scope::Package], Op::Clean, &lean(), &newer);
+        assert_eq!(removed(&d), ["foo-2-1", "foo-3-1"]);
+    }
+
+    #[test]
+    fn lean_keeps_what_undoing_the_last_transaction_needs() {
+        let mut f = lean();
+        f.undo_needs.insert(("foo".into(), "2-1".into()));
+        f.undo_needs.insert(("gone".into(), "1-1".into())); // a removed package
+        let entries = [
+            file(Scope::Package, "foo", "1-1", 10, 1),
+            file(Scope::Package, "foo", "2-1", 10, 2),
+            file(Scope::Binary, "gone", "1-1", 10, 1),
+        ];
+        let d = plan(
+            &entries,
+            &[Scope::Package, Scope::Binary],
+            Op::Clean,
+            &f,
+            &newer,
+        );
+        assert_eq!(removed(&d), ["foo-1-1"]);
+        assert!(d
+            .iter()
+            .any(|d| d.reason.contains("undo a recent transaction")));
+    }
+
+    #[test]
+    fn lean_keeps_aur_builds_held_back_packages_and_pending_upgrades() {
+        let entries = [
+            file(Scope::Binary, "aur", "4-1", 10, 1), // the previous build
+            file(Scope::Binary, "aur", "5-1", 10, 2), // the installed build
+            file(Scope::Binary, "aur", "1-1", 10, 0), // an old build
+            file(Scope::Package, "held", "1-1", 10, 1), // installed, no longer in the repos
+            file(Scope::Package, "foo", "9-1", 10, 1), // newer than installed: pending
+        ];
+        let d = plan(
+            &entries,
+            &[Scope::Package, Scope::Binary],
+            Op::Clean,
+            &lean(),
+            &newer,
+        );
+        assert_eq!(removed(&d), ["aur-1-1"]);
+        let reasons: Vec<&str> = d.iter().map(|d| d.reason.as_str()).collect();
+        assert!(reasons
+            .iter()
+            .any(|r| r.contains("no longer in the repositories")));
+        assert!(reasons.iter().any(|r| r.contains("pending upgrade")));
+    }
+
+    #[test]
+    fn the_standard_policy_is_unchanged_by_the_lean_facts() {
+        let entries = [
+            file(Scope::Package, "foo", "2-1", 10, 1),
+            file(Scope::Package, "foo", "3-1", 10, 2),
+        ];
+        let d = plan(&entries, &[Scope::Package], Op::Clean, &facts(), &newer);
+        assert!(removed(&d).is_empty(), "installed and previous are kept");
     }
 
     #[test]

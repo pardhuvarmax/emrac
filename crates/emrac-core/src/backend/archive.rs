@@ -121,6 +121,18 @@ impl ArchiveBackend {
             fs::create_dir_all(parent).map_err(|e| io_err("couldn't create the folder for", e))?;
         }
 
+        // A local mirror (`Server = file:///…`) is just a copy.
+        if let Some(path) = url.strip_prefix("file://") {
+            let part = PathBuf::from(format!("{}.part", dest.display()));
+            let result = fs::copy(path, &part)
+                .and_then(|_| fs::rename(&part, dest))
+                .map_err(|e| io_err("couldn't copy the file to", e));
+            if result.is_err() {
+                let _ = fs::remove_file(&part);
+            }
+            return result;
+        }
+
         let mut response = ureq::get(url)
             .header("User-Agent", USER_AGENT)
             .config()
