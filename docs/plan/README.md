@@ -61,3 +61,5 @@ Current:
   freshly synced throwaway database, so they match what `-Syu` will do.
 - [`u23-pacman-prompts.md`](./u23-pacman-prompts.md) — pacman asks its own questions unless
   `--yes`; silence is never consent.
+- [`u24-plan-removals.md`](./u24-plan-removals.md) — plans list the removals that conflict and
+  replacement resolution will cause, from libalpm itself.
