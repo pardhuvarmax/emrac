@@ -2,7 +2,7 @@ use std::path::Path;
 
 use emrac_core::{audit_path, inspect_package, Error, Result, Severity, Sources, Verdict};
 
-use crate::commands::aur_install::{build_options, BuildChoice};
+use crate::commands::aur_install::{build_options, build_with_retry, BuildChoice};
 use crate::commands::aur_review::review_aur_package;
 use crate::output;
 use crate::prompt::confirm_default_no;
@@ -39,7 +39,7 @@ pub fn run(
                 continue;
             }
             let opts = build_options(sources, target, sources.predicts_network(target), choice)?;
-            sources.build_aur_package(target, opts)?
+            build_with_retry(sources, target, opts)?
         };
         for file in files {
             let manifest = inspect_package(&file)?;

@@ -262,7 +262,16 @@ pub enum Error {
     InvalidConfigValue { key: String, value: String },
 }
 
+/// Marks a sandboxed build failure that may only be the missing network.
+pub const NETWORK_HINT: &str = "run again with `--allow-network`";
+
 impl Error {
+    /// A sandboxed build failed with the network off, so retrying with it on
+    /// might help.
+    pub fn may_need_network(&self) -> bool {
+        matches!(self, Error::BuildFailed { hint, .. } if hint.contains(NETWORK_HINT))
+    }
+
     /// Which conversational voice the CLI should use to introduce this
     /// error — see `emrac-cli`'s `main.rs`. Kept here rather than
     /// duplicated at the presentation layer, since it's a property of what
@@ -337,3 +346,24 @@ impl Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[cfg(test)]
+mod network_hint_tests {
+    use super::*;
+
+    fn failure(hint: &str) -> Error {
+        Error::BuildFailed {
+            phase: "build and package".into(),
+            status: "exit status: 4".into(),
+            hint: hint.into(),
+        }
+    }
+
+    #[test]
+    fn only_the_no_network_failure_suggests_a_retry_with_network() {
+        assert!(failure(&format!(". blocked, {NETWORK_HINT}")).may_need_network());
+        assert!(!failure(". raise `build.timeout_minutes`").may_need_network());
+        assert!(!failure("").may_need_network());
+        assert!(!Error::NoBuiltPackage("x".into()).may_need_network());
+    }
+}

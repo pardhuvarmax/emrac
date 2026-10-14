@@ -67,6 +67,35 @@ pub fn build_options(
     })
 }
 
+/// Builds an AUR package. If the sandboxed build fails in a way the missing
+/// network may explain, asks (default no; `--yes` does not answer) whether
+/// to retry with the network on.
+pub fn build_with_retry(
+    sources: &Sources,
+    name: &str,
+    opts: BuildOptions,
+) -> Result<Vec<std::path::PathBuf>> {
+    match sources.build_aur_package(name, opts) {
+        Err(err)
+            if opts.sandbox
+                && !opts.allow_network
+                && err.may_need_network()
+                && confirm_default_no(&format!(
+                    "The build of '{name}' failed with the sandbox's network off, which may be why. Retry with network access for this build?"
+                )) =>
+        {
+            sources.build_aur_package(
+                name,
+                BuildOptions {
+                    allow_network: true,
+                    ..opts
+                },
+            )
+        }
+        result => result,
+    }
+}
+
 /// Builds an AUR package, shows what the built package would change, and
 /// installs it — unless the manifest says not to. This is the only path by
 /// which an AUR package reaches `pacman -U`.
@@ -78,7 +107,7 @@ pub fn build_options(
 pub fn build_and_install(sources: &Sources, name: &str, choice: BuildChoice) -> Result<()> {
     let accept_risks = choice.accept_risks;
     let opts = build_options(sources, name, sources.predicts_network(name), choice)?;
-    let files = sources.build_aur_package(name, opts)?;
+    let files = build_with_retry(sources, name, opts)?;
 
     let mut worst = Verdict::Allow;
     let mut blocked: Option<(String, String, String)> = None;

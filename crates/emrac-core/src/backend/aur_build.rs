@@ -223,7 +223,10 @@ impl AurBuildBackend {
         let hint = if opts.allow_network {
             String::new()
         } else {
-            ". The sandbox gives the build no network; if this package downloads dependencies while building, run again with `--allow-network`".to_string()
+            format!(
+                ". The sandbox gives the build no network; if this package downloads dependencies while building, {}",
+                crate::error::NETWORK_HINT
+            )
         };
         let spec = self.sandbox_spec(dir, opts.allow_network, &opts.limits);
         // Memory and process limits need a cgroup scope from the user's systemd
