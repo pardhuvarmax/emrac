@@ -230,6 +230,21 @@ pub enum Error {
     #[error("couldn't work out what the transaction would remove: {0}")]
     Simulation(String),
 
+    #[error("{0}")]
+    DependencyConflict(Box<crate::backend::DependencyConflict>),
+
+    #[error(
+        "'{package}' was not built: you declined the swap. Run it yourself, then upgrade again"
+    )]
+    DependencySwapDeclined { package: String },
+
+    #[error("'{removed}' was removed but '{by}' did not install ({cause}). Install one of them before restarting anything that uses the library: `sudo pacman -S {by}`")]
+    DependencySwapIncomplete {
+        removed: String,
+        by: String,
+        cause: String,
+    },
+
     #[error("couldn't refresh the package list: {0}")]
     FreshSync(String),
 
@@ -276,6 +291,11 @@ impl Error {
     /// error — see `emrac-cli`'s `main.rs`. Kept here rather than
     /// duplicated at the presentation layer, since it's a property of what
     /// the error *is*, not how it's displayed.
+    /// A failed build whose dependency step is the one that stopped.
+    pub fn stopped_on_dependencies(&self) -> bool {
+        matches!(self, Error::BuildFailed { phase, .. } if phase == "dependencies and sources")
+    }
+
     pub fn voice(&self) -> &'static str {
         match self {
             Error::PackageNotFound(_)
@@ -306,6 +326,9 @@ impl Error {
             | Error::DoctorProblems(_)
             | Error::FreshSync(_)
             | Error::Simulation(_)
+            | Error::DependencyConflict(_)
+            | Error::DependencySwapDeclined { .. }
+            | Error::DependencySwapIncomplete { .. }
             | Error::ManifestBlocked { .. }
             | Error::InstallDeclined { .. }
             | Error::NoBuiltPackage(_)

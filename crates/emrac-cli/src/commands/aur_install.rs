@@ -69,13 +69,29 @@ pub fn build_options(
 
 /// Builds an AUR package. If the sandboxed build fails in a way the missing
 /// network may explain, asks (default no; `--yes` does not answer) whether
-/// to retry with the network on.
+/// to retry with the network on. A dependency conflict that a swap of
+/// packages would settle is offered the same way.
 pub fn build_with_retry(
     sources: &Sources,
     name: &str,
     opts: BuildOptions,
 ) -> Result<Vec<std::path::PathBuf>> {
     match sources.build_aur_package(name, opts) {
+        // The replacement provides what the old package did: offer the swap
+        // (default no; `--yes` does not answer it) and carry on building.
+        Err(Error::DependencyConflict(conflict)) if conflict.likely_safe() => {
+            eprintln!("emrac found: {conflict}");
+            if !confirm_default_no(&format!(
+                "Swap '{}' for '{}' now, then continue building '{name}'?",
+                conflict.removed, conflict.by
+            )) {
+                return Err(Error::DependencySwapDeclined {
+                    package: name.to_string(),
+                });
+            }
+            sources.apply_dependency_swap(&conflict)?;
+            sources.build_aur_package(name, opts)
+        }
         Err(err)
             if opts.sandbox
                 && !opts.allow_network

@@ -195,8 +195,8 @@ here are not slippage, they are on schedule.
      - --
    * - 11
      - Interactive Conflict Resolver
-     - Not started
-     - Conflicts currently just surface as pacman's own error text
+     - Partial
+     - Conflict removals and provider choices are listed in plans (u24, u25); a dependency conflict that stops an AUR build is explained and a safe-looking package swap is offered, default no (u26). Other conflicts still surface as pacman's own text
    * - 12
      - Dependency Graph Explorer
      - Not started

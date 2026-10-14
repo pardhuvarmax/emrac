@@ -12,6 +12,20 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u26 — 2026-10-14 — dependency conflicts that stop an AUR build are explained
+
+Found on a real upgrade, not by a test: the installed `mangowm-git` required the package *name* `scenefx0.5` (an old AUR package); the new `mangowm-git` needs `scenefx` from `extra`, now 0.5-1 and providing the same `libscenefx-0.5.so`, and the two conflict. makepkg's dependency step asked pacman for `scenefx`, pacman asked "Remove scenefx0.5?", then refused ("removing scenefx0.5 breaks dependency 'scenefx0.5' required by mangowm-git") and emrac printed only "the build failed in the dependencies and sources step (exit status: 8)". My first advice — answer *y* because the soname matches — was wrong: a dependency on a package name is not met by a matching `.so`.
+
+**Diagnosis.** When the dependency step fails, emrac reads the checkout's `.SRCINFO` (`depends`, `makedepends`, `checkdepends`), takes those that are missing and available from the repositories, and runs the u24 libalpm simulation as an install. If preparing it fails with unsatisfied dependencies, the failure is paired with the conflict removal that caused it and reported as a `DependencyConflict`: which package would go, who still requires it, which package conflicts, and what the removed package provides that the replacement does or does not also provide. No pacman text is parsed.
+
+**Offer, not action.** If the replacement provides everything the removed package did, emrac prints the explanation and the two commands (`sudo pacman -Rdd <old> && sudo pacman -S <new>`) and asks "Swap … now, then continue building …?" — default no, not answered by `--yes`, silence is no. Yes runs them through `sudo` with pacman's own questions and builds again; if the second command fails after the first succeeded, the error says what is now missing and how to put it back. If the provides don't match (or there is nothing to compare), emrac only explains and prints the command. It says that matching provides is a strong hint, not proof that the files are the same.
+
+**Warning in the plan.** For each AUR rebuild in `emrac upgrade`, the dependencies the AUR lists are checked the same way against the same fresh database, and a conflict becomes a plan warning before anything runs.
+
+Verified with 5 unit tests (when a swap is likely safe, the message naming both packages, the dependent and the command, an unclear swap not offered as safe, the `.SRCINFO` dependency lines, only the dependency step being explained) — 217 core, 18 CLI integration, 8 CLI unit. In the container, built to the same shape (`libold` provides `libx.so`, conflicts `libnew`; an installed `app` requires the name `libold`; `newapp` needs `libnew`): with stdin closed the build stops with the explanation and nothing changes; answering yes swaps the packages (`libold` gone, `libnew` in) and `newapp` builds.
+
+Not seen: the **plan warning** firing for real. The host was already past the conflict, and the AUR's dependency list can't be faked in a container, so only the function it shares with the build path was exercised. The plan only knows the AUR's `Depends` (not `MakeDepends`), and not packages not yet cloned. Not covered: several conflicts at once (the first is reported), and conflicts that arise only at `pacman -U` of the built package. Design in `docs/plan/u26-dependency-conflicts.md`.
+
 ## Slice u25 — 2026-10-14 — provider choices, replacements and built packages in plans
 
 Closes the three things u24 said it did not cover, each now seen working for real.

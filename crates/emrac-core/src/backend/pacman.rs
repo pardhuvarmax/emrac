@@ -202,6 +202,25 @@ impl PacmanBackend {
         self.run_inherited("sudo", &self.finish(args))
     }
 
+    /// Replaces an installed package with the repository package that
+    /// conflicts with it, when the installed one is still required by name:
+    /// `pacman -Rdd` then `pacman -S`. Always asks pacman's own questions.
+    pub fn execute_swap(&self, removed: &str, by: &str) -> Result<()> {
+        let args = |rest: &[&str]| -> Vec<String> {
+            std::iter::once("pacman")
+                .chain(rest.iter().copied())
+                .map(String::from)
+                .collect()
+        };
+        self.run_inherited("sudo", &args(&["-Rdd", removed]))?;
+        self.run_inherited("sudo", &args(&["-S", "--needed", by]))
+            .map_err(|err| Error::DependencySwapIncomplete {
+                removed: removed.to_string(),
+                by: by.to_string(),
+                cause: err.to_string(),
+            })
+    }
+
     /// `--noconfirm` unless pacman has been told to ask: with it, pacman takes
     /// the default answer to every question (and the default for a package
     /// conflict is "no", so a conflicting install can only fail).

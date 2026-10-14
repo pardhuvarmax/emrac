@@ -5,7 +5,7 @@ use std::process::Command;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use alpm::{Alpm, Question, SigLevel, TransFlag};
+use alpm::{Alpm, PrepareData, Question, SigLevel, TransFlag};
 
 use crate::deps::{DepEntry, Orphan};
 use crate::error::{Error, Result};
@@ -15,6 +15,100 @@ use crate::snapshot::SnapshotPackage;
 use crate::verify::{self, PackageReport};
 
 /// Read-only access to the official repositories via libalpm, scoped to the
+/// Pairs a broken dependency with the conflict removal that broke it, and
+/// compares what the two conflicting packages provide.
+fn dependency_conflict(
+    handle: &Alpm,
+    broken: &[(String, String)],
+    conflicts: &[(String, String)],
+) -> Option<DependencyConflict> {
+    for (required_by, dependency) in broken {
+        for (removed, by) in conflicts {
+            let Ok(old) = handle.localdb().pkg(removed.as_str()) else {
+                continue;
+            };
+            let satisfies =
+                old.name() == dependency || old.provides().iter().any(|p| p.name() == dependency);
+            if !satisfies {
+                continue;
+            }
+            let Some(new) = handle
+                .syncdbs()
+                .iter()
+                .find_map(|db| db.pkg(by.as_str()).ok())
+            else {
+                continue;
+            };
+            let new_provides: Vec<String> = new.provides().iter().map(|p| p.to_string()).collect();
+            let (mut shared, mut missing) = (Vec::new(), Vec::new());
+            for p in old.provides().iter().filter(|p| p.name() != old.name()) {
+                let text = p.to_string();
+                if new_provides.contains(&text) {
+                    shared.push(text);
+                } else {
+                    missing.push(text);
+                }
+            }
+            return Some(DependencyConflict {
+                removed: removed.clone(),
+                by: by.clone(),
+                dependency: dependency.clone(),
+                required_by: required_by.clone(),
+                shared,
+                missing,
+            });
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod conflict_tests {
+    use super::*;
+
+    fn conflict(shared: &[&str], missing: &[&str]) -> DependencyConflict {
+        DependencyConflict {
+            removed: "scenefx0.5".into(),
+            by: "scenefx".into(),
+            dependency: "scenefx0.5".into(),
+            required_by: "mangowm-git".into(),
+            shared: shared.iter().map(|s| s.to_string()).collect(),
+            missing: missing.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn a_swap_is_likely_safe_only_when_everything_provided_is_still_provided() {
+        assert!(conflict(&["libscenefx-0.5.so=1"], &[]).likely_safe());
+        assert!(!conflict(&["a"], &["b"]).likely_safe());
+        assert!(!conflict(&[], &[]).likely_safe(), "nothing to compare");
+    }
+
+    #[test]
+    fn the_message_names_both_packages_the_dependent_and_the_command() {
+        let text = conflict(&["libscenefx-0.5.so=1"], &[]).to_string();
+        for part in [
+            "'scenefx' conflicts with the installed 'scenefx0.5'",
+            "'mangowm-git' still requires 'scenefx0.5'",
+            "provides the same libscenefx-0.5.so=1",
+            "sudo pacman -Rdd scenefx0.5 && sudo pacman -S scenefx",
+            "not proof",
+        ] {
+            assert!(text.contains(part), "{part}\n{text}");
+        }
+    }
+
+    #[test]
+    fn an_unclear_swap_says_what_is_missing_and_is_not_offered_as_safe() {
+        let c = conflict(&[], &["libx.so=2"]);
+        assert!(c.to_string().contains("does NOT provide libx.so=2"));
+        assert!(!c.plan_warning("p").contains("will offer the swap"));
+        assert!(conflict(&["a"], &[])
+            .plan_warning("p")
+            .contains("will offer the swap"));
+    }
+}
+
 /// sync databases pacman has already downloaded locally (`/var/lib/pacman/sync`).
 /// No network access, no root required.
 pub struct AlpmBackend {
@@ -36,6 +130,95 @@ pub enum SimOp<'a> {
 pub struct Providers {
     pub dependency: String,
     pub providers: Vec<String>,
+}
+
+/// Installing a repository package would remove an installed one that another
+/// installed package still requires by name (the case pacman reports as
+/// "removing X breaks dependency 'X' required by Y").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DependencyConflict {
+    /// The installed package the transaction would remove.
+    pub removed: String,
+    /// The package being installed, which conflicts with it.
+    pub by: String,
+    /// The dependency that would break, as the dependent names it.
+    pub dependency: String,
+    /// The installed package that requires it.
+    pub required_by: String,
+    /// What `removed` provides (besides its own name) that `by` provides too.
+    pub shared: Vec<String>,
+    /// What `removed` provides that `by` does not.
+    pub missing: Vec<String>,
+}
+
+impl DependencyConflict {
+    /// The replacement provides everything the removed package provided, and
+    /// there is something to compare. A strong hint, not proof the files match.
+    pub fn likely_safe(&self) -> bool {
+        self.missing.is_empty() && !self.shared.is_empty()
+    }
+
+    /// The two commands that swap the packages.
+    pub fn command(&self) -> String {
+        format!(
+            "sudo pacman -Rdd {} && sudo pacman -S {}",
+            self.removed, self.by
+        )
+    }
+
+    /// One line for a plan, about the AUR package that will hit this.
+    pub fn plan_warning(&self, building: &str) -> String {
+        format!(
+            "building '{building}' will stop on a dependency conflict: it needs '{}', which conflicts with the installed '{}' that '{}' requires. {}{}",
+            self.by,
+            self.removed,
+            self.required_by,
+            self.verdict(),
+            if self.likely_safe() {
+                "; emrac will offer the swap when the build stops"
+            } else {
+                ""
+            }
+        )
+    }
+
+    fn verdict(&self) -> String {
+        if self.likely_safe() {
+            format!(
+                "'{}' provides the same {}, so the swap looks safe",
+                self.by,
+                self.shared.join(", ")
+            )
+        } else if self.missing.is_empty() {
+            format!(
+                "'{}' provides nothing to compare with '{}'; check before swapping them",
+                self.by, self.removed
+            )
+        } else {
+            format!(
+                "'{}' does NOT provide {}, which '{}' does; check before swapping them",
+                self.by,
+                self.missing.join(", "),
+                self.removed
+            )
+        }
+    }
+}
+
+impl std::fmt::Display for DependencyConflict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "'{}' conflicts with the installed '{}', and '{}' can't be removed because '{}' still requires '{}' by that name.",
+            self.by, self.removed, self.removed, self.required_by, self.dependency
+        )?;
+        writeln!(f, "{}.", self.verdict())?;
+        write!(
+            f,
+            "Swapping them: {}\n(matching provides is a strong hint, not proof that the files are the same.)",
+            self.command()
+        )
+    }
 }
 
 /// What a simulated transaction does besides what was asked for.
@@ -106,8 +289,10 @@ impl AlpmBackend {
         let mut handle = Self::open_handle(db_path.map(|p| p.display().to_string()))?;
 
         // (removed package, why) pairs, and the provider choices met on the way.
-        type Decisions = (Vec<(String, String)>, Vec<Providers>);
-        let decided: Rc<RefCell<Decisions>> = Rc::new(RefCell::new((Vec::new(), Vec::new())));
+        // The third list is the raw (removed, by) pair of each conflict.
+        type Decisions = (Vec<(String, String)>, Vec<Providers>, Vec<(String, String)>);
+        let decided: Rc<RefCell<Decisions>> =
+            Rc::new(RefCell::new((Vec::new(), Vec::new(), Vec::new())));
         handle.set_question_cb(Rc::clone(&decided), |question, decided| {
             match question.question() {
                 Question::Conflict(mut q) => {
@@ -117,7 +302,8 @@ impl AlpmBackend {
                     decided
                         .borrow_mut()
                         .0
-                        .push((removed, format!("conflicts with {by}")));
+                        .push((removed.clone(), format!("conflicts with {by}")));
+                    decided.borrow_mut().2.push((removed, by));
                     q.set_remove(true);
                 }
                 Question::Replace(q) => {
@@ -178,7 +364,24 @@ impl AlpmBackend {
                     .map_err(|e| fail(e.to_string()))?;
             }
         }
-        handle.trans_prepare().map_err(|e| fail(e.to_string()))?;
+        // On failure, which dependencies the removals would break, copied out
+        // so the handle can be read again.
+        let prepared = handle.trans_prepare().map_err(|e| {
+            let broken: Vec<(String, String)> = match e.data() {
+                Some(PrepareData::UnsatisfiedDeps(list)) => list
+                    .iter()
+                    .map(|m| (m.target().to_string(), m.depend().name().to_string()))
+                    .collect(),
+                _ => Vec::new(),
+            };
+            (e.to_string(), broken)
+        });
+        if let Err((message, broken)) = prepared {
+            if let Some(conflict) = dependency_conflict(&handle, &broken, &decided.borrow().2) {
+                return Err(Error::DependencyConflict(Box::new(conflict)));
+            }
+            return Err(fail(message));
+        }
 
         let decisions = decided.borrow();
         let removals: Vec<Removal> = handle
@@ -202,6 +405,23 @@ impl AlpmBackend {
             removals,
             providers,
         })
+    }
+
+    /// Which of `deps` are not installed but can be had from the
+    /// repositories (so a dependency that is itself an AUR package is left
+    /// out). Names may carry a version constraint.
+    pub fn uninstalled_repo_dependencies(&self, deps: &[String]) -> Vec<String> {
+        deps.iter()
+            .filter(|d| {
+                self.handle
+                    .localdb()
+                    .pkgs()
+                    .find_satisfier(d.as_str())
+                    .is_none()
+            })
+            .filter(|d| self.handle.syncdbs().find_satisfier(d.as_str()).is_some())
+            .cloned()
+            .collect()
     }
 
     pub fn search(&self, query: &str, limit: Option<usize>) -> Vec<PackageSummary> {

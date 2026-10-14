@@ -371,8 +371,32 @@ impl Sources {
     /// returns the package files. Prompts interactively (build output,
     /// dependency sync, sudo password) like a real `makepkg` session.
     pub fn build_aur_package(&self, name: &str, opts: BuildOptions) -> Result<Vec<PathBuf>> {
-        self.aur_build.build(name, opts)?;
+        match self.aur_build.build(name, opts) {
+            Ok(()) => {}
+            // The dependency step is pacman's, which says only that it
+            // failed; if a conflict is why, say what it is.
+            Err(err @ Error::BuildFailed { .. }) if err.stopped_on_dependencies() => {
+                let deps = self
+                    .aur_build
+                    .read_file(name, None, ".SRCINFO")
+                    .map(|text| srcinfo_dependencies(&text))
+                    .unwrap_or_default();
+                return Err(dependency_conflict_for(&self.alpm, None, &deps)
+                    .map(|c| Error::DependencyConflict(Box::new(c)))
+                    .unwrap_or(err));
+            }
+            Err(err) => return Err(err),
+        }
         self.aur_build.built_files(name)
+    }
+
+    /// Swaps the conflicting packages named by `conflict` (see
+    /// `DependencyConflict::command`). The caller has asked the user first.
+    pub fn apply_dependency_swap(
+        &self,
+        conflict: &crate::backend::DependencyConflict,
+    ) -> Result<()> {
+        self.pacman.execute_swap(&conflict.removed, &conflict.by)
     }
 
     /// Builds the PKGBUILD in a local directory the same way (no install).
@@ -461,6 +485,8 @@ impl Sources {
             self.official_upgrade_packages(&names, view.alpm.as_ref().unwrap_or(&self.alpm));
 
         let mut aur_warning = None;
+        // AUR packages to rebuild, with their dependencies as the AUR lists them.
+        let mut aur_builds: Vec<(String, Vec<String>)> = Vec::new();
 
         if !offline {
             let foreign_names = self.alpm.foreign_package_names();
@@ -478,6 +504,7 @@ impl Sources {
                                     held_names.push(details.name);
                                     continue;
                                 }
+                                aur_builds.push((details.name.clone(), details.depends.clone()));
                                 packages.push(PlannedPackage {
                                     name: details.name,
                                     version: details.version,
@@ -508,6 +535,14 @@ impl Sources {
             &mut plan,
             AlpmBackend::simulate(dbpath, SimOp::Upgrade { ignore: &ignore }),
         );
+        // An AUR rebuild whose dependencies would remove something still
+        // required stops mid-build; say so now.
+        let sync_view = view.alpm.as_ref().unwrap_or(&self.alpm);
+        for (name, deps) in &aur_builds {
+            if let Some(conflict) = dependency_conflict_for(sync_view, dbpath, deps) {
+                plan.warnings.push(conflict.plan_warning(name));
+            }
+        }
         Ok(UpgradePlan {
             plan,
             aur_warning,
@@ -1661,6 +1696,44 @@ fn build_plan(
     }
 }
 
+/// The dependency lines of a `.SRCINFO` (`depends`, `makedepends`,
+/// `checkdepends`, with or without an `_arch` suffix), deduplicated. Only
+/// used to explain a failure or warn in a plan, never to decide what to build.
+fn srcinfo_dependencies(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let Some((key, value)) = line.trim().split_once(" = ") else {
+            continue;
+        };
+        let key = key.split('_').next().unwrap_or(key);
+        if matches!(key, "depends" | "makedepends" | "checkdepends")
+            && !value.trim().is_empty()
+            && !out.iter().any(|v| v == value.trim())
+        {
+            out.push(value.trim().to_string());
+        }
+    }
+    out
+}
+
+/// Would installing the repository packages among `deps` that are missing
+/// remove an installed package another one still requires? `None` also when
+/// nothing is missing or the simulation cannot run.
+fn dependency_conflict_for(
+    alpm: &AlpmBackend,
+    dbpath: Option<&std::path::Path>,
+    deps: &[String],
+) -> Option<crate::backend::DependencyConflict> {
+    let missing = alpm.uninstalled_repo_dependencies(deps);
+    if missing.is_empty() {
+        return None;
+    }
+    match AlpmBackend::simulate(dbpath, SimOp::Install(&missing)) {
+        Err(Error::DependencyConflict(conflict)) => Some(*conflict),
+        _ => None,
+    }
+}
+
 /// Adds the removals libalpm says a transaction would cause to `plan`, and
 /// counts the space they free. If the simulation could not run, says so in the
 /// plan instead of silently leaving the section out.
@@ -1914,6 +1987,32 @@ mod freshness_tests {
             },
             "no date at all is not 'fresh'"
         );
+    }
+}
+
+#[cfg(test)]
+mod srcinfo_tests {
+    use super::*;
+
+    #[test]
+    fn dependencies_come_from_every_dependency_key_once() {
+        let text = "pkgbase = x\n\tpkgver = 1\n\tdepends = scenefx\n\tdepends = libdrm\n\tmakedepends = meson\n\tcheckdepends = bats\n\tdepends_x86_64 = lib32-x\n\toptdepends = vim: editing\n\tdepends = scenefx\n\nrelease = 1\n";
+        assert_eq!(
+            srcinfo_dependencies(text),
+            ["scenefx", "libdrm", "meson", "bats", "lib32-x"]
+        );
+        assert!(srcinfo_dependencies("").is_empty());
+    }
+
+    #[test]
+    fn only_a_failed_dependency_step_is_explained() {
+        let failed = |phase: &str| Error::BuildFailed {
+            phase: phase.into(),
+            status: "exit status: 8".into(),
+            hint: String::new(),
+        };
+        assert!(failed("dependencies and sources").stopped_on_dependencies());
+        assert!(!failed("build and package").stopped_on_dependencies());
     }
 }
 
