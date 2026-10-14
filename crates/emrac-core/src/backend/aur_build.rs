@@ -242,7 +242,17 @@ impl AurBuildBackend {
         let steps: [(&str, &[&str]); 2] = [
             (
                 "extract and prepare",
-                &["--nobuild", "--nodeps", "--noconfirm", "--cleanbuild"],
+                // Signatures were checked on the host (`--verifysource`, with
+                // the user's keyring); the sandbox's home is empty, so it
+                // could only fail on every signed source. Checksums are
+                // still checked here.
+                &[
+                    "--nobuild",
+                    "--nodeps",
+                    "--noconfirm",
+                    "--cleanbuild",
+                    "--skippgpcheck",
+                ],
             ),
             (
                 "build and package",
