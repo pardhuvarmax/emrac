@@ -166,9 +166,79 @@ cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
 { cat "$cg/memory.events"; echo ---; cat "$cg/pids.events"; } > "$events" 2>/dev/null
 exit $status"#;
 
-/// Runs `cmd` with the terminal attached, killing it if it outlives `timeout`.
-pub fn run_command(mut cmd: Command, timeout: Option<Duration>) -> std::io::Result<Outcome> {
+/// How much of the end of a run's output is kept.
+const TAIL_BYTES: usize = 32 * 1024;
+
+/// Runs `cmd`, killing it if it outlives `timeout`, and returns the end of its
+/// output (which is still shown as it arrives). Output goes through pipes, so the program sees no terminal:
+/// no colours or progress bars. Its stdin stays attached.
+pub fn run_command_tail(
+    mut cmd: Command,
+    timeout: Option<Duration>,
+) -> std::io::Result<(Outcome, String)> {
+    use std::io::{Read, Write};
+    use std::sync::{Arc, Mutex};
+
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
+    let tail: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    let mut readers = Vec::new();
+    let sources: [(Option<Box<dyn Read + Send>>, bool); 2] = [
+        (
+            child
+                .stdout
+                .take()
+                .map(|s| Box::new(s) as Box<dyn Read + Send>),
+            false,
+        ),
+        (
+            child
+                .stderr
+                .take()
+                .map(|s| Box::new(s) as Box<dyn Read + Send>),
+            true,
+        ),
+    ];
+    for (source, to_stderr) in sources {
+        let Some(mut source) = source else {
+            continue;
+        };
+        let tail = Arc::clone(&tail);
+        readers.push(std::thread::spawn(move || {
+            let mut buf = [0u8; 8192];
+            while let Ok(n) = source.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                let chunk = &buf[..n];
+                let _ = if to_stderr {
+                    let mut e = std::io::stderr().lock();
+                    e.write_all(chunk).and_then(|_| e.flush())
+                } else {
+                    let mut o = std::io::stdout().lock();
+                    o.write_all(chunk).and_then(|_| o.flush())
+                };
+                let mut tail = tail.lock().unwrap();
+                tail.extend_from_slice(chunk);
+                if tail.len() > TAIL_BYTES {
+                    let excess = tail.len() - TAIL_BYTES;
+                    tail.drain(..excess);
+                }
+            }
+        }));
+    }
+    let outcome = wait_for(child, timeout)?;
+    // After a timeout a straggler could still hold a pipe open; don't wait for it.
+    if matches!(outcome, Outcome::Exited(..)) {
+        for reader in readers {
+            let _ = reader.join();
+        }
+    }
+    let text = String::from_utf8_lossy(&tail.lock().unwrap()).into_owned();
+    Ok((outcome, text))
+}
+
+fn wait_for(mut child: std::process::Child, timeout: Option<Duration>) -> std::io::Result<Outcome> {
     let deadline = timeout.map(|t| Instant::now() + t);
     loop {
         if let Some(status) = child.try_wait()? {
@@ -345,7 +415,7 @@ pub fn run(
     command: &[String],
     limits: &Limits,
     use_scope: bool,
-) -> std::io::Result<Outcome> {
+) -> std::io::Result<(Outcome, String)> {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
@@ -375,15 +445,43 @@ pub fn run(
             .args(command);
         c
     };
-    let outcome = run_command(cmd, limits.timeout());
+    let outcome = run_command_tail(cmd, limits.timeout());
     let events = std::fs::read_to_string(&events_file)
         .map(|t| parse_wrapper_events(&t))
         .unwrap_or_default();
     let _ = std::fs::remove_file(&events_file);
     match outcome? {
-        Outcome::Exited(status, _) => Ok(Outcome::Exited(status, events)),
-        Outcome::TimedOut => Ok(Outcome::TimedOut),
+        (Outcome::Exited(status, _), tail) => Ok((Outcome::Exited(status, events), tail)),
+        (Outcome::TimedOut, tail) => Ok((Outcome::TimedOut, tail)),
     }
+}
+
+/// Does the end of a build's output say it tried to reach the network and
+/// could not (a name that would not resolve, a refused connection, ...)?
+pub fn looks_like_network_failure(output: &str) -> bool {
+    const SIGNS: &[&str] = &[
+        "could not resolve host",
+        "couldn't resolve host",
+        "temporary failure in name resolution",
+        "temporary failure resolving",
+        "name or service not known",
+        "failed to lookup address",
+        "network is unreachable",
+        "no route to host",
+        "connection refused",
+        "connection timed out",
+        "failed to connect to",
+        "unable to access 'http",
+        "spurious network error",
+        "dial tcp",
+        "curl: (6)",
+        "curl: (7)",
+        "curl: (28)",
+        "enotfound",
+        "eai_again",
+    ];
+    let lower = output.to_lowercase();
+    SIGNS.iter().any(|s| lower.contains(s))
 }
 
 /// Directories the user's makepkg config points outside the build directory
@@ -574,11 +672,46 @@ mod tests {
     }
 
     #[test]
+    fn the_end_of_the_output_is_returned_from_both_streams_and_capped() {
+        let mut cmd = Command::new("sh");
+        cmd.args([
+            "-c",
+            "echo out-line; echo err-line >&2; i=0; while [ $i -lt 5000 ]; do echo padding-padding-padding-padding; i=$((i+1)); done; echo the-end",
+        ]);
+        let (out, tail) = run_command_tail(cmd, None).unwrap();
+        assert!(matches!(out, Outcome::Exited(ref s, _) if s.success()));
+        assert!(tail.ends_with("the-end\n"), "{tail:?}");
+        assert!(tail.len() <= TAIL_BYTES, "{}", tail.len());
+        assert!(!tail.contains("out-line"), "the start was cut off");
+    }
+
+    #[test]
+    fn network_failures_are_recognised_and_other_failures_are_not() {
+        for yes in [
+            "warning: spurious network error (2 tries remaining): [6] Could not resolve hostname (Could not resolve host: index.crates.io)",
+            "fatal: unable to access 'https://x/': Could not resolve host: x",
+            "curl: (6) Could not resolve host: example.org",
+            "Temporary failure in name resolution",
+            "dial tcp: lookup proxy.golang.org: no such host\nGet https://x: dial tcp 1.2.3.4:443: connect: Network is unreachable",
+        ] {
+            assert!(looks_like_network_failure(yes), "{yes}");
+        }
+        for no in [
+            "==> ERROR: One or more PGP signatures could not be verified!",
+            "error: use of undeclared identifier 'foo'",
+            "make: *** [Makefile:14: build] Error 2",
+            "",
+        ] {
+            assert!(!looks_like_network_failure(no), "{no}");
+        }
+    }
+
+    #[test]
     fn the_timeout_kills_a_run_on_time_and_a_normal_exit_is_reported() {
         let mut slow = Command::new("sleep");
         slow.arg("30");
         let start = Instant::now();
-        let out = run_command(slow, Some(Duration::from_millis(300))).unwrap();
+        let (out, _) = run_command_tail(slow, Some(Duration::from_millis(300))).unwrap();
         assert!(matches!(out, Outcome::TimedOut), "{out:?}");
         assert!(
             start.elapsed() < Duration::from_secs(5),
@@ -586,12 +719,12 @@ mod tests {
             start.elapsed()
         );
 
-        let ok = run_command(Command::new("true"), Some(Duration::from_secs(5))).unwrap();
+        let (ok, _) = run_command_tail(Command::new("true"), Some(Duration::from_secs(5))).unwrap();
         assert!(
             matches!(&ok, Outcome::Exited(s, _) if s.success()),
             "{ok:?}"
         );
-        let fail = run_command(Command::new("false"), None).unwrap();
+        let (fail, _) = run_command_tail(Command::new("false"), None).unwrap();
         assert!(
             matches!(&fail, Outcome::Exited(s, _) if s.code() == Some(1)),
             "{fail:?}"

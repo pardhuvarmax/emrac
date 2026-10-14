@@ -220,14 +220,6 @@ impl AurBuildBackend {
         }
 
         // 2 and 3, sandboxed.
-        let hint = if opts.allow_network {
-            String::new()
-        } else {
-            format!(
-                ". The sandbox gives the build no network; if this package downloads dependencies while building, {}",
-                crate::error::NETWORK_HINT
-            )
-        };
         let spec = self.sandbox_spec(dir, opts.allow_network, &opts.limits);
         // Memory and process limits need a cgroup scope from the user's systemd
         // manager; if there is none, say so and carry on with the timeout and
@@ -262,7 +254,7 @@ impl AurBuildBackend {
         for (phase, args) in steps {
             let mut command = vec!["makepkg".to_string()];
             command.extend(args.iter().map(|a| a.to_string()));
-            let outcome = sandbox::run(&spec, &command, &opts.limits, use_scope)
+            let (outcome, output) = sandbox::run(&spec, &command, &opts.limits, use_scope)
                 .map_err(|err| Error::CommandSpawn("bwrap".to_string(), err))?;
             match &outcome {
                 Outcome::TimedOut => {
@@ -288,8 +280,13 @@ impl AurBuildBackend {
                             ". It hit its process limit ({} tasks); raise `build.max_tasks` (0 removes the limit)",
                             opts.limits.max_tasks
                         )
+                    } else if !opts.allow_network && sandbox::looks_like_network_failure(&output) {
+                        format!(
+                            ". The build tried to use the network, which the sandbox blocks; if it needs to download dependencies, {}",
+                            crate::error::NETWORK_HINT
+                        )
                     } else {
-                        hint.clone()
+                        String::new()
                     };
                     return Err(failed(phase, status, &hint));
                 }
