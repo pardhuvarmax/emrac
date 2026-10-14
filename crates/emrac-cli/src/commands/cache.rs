@@ -14,16 +14,17 @@ pub fn run(
     dry_run: bool,
     yes: bool,
     json: bool,
+    verbose: bool,
 ) -> Result<()> {
     match command {
         None => overview(sources, &CacheScopes::default(), false, json),
         Some(CacheCommand::List(scopes)) => overview(sources, scopes, true, json),
         Some(CacheCommand::Stats(scopes)) => overview(sources, scopes, false, json),
         Some(CacheCommand::Clean(args)) => {
-            change(sources, args, CacheOp::Clean, dry_run, yes, json)
+            change(sources, args, CacheOp::Clean, dry_run, yes, json, verbose)
         }
         Some(CacheCommand::Purge(args)) => {
-            change(sources, args, CacheOp::Purge, dry_run, yes, json)
+            change(sources, args, CacheOp::Purge, dry_run, yes, json, verbose)
         }
         Some(CacheCommand::Trim { size_limit, args }) => change(
             sources,
@@ -32,6 +33,7 @@ pub fn run(
             dry_run,
             yes,
             json,
+            verbose,
         ),
     }
 }
@@ -159,6 +161,7 @@ fn change(
     dry_run: bool,
     yes: bool,
     json: bool,
+    verbose: bool,
 ) -> Result<()> {
     let default: &[CacheScope] = match op {
         CacheOp::Purge => &CacheScope::ALL,
@@ -183,15 +186,30 @@ fn change(
             return Ok(());
         }
     } else if dry_run {
+        // What goes is the point of a dry run; what stays is summarized by
+        // reason unless asked for (-v).
+        let mut kept: BTreeMap<&str, (usize, u64)> = BTreeMap::new();
         for d in &decisions {
-            println!(
-                "{} {:>12}  {:<8} {}  — {}",
-                if d.remove { "remove" } else { "keep  " },
-                human_size(d.entry.bytes),
-                d.entry.scope.label(),
-                d.entry.path.display(),
-                d.reason
-            );
+            if d.remove || verbose {
+                println!(
+                    "{} {:>12}  {:<8} {}  — {}",
+                    if d.remove { "remove" } else { "keep  " },
+                    human_size(d.entry.bytes),
+                    d.entry.scope.label(),
+                    d.entry.path.display(),
+                    d.reason
+                );
+            } else {
+                let row = kept.entry(d.reason.as_str()).or_default();
+                row.0 += 1;
+                row.1 += d.entry.bytes;
+            }
+        }
+        if !kept.is_empty() {
+            println!("\nKept (add -v to list each):");
+            for (reason, (count, bytes)) in &kept {
+                println!("  {:>6}  {:>12}  {reason}", count, human_size(*bytes));
+            }
         }
         println!(
             "\nemrac plans: {} would be removed, freeing {} (dry run, nothing changed).",
