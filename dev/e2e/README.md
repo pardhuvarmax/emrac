@@ -1,0 +1,12 @@
+# e2e/
+
+End-to-end checks: the release binary against a real pacman, in the disposable container from [`../container/`](../container).
+
+- [`final-check.sh`](./final-check.sh) — the checks, one `ck "title" "command"` line each (26 at r2): version and exit codes, search and info, install and remove, history, verify, snapshots, pins, undo and redo, audit, an AUR package built in the sandbox and installed, `cache`, `pacnew`, `doctor`, config, completion, and a closed stdin declining. A comment at the top records the last full run; update it when you run them all.
+- [`run.sh`](./run.sh) — builds the release binary with [`../release-build.sh`](../release-build.sh), builds the container image and runs the checks in it.
+
+```sh
+dev/e2e/run.sh
+```
+
+Needs podman and network access, so CI does not run these. The check titles are listed in [`docs/tests/emrac-tests.rst`](../../docs/tests/emrac-tests.rst), which `dev/gen-tests-doc.sh` regenerates.

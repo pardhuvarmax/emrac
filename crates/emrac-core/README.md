@@ -1,16 +1,13 @@
 # emrac-core
 
-Backend library crate. Owns all interaction with libalpm/pacman/makepkg/AUR so that both the CLI and (later) the TUI call into one shared implementation instead of duplicating it.
+The library behind emrac. It owns all interaction with libalpm, pacman, makepkg, git and the AUR, so that the command line (and a future terminal interface) call one shared implementation instead of duplicating it. Nothing here prints to the terminal or reads from it; that is the front end's job.
 
-**Current contents (Slice i1):**
+Where things are (details in [`src/README.md`](./src/README.md)):
 
-- [`backend/alpm.rs`](./src/backend/alpm.rs) — read-only libalpm queries against the official repo sync databases (`search`, `info`, and resolved-package lookups used to build install/remove plans). No network calls, no root required.
-- [`backend/aur.rs`](./src/backend/aur.rs) — read-only queries against the AUR's RPC API (`search`, `info`). Outbound HTTPS GET only, no root required.
-- [`backend/pacman.rs`](./src/backend/pacman.rs) — the only place that shells out to `pacman`/`sudo pacman`. Dependency/upgrade resolution (`--print`) needs no root; actual execution (`install`/`remove`/`upgrade`) runs under `sudo`, prompting interactively.
-- [`backend/aur_build.rs`](./src/backend/aur_build.rs) — the only place that shells out to `git`/`makepkg`. Clones/fetches each AUR package into a persistent cache (`~/.cache/emrac/build/<pkg>`) and builds via `makepkg -si`, never as root. Reused as-is for AUR upgrades — a rebuild is just another sync/review/build cycle.
-- [`sources.rs`](./src/sources.rs) — `Sources`: the aggregator that merges official repos and the AUR behind one `search`/`info` surface, classifies `install`/`upgrade` targets by source, and orchestrates `pacman.rs`/`alpm.rs`/`aur_build.rs` accordingly. This is what the CLI/TUI should actually call, not the backends directly.
-- [`plan.rs`](./src/plan.rs) — `Plan`/`PlannedPackage`/`PlanAction`: the transaction preview shown before any install/remove/upgrade executes.
-- [`package.rs`](./src/package.rs) — `PackageSummary` / `PackageDetails` data models (AUR-only fields like `maintainer`/`votes`/`popularity` are `None` for official-repo packages).
-- [`error.rs`](./src/error.rs) — crate error type.
+- **Sources and plans** — `Sources` is the entry point; it merges the official repositories and the AUR, builds plans (what an install, removal or upgrade will do, including what it will also remove), and runs them.
+- **AUR builds** — `audit` (static reading of PKGBUILDs, scriptlets and shipped files), `manifest` (what a built package changes), `sandbox` (bubblewrap and resource limits), and the `backend/aur_build` pipeline that ties them to `makepkg`.
+- **Recovery** — `history`, `rollback`, `downgrade`, `reinstall`, `purge`, `snapshot`, `pins`, and `verify`.
+- **Housekeeping** — `doctor` (health checks), `pacnew` (`.pacnew` files), `cache`, `config`, `deps`.
+- **Backends** — [`src/backend/`](./src/backend): libalpm, pacman, the AUR RPC, `git`/`makepkg`, the Arch Linux Archive, a freshly synced throwaway database, and package-file reading.
 
-This completes the "core CLI loop" milestone (`search`/`info`/`install`/`remove`/`upgrade` against official repos + AUR) from `SPEC.md` Part X. See [`../../dev/README.md`](../../dev/README.md) for how mutating commands are tested without touching the host.
+Run its tests with `cargo test -p emrac-core` (244 tests, listed in [`docs/tests/emrac-tests.rst`](../../docs/tests/emrac-tests.rst)). Commands that change the system are tried in a container instead: see [`dev/`](../../dev).

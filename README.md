@@ -78,6 +78,8 @@ Errors go to stderr as `emrac found: …` (something you can fix) or `emrac says
 - Architecture and process flowcharts (Mermaid)
 - Implementation notes (language, integration strategy, milestone scope)
 
+The automated tests that pass are listed in [`docs/tests/emrac-tests.rst`](./docs/tests/emrac-tests.rst), generated and kept current by `dev/gen-tests-doc.sh`. Release notes are in [`docs/releases/`](./docs/releases).
+
 ## Architecture (planned)
 
 - **Language:** Rust

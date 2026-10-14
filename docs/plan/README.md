@@ -65,3 +65,12 @@ Current:
   replacement resolution will cause, from libalpm itself.
 - [`u25-remaining-plan-gaps.md`](./u25-remaining-plan-gaps.md) — provider choices, replacements and
   built-package conflicts in plans and manifests.
+- [`u26-dependency-conflicts.md`](./u26-dependency-conflicts.md) — explaining a dependency
+  conflict that stops an AUR build, and offering the swap.
+- [`u27-pacnew.md`](./u27-pacnew.md) — `emrac pacnew`: telling your edits from upstream's with a
+  three-way comparison.
+- [`u28-cache.md`](./u28-cache.md) — `emrac cache`: list, clean, trim and purge the source, build,
+  binary and pacman caches.
+- [`u29-lean-cache.md`](./u29-lean-cache.md) — a lean cache policy that keeps one rollback set.
+- [`u30-pacnew-revert.md`](./u30-pacnew-revert.md) — `pacnew`: validate before applying, record
+  every change, revert, edit by hand.

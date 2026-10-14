@@ -1,21 +1,26 @@
 # commands/
 
-One file per subcommand. Each exposes a thin `run()` that calls into `emrac-core` and hands the result to `output.rs` — no business logic lives here.
+One module per subcommand. Each exposes a thin `run()` that calls into `emrac-core` and hands the result to `../output.rs`; the plan, confirm and execute flow of the commands that change the system lives here too (via `../prompt.rs`), since that is orchestration, not business logic.
 
-Currently: [`search.rs`](./search.rs), [`info.rs`](./info.rs), [`install.rs`](./install.rs), [`remove.rs`](./remove.rs), [`upgrade.rs`](./upgrade.rs). `install`/`remove`/`upgrade` also handle the plan/confirm/execute flow (via `../prompt.rs`), since that's still just command orchestration, not business logic. [`aur_review.rs`](./aur_review.rs) is a shared helper, not a subcommand — `install` and `upgrade` both call it to show an AUR package's PKGBUILD/diff and get its own confirmation before a build.
+**Find and inspect**
+- [`search.rs`](./search.rs), [`info.rs`](./info.rs) — official repositories plus the AUR; `--official`, `--aur`, `--offline`.
+- [`deps.rs`](./deps.rs) — `deps`, `rdeps`, `why`, `orphans`.
+- [`verify.rs`](./verify.rs) — `verify` (alias `check`): exits non-zero if any package has real problems.
+- [`audit.rs`](./audit.rs) — `audit` of a PKGBUILD, a folder, a built package file or an AUR package.
+- [`doctor.rs`](./doctor.rs) — `doctor`, `--online`, `--report`; the exit status is the number of problems.
 
-[`config.rs`](./config.rs) handles `emrac config ...` (persisted flag defaults, see `emrac-core`'s `config.rs`); it's dispatched before `Sources::init()` since it needs no pacman/alpm setup.
+**Change the system**
+- [`install.rs`](./install.rs), [`remove.rs`](./remove.rs), [`upgrade.rs`](./upgrade.rs), [`purge.rs`](./purge.rs), [`reinstall.rs`](./reinstall.rs), [`downgrade.rs`](./downgrade.rs) — plan, show, confirm, execute, then log to the history.
+- [`aur_review.rs`](./aur_review.rs), [`aur_install.rs`](./aur_install.rs), [`official_inspect.rs`](./official_inspect.rs) — shared helpers, not subcommands: the PKGBUILD review and its confirmation, the build-and-install flow (sandbox, manifest, the high-risk prompt, the retry with the network on, the dependency-conflict swap), and `--inspect` for official packages.
+- [`build.rs`](./build.rs) — `build`: an AUR package or a local PKGBUILD folder, no install.
+- [`rollback.rs`](./rollback.rs) — `rollback [tx]`, `undo`, `redo`.
+- [`snapshot.rs`](./snapshot.rs), [`restore.rs`](./restore.rs) — package-set restore points.
+- [`pin.rs`](./pin.rs) — `pin` (no packages: list) and `unpin`.
+- [`history.rs`](./history.rs) — `history` (alias `transactions`), and `record()`, which the commands above call after executing; a failed write only warns.
 
-[`completion.rs`](./completion.rs) prints a `clap_complete`-generated bash/zsh/fish script for `emrac completion <shell>`; like `config`, it's dispatched before `Sources::init()`.
+**Housekeeping**
+- [`pacnew.rs`](./pacnew.rs) — `pacnew`, `pacnew diff`, `resolve` (keep, take, merge, edit), `revert`, `status`; asks every time and never takes `--yes` as an answer.
+- [`cache.rs`](./cache.rs) — `cache` list, stats, clean, trim, purge (and the `cc` / `cs` shortcuts).
 
-[`history.rs`](./history.rs) handles `emrac history` (alias `transactions`) and exports `record()`, which `install`/`remove`/`upgrade` call after executing to append to the transaction log; a failed write there only warns.
-
-[`rollback.rs`](./rollback.rs) handles `emrac rollback [tx]`, `emrac undo` and `emrac redo` (same code path; redo is just reversing the latest undo): plan, show what will change and what is left alone, confirm, execute, then log the result with `history::record_rollback`.
-
-[`downgrade.rs`](./downgrade.rs) handles `emrac downgrade <pkg> [version]` and `--list`: plan, preview, confirm, execute via the same fetch + `pacman -U` path rollback uses, then log it as a `downgrade` transaction (so `undo` can reverse it).
-
-[`reinstall.rs`](./reinstall.rs) handles `emrac reinstall <pkg>...`: plan (each package's source is shown), confirm, execute, log as a `reinstall` transaction (which `undo` skips and `rollback` refuses, since no version changes).
-
-[`purge.rs`](./purge.rs) handles `emrac purge <pkg>...`: the `remove` flow plus a preview of the config files with local changes that will be deleted instead of kept as `.pacsave`, and a dedicated confirmation when there are any.
-
-[`verify.rs`](./verify.rs) handles `emrac verify <pkg>...` (alias `check`): prints the per-package report and then exits non-zero if any package has real problems (edited config files and unreadable files don't count), so scripts can use it. Read-only; not logged in the history.
+**Setup**
+- [`config.rs`](./config.rs), [`completion.rs`](./completion.rs) — handled before `Sources::init()`, since they need no pacman setup.

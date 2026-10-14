@@ -1,3 +1,33 @@
 # src/
 
-`lib.rs` is the crate root — it re-exports the public API (`Sources`/`SearchScope`/`SearchResults`, `Plan`/`PlannedPackage`/`PlanAction`, `Error`/`Result`, `Config`, `History`/`TransactionRecord`, `PackageSummary`/`PackageDetails`) and nothing else. `Sources` (in [`sources.rs`](./sources.rs)) is the intended entry point; the source-specific backends in [`backend/`](./backend) aren't re-exported. Data models live in [`package.rs`](./package.rs) and [`plan.rs`](./plan.rs), the crate error type in [`error.rs`](./error.rs), and the persisted TOML config (`~/.config/emrac/config.toml`) in [`config.rs`](./config.rs). Executed transactions are logged by [`history.rs`](./history.rs) to `~/.local/share/emrac/history.jsonl` (append-only JSON Lines). [`rollback.rs`](./rollback.rs) is the pure planning logic for `rollback`/`undo` (inverse of a recorded transaction, post-state check, package-file lookup); `Sources::plan_rollback`/`execute_rollback` wire it to libalpm and pacman. Missing official package versions come from the Arch Linux Archive via [`backend/archive.rs`](./backend/archive.rs), downloaded to `~/.cache/emrac/archive/<pkg>/`. [`downgrade.rs`](./downgrade.rs) holds the pure version-choosing logic for `emrac downgrade`. [`reinstall.rs`](./reinstall.rs) picks where each package of `emrac reinstall` comes from (file, repository, Archive, or AUR rebuild). [`purge.rs`](./purge.rs) classifies a package's `backup=()` config files (unmodified / modified / missing / unreadable) for `emrac purge`. [`verify.rs`](./verify.rs) parses a package's mtree and compares it with the filesystem for `emrac verify`.
+`lib.rs` is the crate root: it declares the modules and re-exports the public API, and nothing else. [`sources.rs`](./sources.rs) is the intended entry point; the backends in [`backend/`](./backend) are not re-exported.
+
+**Core model**
+- [`sources.rs`](./sources.rs) — `Sources`: merges the official repositories and the AUR behind one `search`/`info` surface, plans and runs install, remove, upgrade, rollback, downgrade, reinstall, purge, restore, builds, `doctor`, and the `pacnew` and `cache` scans.
+- [`plan.rs`](./plan.rs) — `Plan` and friends: the preview shown before anything changes, including removals, provider choices and warnings.
+- [`package.rs`](./package.rs) — `PackageSummary` / `PackageDetails`.
+- [`error.rs`](./error.rs) — the error type; each error is voiced `found` (something the user can fix) or `says` (something failed underneath).
+- [`config.rs`](./config.rs) — the TOML config (`flags`, `review`, `search`, `snapshot`, `build`, `cache`).
+
+**Safety of AUR builds**
+- [`audit.rs`](./audit.rs) — static analysis of a PKGBUILD, its scriptlets and the files shipped beside it; findings are info, warning, high or critical.
+- [`manifest.rs`](./manifest.rs) — inspects a built package file: setuid files, hooks, sudoers entries, accounts, units, scripts, and the installed packages it would remove.
+- [`sandbox.rs`](./sandbox.rs) — the bubblewrap argument list, the probe that checks it works, resource limits (cgroup scope, timeout, size), and the run that keeps the tail of the build's output.
+
+**Recovery and history**
+- [`history.rs`](./history.rs) — the append-only transaction log (`~/.local/share/emrac/history.jsonl`).
+- [`rollback.rs`](./rollback.rs) — pure planning for `rollback` / `undo` / `redo`: the inverse of a record, the post-state check, finding package files.
+- [`downgrade.rs`](./downgrade.rs), [`reinstall.rs`](./reinstall.rs), [`purge.rs`](./purge.rs) — the version choice, the source choice, and the config-file classification behind those commands.
+- [`snapshot.rs`](./snapshot.rs) — named restore points of the installed package set.
+- [`pins.rs`](./pins.rs) — holds with a reason and an expiry.
+- [`verify.rs`](./verify.rs) — compares a package's mtree with the filesystem.
+- [`deps.rs`](./deps.rs) — dependency, reverse-dependency, "why" and orphan reports.
+
+**Housekeeping**
+- [`doctor.rs`](./doctor.rs) — the health checks, each with a fix, and the sanitized report.
+- [`pacnew.rs`](./pacnew.rs) — pure logic for `.pacnew` files: classifying by comparing the old shipped file, the live file and the new one, three-way merging, validators for the files that matter.
+- [`pacnew_log.rs`](./pacnew_log.rs) — the record of changes `pacnew` made (`~/.local/share/emrac/pacnew-log.jsonl`).
+- [`pacnew_ops.rs`](./pacnew_ops.rs) — applying and reverting a change through `sudo`, with copies kept.
+- [`cache.rs`](./cache.rs) — scanning the source, build, binary and pacman caches and deciding what is safe to remove.
+
+Persisted state lives in `~/.config/emrac/`, `~/.local/share/emrac/` and `~/.cache/emrac/`.
