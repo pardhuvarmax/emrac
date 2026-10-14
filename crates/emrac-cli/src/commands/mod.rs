@@ -11,6 +11,7 @@ pub mod history;
 pub mod info;
 pub mod install;
 pub mod official_inspect;
+pub mod pacnew;
 pub mod pin;
 pub mod purge;
 pub mod reinstall;

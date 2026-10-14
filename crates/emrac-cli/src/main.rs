@@ -139,6 +139,13 @@ fn run(cli: &Cli) -> Result<()> {
             quiet,
             config.snapshot.before_upgrade,
         ),
+        Commands::Pacnew { fetch, command } => commands::pacnew::run(
+            &sources,
+            *fetch && !offline,
+            command.as_ref(),
+            dry_run,
+            json,
+        ),
         Commands::Pin {
             pkgs,
             reason,

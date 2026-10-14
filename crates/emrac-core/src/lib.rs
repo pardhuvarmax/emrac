@@ -8,6 +8,7 @@ mod error;
 mod history;
 mod manifest;
 mod package;
+mod pacnew;
 mod pins;
 mod plan;
 mod purge;
@@ -31,6 +32,8 @@ pub use error::{Error, Result};
 pub use history::{parse_date, History, TransactionRecord, TxStatus};
 pub use manifest::Manifest;
 pub use package::{PackageDetails, PackageSummary};
+pub use pacnew::unified_diff;
+pub use pacnew::{Class as PacnewClass, Merge as PacnewMerge, Pending as PacnewFile};
 pub use pins::{Pin, PinStore};
 pub use plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval, ProviderChoice};
 pub use purge::{ConfigFile, ConfigState, PurgePlan};
@@ -41,6 +44,7 @@ pub use snapshot::{
     RestoreDiff, RestoreEntry, RestoreItem, RestorePlan, RestoreSource, Snapshot, SnapshotPackage,
     SnapshotStore,
 };
+pub use sources::PacnewAction;
 pub use sources::{
     audit_path, inspect_package, package_list_state, OfficialInspection, PackageList,
     SearchResults, SearchScope, Sources, UpgradePlan,

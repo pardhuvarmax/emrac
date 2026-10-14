@@ -15,6 +15,7 @@ use crate::error::{Error, Result};
 use crate::history::{now, History, TxStatus};
 use crate::manifest::{self, Manifest};
 use crate::package::{PackageDetails, PackageSummary};
+use crate::pacnew::{self, Class, Merge, Pending, Texts};
 use crate::pins::{self, Pin, PinStore};
 use crate::plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval, ProviderChoice};
 use crate::purge::PurgePlan;
@@ -429,6 +430,308 @@ impl Sources {
     /// Installs built package files with `sudo pacman -U`.
     pub fn install_built(&self, files: &[PathBuf]) -> Result<()> {
         self.pacman.execute_install_files(files)
+    }
+
+    /// Every pending `.pacnew` / `.pacsave`, judged by comparing the live
+    /// file, the new one and the version the old package shipped. With
+    /// `fetch`, an old package missing from the local caches may be downloaded
+    /// from the Archive to get it. Nothing is changed.
+    pub fn pacnew_scan(&self, fetch: bool) -> Result<Vec<Pending>> {
+        let log = std::fs::read_to_string("/var/log/pacman.log").unwrap_or_default();
+        let events = pacnew::parse_log(&log);
+        let cache_dirs = self.pacman.cache_dirs().unwrap_or_default();
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut out = Vec::new();
+        for (package, live, suffix, md5) in self.alpm.pending_config() {
+            let pending = format!("{live}.{suffix}");
+            seen.insert(pending.clone());
+            out.push(self.judge_pending(
+                Some(package),
+                &live,
+                &pending,
+                suffix == "pacsave",
+                &md5,
+                &events,
+                &cache_dirs,
+                fetch,
+            ));
+        }
+        for pending in find_pacnew(Path::new("/etc")) {
+            if seen.contains(&pending) {
+                continue;
+            }
+            let Some(live) = pacnew::live_path(&pending) else {
+                continue;
+            };
+            out.push(self.judge_pending(
+                None,
+                live,
+                &pending,
+                pending.ends_with(".pacsave"),
+                "",
+                &events,
+                &cache_dirs,
+                fetch,
+            ));
+        }
+        out.sort_by(|a, b| a.live.cmp(&b.live));
+        Ok(out)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn judge_pending(
+        &self,
+        package: Option<String>,
+        live: &str,
+        pending: &str,
+        is_pacsave: bool,
+        recorded_md5: &str,
+        events: &[pacnew::LogEvent],
+        cache_dirs: &[PathBuf],
+        fetch: bool,
+    ) -> Pending {
+        let age_days = std::fs::metadata(pending)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| std::time::SystemTime::now().duration_since(t).ok())
+            .map(|d| d.as_secs() / 86_400);
+        let mut file = Pending {
+            live: live.to_string(),
+            pending: pending.to_string(),
+            package: package.clone(),
+            class: Class::Unknown,
+            reason: String::new(),
+            base_version: None,
+            age_days,
+            critical: pacnew::is_critical(live),
+            merge: None,
+            texts: Texts::default(),
+            merged: None,
+        };
+        if is_pacsave {
+            file.class = Class::Pacsave;
+            file.reason =
+                "left when the package was removed; there is no newer version to compare".into();
+            return file;
+        }
+        let read = |path: &str| {
+            std::fs::read(path)
+                .ok()
+                .and_then(|b| String::from_utf8(b).ok())
+        };
+        let (Some(theirs), Some(ours)) = (read(pending), read(live)) else {
+            file.reason =
+                "can't be read as text (no permission, binary, or the live file is missing)".into();
+            return file;
+        };
+        file.texts.ours = Some(ours.clone());
+        file.texts.theirs = Some(theirs.clone());
+        if ours == theirs {
+            (file.class, file.reason) = (
+                Class::Identical,
+                "the live file and the new one are the same".into(),
+            );
+            return file;
+        }
+        // A .pacnew made by an older upgrade than the installed package is
+        // not what the installed package ships.
+        if !recorded_md5.is_empty() && md5_of(pending).is_some_and(|m| m != recorded_md5) {
+            file.reason =
+                "this .pacnew is older than the installed package's file, so it says nothing about what changed"
+                    .into();
+            return file;
+        }
+        let member = live.trim_start_matches('/');
+        // Walk the earlier versions, newest first. If the live file is exactly
+        // what one of them shipped, it was never edited (just older than the
+        // `.pacnew`); otherwise the first one that differs from the new file
+        // is the base the two sides are compared against.
+        let mut base: Option<(String, String)> = None;
+        let mut unedited: Option<(String, String)> = None;
+        if let Some(pkg) = package.as_deref() {
+            for version in pacnew::earlier_versions(events, pkg, 6) {
+                let Some(text) = self.old_file_text(pkg, &version, member, cache_dirs, fetch)
+                else {
+                    continue;
+                };
+                if text == ours {
+                    unedited = Some((version, text));
+                    break;
+                }
+                if base.is_none() && text != theirs {
+                    base = Some((version, text));
+                }
+            }
+        }
+        let base = unedited.clone().or(base);
+        let (class, reason) =
+            pacnew::classify(base.as_ref().map(|(_, t)| t.as_str()), &ours, &theirs);
+        let reason = match &unedited {
+            Some((version, _)) => format!(
+                "the live file is exactly what {version} shipped, so you never edited it; it is just older than the new one"
+            ),
+            None => reason.to_string(),
+        };
+        file.class = class;
+        file.reason = reason;
+        if let Some((version, text)) = base {
+            file.base_version = Some(version);
+            file.texts.base = Some(text);
+        } else if package.is_some() {
+            file.reason.push_str(if fetch {
+                " (the earlier package versions weren't in the caches or the Archive)"
+            } else {
+                " (the earlier package versions aren't in the local caches; --fetch also looks in the Archive)"
+            });
+        }
+        if class == Class::BothChanged {
+            if let Some(base) = &file.texts.base {
+                match pacnew::merge3(base, &ours, &theirs) {
+                    Ok(merge) => {
+                        file.merge = Some(
+                            match &merge {
+                                Merge::Clean(_) => "clean",
+                                Merge::Conflicts(_) => "conflicts",
+                            }
+                            .to_string(),
+                        );
+                        file.merged = Some(merge);
+                    }
+                    Err(err) => file.reason.push_str(&format!(" (couldn't merge: {err})")),
+                }
+            }
+        }
+        file
+    }
+
+    /// One file as an older version of `pkg` shipped it: from a package file
+    /// on this machine, else (with `fetch`) from the Archive.
+    fn old_file_text(
+        &self,
+        pkg: &str,
+        version: &str,
+        member: &str,
+        cache_dirs: &[PathBuf],
+        fetch: bool,
+    ) -> Option<String> {
+        let path = match self.locate_file(cache_dirs, pkg, version) {
+            Some(path) => path,
+            None if fetch => {
+                let file = self.archive.find(pkg, version).ok()??;
+                let dest = self.archive.cache_dir(pkg).ok()?.join(&file.filename);
+                if !dest.exists() {
+                    self.archive.download(&file.url, &dest).ok()?;
+                }
+                dest
+            }
+            None => return None,
+        };
+        crate::backend::PackageFile::read(&path, member)
+    }
+
+    /// Carries out the user's choice for one pending file. The live file is
+    /// copied to `~/.local/share/emrac/config-backups/` before it is
+    /// replaced; the change itself goes through `sudo`. Returns the backup's
+    /// path, if one was made.
+    pub fn pacnew_apply(&self, file: &Pending, action: PacnewAction) -> Result<Option<PathBuf>> {
+        let sudo = |program: &str, args: &[&str]| {
+            self.pacman.run_sudo(
+                program,
+                &args.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+            )
+        };
+        match action {
+            PacnewAction::Keep => {
+                sudo("rm", &["-f", &file.pending])?;
+                Ok(None)
+            }
+            PacnewAction::Take | PacnewAction::Merge => {
+                let merged = match (action, &file.merged) {
+                    (PacnewAction::Merge, Some(Merge::Clean(text))) => Some(text.clone()),
+                    (PacnewAction::Merge, _) => {
+                        return Err(Error::Simulation(format!(
+                            "{} has no clean merge to apply",
+                            file.live
+                        )))
+                    }
+                    _ => None,
+                };
+                let backup = self.back_up_live(&file.live)?;
+                match merged {
+                    None => sudo("mv", &["-f", &file.pending, &file.live])?,
+                    Some(text) => {
+                        use std::os::unix::fs::MetadataExt;
+                        let meta = std::fs::metadata(&file.live).map_err(|source| Error::Io {
+                            context: format!("couldn't read {}", file.live),
+                            source,
+                        })?;
+                        let tmp = backup.with_extension("merged");
+                        std::fs::write(&tmp, text).map_err(|source| Error::Io {
+                            context: format!("couldn't write {}", tmp.display()),
+                            source,
+                        })?;
+                        let result = sudo(
+                            "install",
+                            &[
+                                "-m",
+                                &format!("{:o}", meta.mode() & 0o7777),
+                                "-o",
+                                &meta.uid().to_string(),
+                                "-g",
+                                &meta.gid().to_string(),
+                                &tmp.display().to_string(),
+                                &file.live,
+                            ],
+                        );
+                        let _ = std::fs::remove_file(&tmp);
+                        result?;
+                        sudo("rm", &["-f", &file.pending])?;
+                    }
+                }
+                Ok(Some(backup))
+            }
+        }
+    }
+
+    /// Copies `live` into the config-backups folder (private, mode 0600).
+    fn back_up_live(&self, live: &str) -> Result<PathBuf> {
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+        let io = |context: String| move |source| Error::Io { context, source };
+        let home = std::env::var("HOME").map_err(|_| Error::NoHomeDir)?;
+        let dest = pacnew::backup_path(Path::new(&home), &now().to_string(), live);
+        if let Some(parent) = dest.parent() {
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(parent)
+                .map_err(io(format!("couldn't create {}", parent.display())))?;
+        }
+        let bytes = match std::fs::read(live) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                // Not readable by the user: ask sudo to read it.
+                let out = Command::new("sudo")
+                    .args(["cat", live])
+                    .output()
+                    .map_err(|e| Error::CommandSpawn("sudo".to_string(), e))?;
+                if !out.status.success() {
+                    return Err(Error::CommandFailed {
+                        command: format!("sudo cat {live}"),
+                        stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+                    });
+                }
+                out.stdout
+            }
+        };
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&dest)
+            .map_err(io(format!("couldn't create {}", dest.display())))?;
+        std::io::Write::write_all(&mut f, &bytes)
+            .map_err(io(format!("couldn't write {}", dest.display())))?;
+        Ok(dest)
     }
 
     /// Splits explicitly-named upgrade targets into official vs. AUR.
@@ -1935,6 +2238,31 @@ fn find_pacnew(root: &Path) -> Vec<String> {
     walk(root, 0, &mut out);
     out.sort();
     out
+}
+
+/// What to do with a pending file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PacnewAction {
+    /// Keep the live file; delete the `.pacnew` / `.pacsave`.
+    Keep,
+    /// Replace the live file with the `.pacnew`.
+    Take,
+    /// Replace the live file with the clean three-way merge.
+    Merge,
+}
+
+/// md5 of a file as `md5sum` prints it (what pacman records for config files).
+fn md5_of(path: &str) -> Option<String> {
+    let out = Command::new("md5sum").arg(path).output().ok()?;
+    out.status
+        .success()
+        .then(|| {
+            String::from_utf8_lossy(&out.stdout)
+                .split_whitespace()
+                .next()
+                .map(str::to_string)
+        })
+        .flatten()
 }
 
 /// Total size of the files under `dir`, `depth` levels down.

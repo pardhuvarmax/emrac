@@ -145,6 +145,17 @@ pub enum Commands {
         command: ConfigCommand,
     },
 
+    /// Find, explain and resolve .pacnew / .pacsave files (no subcommand: list them)
+    Pacnew {
+        /// Also fetch old package versions missing from the local caches
+        /// from the Arch Linux Archive, to tell your edits from upstream's
+        #[arg(long)]
+        fetch: bool,
+
+        #[command(subcommand)]
+        command: Option<PacnewCommand>,
+    },
+
     /// Hold installed packages back from `upgrade` (no packages: list pins)
     Pin {
         pkgs: Vec<String>,
@@ -304,6 +315,22 @@ pub enum CompletionShell {
     Bash,
     Zsh,
     Fish,
+}
+
+#[derive(Subcommand)]
+pub enum PacnewCommand {
+    /// Show what you changed, what upstream changed, and how a merge comes out
+    Diff {
+        /// The live file (/etc/…) or its .pacnew / .pacsave
+        file: String,
+    },
+
+    /// Go through the pending files and keep, take or merge each
+    /// (asks every time; --yes does not answer)
+    Resolve {
+        /// Only these files (default: all of them)
+        files: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]

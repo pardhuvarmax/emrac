@@ -33,15 +33,26 @@ by a package".
 
 ## 2. Finding the base
 
-`/var/log/pacman.log` records `warning: <file> installed as <file>.pacnew` and
-`upgraded <pkg> (<old> -> <new>)`. The base is the owning package's `<old>` from
-the upgrade just before the latest such warning for that file. Its file is taken
-from the pacman cache, then from the Arch Linux Archive through the existing
-`ArchiveBackend` (u5), by extracting only that one path with `bsdtar`.
+`/var/log/pacman.log` records `upgraded <pkg> (<old> -> <new>)`. The earlier
+versions of the owning package (newest first, at most six) give candidate files,
+read from the pacman cache, the AUR build folder or emrac's archive cache, and
+with `--fetch` from the Arch Linux Archive through the existing `ArchiveBackend`
+(u5), extracting only that one path with `bsdtar`.
 
-If the log has no usable entry, the package is gone from both, or the archive is
-unreachable, the file is classified `unknown` and only the live-vs-new diff is
-shown, with the reason. Nothing is guessed.
+(The first version of this plan took the version just before the log's `installed
+as .pacnew` warning. Real data showed that is not reliable: a `.pacnew` can be left
+by an older upgrade than the log's latest warning, and the live file can be older
+than every recent version. So every candidate is tried.)
+
+- If the live file is exactly what one candidate shipped, it was never edited: it is
+  just older than the new file (`untouched`).
+- Otherwise the base is the newest candidate whose file differs from the new one.
+- A `.pacnew` whose md5 differs from the one pacman recorded for the installed
+  package is older than that package, says nothing about what changed, and is
+  `unknown`.
+
+If no candidate can be read, the file is `unknown` and only the live-vs-new diff is
+shown, with the reason and the hint about `--fetch`. Nothing is guessed.
 
 ## 3. Classification
 
@@ -59,8 +70,9 @@ with conflicts is never written.
 
 ## 4. Commands
 
-- `emrac pacnew` — list every pending file with its package, class, age, and a
-  one-line reason. `--json` is machine-readable.
+- `emrac pacnew [--fetch]` — list every pending file with its package, class, age, and
+  a one-line reason. `--json` is machine-readable. Without `--fetch`, only package
+  files already on this machine are used; nothing is downloaded.
 - `emrac pacnew diff <file>` — what the user changed, what upstream changed (both
   against the base), and the result of a merge.
 - `emrac pacnew resolve [file…]` — for each file, offer keep / take / merge / skip.
@@ -69,8 +81,9 @@ with conflicts is never written.
 ## 5. Safety
 
 - emrac never runs as root. Writes go through `sudo`; the replaced live file is first
-  copied to `~/.local/share/emrac/config-backups/<timestamp>/<path>` with its mode.
-- Every change is a default-no prompt that `--yes` does not answer; silence is no.
+  copied to `~/.local/share/emrac/config-backups/<unix-time>/<path>` (private, mode 0600).
+- Every change is asked about; an empty answer, an unknown one, `--yes` and a closed
+  stdin all skip. The suggested action is named, never pre-selected.
 - A short list of files whose change can lock the user out (`sudoers`, `sudoers.d/*`,
   `passwd`, `shadow`, `group`, `fstab`, `pam.d/*`, `ssh/sshd_config`) is marked and
   needs the user to type the file's name to take or merge it. Keep and skip stay

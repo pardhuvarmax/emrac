@@ -391,7 +391,7 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             ),
         )
         .detail(listed(&i.pacnew_files))
-        .fix("compare each with its live file (diff, or pacdiff from pacman-contrib), then keep or delete")
+        .fix("`emrac pacnew` shows which ones hold your own edits and offers to keep, take or merge each")
     });
 
     // Failed units.

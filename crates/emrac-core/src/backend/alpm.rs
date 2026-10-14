@@ -542,6 +542,31 @@ impl AlpmBackend {
         files
     }
 
+    /// Config files (`backup=()` of every installed package) that have a
+    /// `.pacnew` or `.pacsave` beside them: (package, live path, which suffix,
+    /// md5 recorded for the shipped file).
+    pub fn pending_config(&self) -> Vec<(String, String, &'static str, String)> {
+        let root = self.handle.root().to_string();
+        let mut out = Vec::new();
+        for pkg in self.handle.localdb().pkgs() {
+            for backup in pkg.backup() {
+                let live = Path::new(&root).join(backup.name());
+                for suffix in ["pacnew", "pacsave"] {
+                    let pending = format!("{}.{suffix}", live.display());
+                    if Path::new(&pending).exists() {
+                        out.push((
+                            pkg.name().to_string(),
+                            live.display().to_string(),
+                            suffix,
+                            backup.hash().to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+        out
+    }
+
     /// Checks an installed package's files against its mtree record.
     pub fn verify_installed(&self, name: &str, no_extract: &[String]) -> Result<PackageReport> {
         let pkg = self

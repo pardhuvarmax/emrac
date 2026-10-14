@@ -68,6 +68,28 @@ pub fn confirm_default_no(message: &str) -> bool {
     ask(message, "[y/N]", false)
 }
 
+/// Asks which of `options` (single letters) to take. An empty answer, an
+/// unknown one and end of input all mean "none": nothing is changed.
+pub fn choose(message: &str, options: &str) -> Option<char> {
+    print!("emrac asks: {message} ");
+    io::stdout().flush().ok()?;
+    pick(read_line().as_deref(), options)
+}
+
+pub(crate) fn pick(line: Option<&str>, options: &str) -> Option<char> {
+    let c = line?.trim().chars().next()?.to_ascii_lowercase();
+    options.contains(c).then_some(c)
+}
+
+/// The user must type `expected` exactly: for changes that can lock them out.
+pub fn confirm_typed(message: &str, expected: &str) -> bool {
+    print!("emrac asks: {message} ");
+    if io::stdout().flush().is_err() {
+        return false;
+    }
+    read_line().is_some_and(|l| l.trim() == expected)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,6 +114,16 @@ mod tests {
         for no in ["n", "N", "no", "nope", "yy", "yes please", "0", "q"] {
             assert!(!decide(Some(no), true), "{no}");
             assert!(!decide(Some(no), false), "{no}");
+        }
+    }
+
+    #[test]
+    fn a_choice_needs_a_listed_letter_and_nothing_else_selects() {
+        assert_eq!(pick(Some("t"), "tks"), Some('t'));
+        assert_eq!(pick(Some(" K "), "tks"), Some('k'));
+        assert_eq!(pick(Some("take"), "tks"), Some('t'));
+        for none in [Some(""), Some("x"), Some("m"), None] {
+            assert_eq!(pick(none, "tks"), None, "{none:?}");
         }
     }
 

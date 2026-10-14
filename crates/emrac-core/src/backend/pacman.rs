@@ -221,6 +221,14 @@ impl PacmanBackend {
             })
     }
 
+    /// Runs `sudo <program> <args>` with the terminal attached: the one way
+    /// emrac changes a root-owned file outside pacman.
+    pub fn run_sudo(&self, program: &str, args: &[String]) -> Result<()> {
+        let mut all = vec![program.to_string()];
+        all.extend(args.iter().cloned());
+        self.run_inherited("sudo", &all)
+    }
+
     /// `--noconfirm` unless pacman has been told to ask: with it, pacman takes
     /// the default answer to every question (and the default for a package
     /// conflict is "no", so a conflicting install can only fail).
