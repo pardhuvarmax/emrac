@@ -78,3 +78,5 @@ Current:
   check: `history archive`, a hash chain, `history ack`.
 - [`u7-ledger.md`](./u7-ledger.md) — a second, root-owned append-only copy of the history that the
   user's own programs cannot rewrite.
+- [`u8-ledger-watch.md`](./u8-ledger-watch.md) — the kernel audit system watches the ledger, emrac
+  reports any write that is not its own, and chain anchors catch a rewrite.
