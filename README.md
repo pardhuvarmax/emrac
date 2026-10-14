@@ -6,7 +6,7 @@ A hybrid next generation package management platform for Arch Linux — an orche
 
 ---
 
-Status: **Slice u30** (release r1 plus thirty updates). The core loop (`search`, `info`, `install`, `remove`, `upgrade` against the official repos and the AUR) works, with a transaction preview and confirmation before every change, audited and sandboxed AUR builds, history with rollback, health checks, and tools for config files and caches (see Highlights). Still missing: the TUI, build profiles and the source-or-binary recommendation, and most of `SPEC.md` Part IV.
+Status: **Slice r2** (released 2026-10-14; the release notes are in [`docs/releases/r2.md`](./docs/releases/r2.md)). The core loop (`search`, `info`, `install`, `remove`, `upgrade` against the official repos and the AUR) works, with a transaction preview and confirmation before every change, audited and sandboxed AUR builds, history with rollback, health checks, and tools for config files and caches (see Highlights). Still missing: the TUI, build profiles and the source-or-binary recommendation, and most of `SPEC.md` Part IV.
 
 | Area | Commands |
 |---|---|

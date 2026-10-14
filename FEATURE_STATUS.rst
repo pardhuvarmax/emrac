@@ -2,9 +2,8 @@ Feature Status
 ================
 
 Every category in ``SPEC.md`` Parts III, IV and V, checked against
-what is actually shipped as of **Slice u30** (release ``r1`` plus the
-updates ``u1`` to ``u30``; the last commit before this refresh is
-``10ae7bd``). The core CLI loop -- ``search`` / ``info`` / ``install``
+what is actually shipped as of **Slice r2** (release ``r2``, which
+includes the updates ``u1`` to ``u30`` built on ``r1``). The core CLI loop -- ``search`` / ``info`` / ``install``
 / ``remove`` / ``upgrade``, official repos + AUR -- has been complete
 since ``r1``. Since then the work has gone into making a real upgrade
 safe and recoverable: audited and sandboxed AUR builds, plans that match
@@ -396,4 +395,4 @@ are tracked separately since they are not product features: 3 partial
 (shell integration, system, pin/unpin), 3 not started.
 
 Source: ``SPEC.md`` Parts III, IV, V and X, checked against
-``crates/`` and ``CHANGELOG.md`` as of Slice u30.
+``crates/`` and ``CHANGELOG.md`` as of Slice r2.

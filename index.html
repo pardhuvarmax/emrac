@@ -331,7 +331,7 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
   </div>
 
   <h2 id="built">Available now</h2>
-  <p>Release <b>r1</b> plus thirty updates (<b>u1</b> to <b>u30</b>). Everything below runs today. Each command that changes the system was also tried against a real pacman in a container, and <a href="#changes">the change list</a> says what was seen for each slice.</p>
+  <p>Release <b>r2</b>, which includes the thirty updates built on r1 (<b>u1</b> to <b>u30</b>). Everything below runs today. Each command that changes the system was also tried against a real pacman in a container, and <a href="#changes">the change list</a> says what was seen for each slice.</p>
   <h3>Everyday commands</h3>
   <table class="box resp">
     <tbody>
@@ -482,6 +482,7 @@ use_agent = true</pre>
   <table class="box resp">
     <thead><tr><th>Slice</th><th>Date</th><th>Change</th></tr></thead>
     <tbody>
+      <tr><td><b>r2</b></td><td>2026-10-14</td><td>Second release: r1 plus the updates u1&ndash;u30. Reviewed, audited and sandboxed AUR builds, plans that match what pacman will do, undo after a real upgrade, <code>doctor</code>, <code>pacnew</code> and <code>cache</code>; checked with 271 tests and 26 end-to-end runs against a real pacman.</td></tr>
       <tr><td><b>u30</b></td><td>2026-10-14</td><td><code>pacnew</code> checks a file before applying it, records every change, can <code>revert</code> it, shows <code>status</code> and lets you edit a conflicted merge by hand.</td></tr>
       <tr><td><b>u29</b></td><td>2026-10-14</td><td><code>cache clean --lean</code> (or <code>cache.policy = "lean"</code>) keeps one rollback set: what undoing the last <code>cache.keep_days</code> days needs, AUR builds and held-back packages. Rollback now fetches current versions from the repositories.</td></tr>
       <tr><td><b>u28</b></td><td>2026-10-14</td><td><code>emrac cache</code>: list, stats, clean, trim and purge over source, build, binary and pacman caches; keeps what <code>undo</code> needs; dry-run summarizes what stays.</td></tr>
@@ -518,7 +519,7 @@ use_agent = true</pre>
   </table>
 
   <h2 id="install">Download</h2>
-  <p>Emrac is at release r1 with updates through u30. It has not been published to the AUR or a repository yet, so the commands below show the intended installation.</p>
+  <p>Emrac is at release r2. It has not been published to the AUR or a repository yet, so the commands below show the intended installation.</p>
   <div class="tabs" role="tablist" aria-label="Installation method">
     <button type="button" role="tab" aria-selected="true" data-tab="aur">AUR</button>
     <button type="button" role="tab" aria-selected="false" data-tab="pacman">pacman</button>
@@ -534,7 +535,7 @@ use_agent = true</pre>
   <div class="box">
     <div class="dl">
       <a class="btn" href="#install">Download Emrac</a>
-      <p>Release r1 + updates u1&ndash;u30</p>
+      <p>Release r2</p>
     </div>
   </div>
 
@@ -544,6 +545,7 @@ use_agent = true</pre>
       <li><div class="kv"><b>i1</b><span>incubation</span></div><small>Read-only search and info against official repositories</small></li>
       <li><div class="kv"><b>r1</b><span>first release</span></div><small>search, info, install, remove, upgrade; official repositories and AUR</small></li>
       <li><div class="kv"><b>u1&ndash;u30</b><span>updates</span></div><small>History and rollback, audit and sandbox, doctor, plans that match pacman, pacnew, cache</small></li>
+      <li><div class="kv"><b>r2</b><span>second release</span></div><small>r1 plus u1&ndash;u30, made safe for a real machine; the next update is u1 against r2</small></li>
     </ul>
   </div>
 
