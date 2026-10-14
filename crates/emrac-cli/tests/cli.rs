@@ -643,6 +643,9 @@ package() {{
 
 /// Can a sandbox and makepkg run here at all? (CI containers often can't.)
 fn sandbox_usable() -> bool {
+    // The same arguments emrac's own probe uses, including a fresh /proc and
+    // /tmp: a clean chroot or a container may allow the rest and forbid
+    // mounting /proc, and the tests must skip there rather than fail.
     let bwrap = Command::new("bwrap")
         .args([
             "--unshare-all",
@@ -651,6 +654,10 @@ fn sandbox_usable() -> bool {
             "/",
             "--dev",
             "/dev",
+            "--proc",
+            "/proc",
+            "--tmpfs",
+            "/tmp",
             "true",
         ])
         .output()

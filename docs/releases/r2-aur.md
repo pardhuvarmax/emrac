@@ -2,7 +2,7 @@
 
 Tag `r2-aur`, 2026-10-14. Built by pardhuvarmax — https://github.com/pardhuvarmax/emrac
 
-This is the source release the first Arch User Repository package is built from. The program is **release r2** unchanged: the Rust source is identical to the `r2` tag, and the version is still `0.2.0`. What this tag adds is what a distribution package needs.
+This is the source release the first Arch User Repository package is built from. The program is **release r2**: its behaviour is unchanged and the version is still `0.2.0`. Compared with the `r2` tag, the Rust code differs only in tests (and a test-only switch in an output helper). What this tag adds is what a distribution package needs.
 
 ## What is new compared with the `r2` tag
 
@@ -10,6 +10,7 @@ This is the source release the first Arch User Repository package is built from.
 - **A tracked list of tests.** `docs/tests/emrac-tests.rst` lists every passing automated test (271) and the 26 end-to-end checks. `dev/gen-tests-doc.sh` regenerates it and CI fails if it is stale.
 - **The end-to-end checks in the repository** (`dev/e2e/`), run in a disposable container against a real pacman, and a release build script (`dev/release-build.sh`) that embeds none of the builder's paths.
 - **A README in every folder**, the stale ones rewritten.
+- **Tests that hold up in a clean build.** Building the package in a clean chroot showed that two sandbox tests failed where bubblewrap cannot mount `/proc`: their check for "is the sandbox usable?" left out the `/proc` mount that emrac's own check performs. They now use the same arguments and skip where the sandbox cannot work, and run for real where it can. A third test no longer writes 5,000 lines into every test log.
 - **Credit and metadata:** `emrac --version` and `--help` name the builder; the images carry no author metadata.
 
 ## What emrac r2 is
