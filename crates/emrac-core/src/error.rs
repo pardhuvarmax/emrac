@@ -227,6 +227,9 @@ pub enum Error {
     #[error("makepkg finished but left no package file for '{0}'")]
     NoBuiltPackage(String),
 
+    #[error("couldn't work out what the transaction would remove: {0}")]
+    Simulation(String),
+
     #[error("couldn't refresh the package list: {0}")]
     FreshSync(String),
 
@@ -293,6 +296,7 @@ impl Error {
             | Error::AuditFlagged(_)
             | Error::DoctorProblems(_)
             | Error::FreshSync(_)
+            | Error::Simulation(_)
             | Error::ManifestBlocked { .. }
             | Error::InstallDeclined { .. }
             | Error::NoBuiltPackage(_)

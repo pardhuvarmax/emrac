@@ -30,13 +30,32 @@ pub struct PlannedPackage {
     pub previous_version: Option<String>,
 }
 
+/// A package the transaction removes although nobody asked for it to be:
+/// pacman removes it to resolve a conflict or because another package
+/// replaces it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PlannedRemoval {
+    pub name: String,
+    pub version: String,
+    /// `conflicts with <pkg>`, `replaced by <pkg>`, …
+    pub reason: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Plan {
     pub action: PlanAction,
     pub packages: Vec<PlannedPackage>,
     pub total_download_size: u64,
-    /// Positive for install, negative for remove.
+    /// Positive for install, negative for remove. Accounts for `removals`.
     pub total_installed_size_delta: i64,
+    /// What conflict and replacement resolution will additionally remove,
+    /// according to libalpm itself.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub removals: Vec<PlannedRemoval>,
+    /// Things the user should know about how far this plan can be trusted
+    /// (e.g. the removals could not be worked out).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 impl Plan {

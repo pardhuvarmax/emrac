@@ -109,6 +109,22 @@ pub fn print_plan(plan: &Plan, json: bool) {
     }
     println!();
 
+    // Removals nobody asked for: the packages pacman removes to resolve
+    // conflicts, or because another package replaces them.
+    if !plan.removals.is_empty() {
+        println!(
+            "Will also REMOVE {} (a conflict or replacement; pacman will ask you again):",
+            plural(plan.removals.len(), "installed package"),
+        );
+        for r in &plan.removals {
+            println!("  local/{} {}  — {}", r.name, r.version, r.reason);
+        }
+        println!();
+    }
+    for warning in &plan.warnings {
+        eprintln!("emrac warns: {warning}");
+    }
+
     if plan.total_download_size > 0 {
         println!(
             "Download Size    : {}",
@@ -393,6 +409,14 @@ pub fn print_history(
             status,
             summarize_packages(record)
         );
+        if !record.removed.is_empty() {
+            let removed: Vec<String> = record
+                .removed
+                .iter()
+                .map(|r| format!("{} ({})", r.name, r.reason))
+                .collect();
+            println!("        also removed: {}", removed.join(", "));
+        }
         if let Some(original) = &record.rollback_of {
             println!("        rollback of {original}");
         }

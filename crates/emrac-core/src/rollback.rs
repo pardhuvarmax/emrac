@@ -235,14 +235,24 @@ pub fn plan_rollback(
     Ok(RollbackPlan {
         target: record.id.clone(),
         reapplies: record.rollback_of.clone(),
-        note: (record.action == PlanAction::Purge).then(|| {
-            "this was a purge: reinstalling brings the packages back, but their deleted configuration files stay deleted".to_string()
-        }),
+        note: if record.action == PlanAction::Purge {
+            Some("this was a purge: reinstalling brings the packages back, but their deleted configuration files stay deleted".to_string())
+        } else if !record.removed.is_empty() {
+            let names: Vec<&str> = record.removed.iter().map(|r| r.name.as_str()).collect();
+            Some(format!(
+                "that transaction also removed {} to resolve conflicts; undoing it does not put them back",
+                names.join(", ")
+            ))
+        } else {
+            None
+        },
         plan: Plan {
             action: inverse,
             packages,
             total_download_size: 0,
             total_installed_size_delta: 0,
+            removals: Vec::new(),
+            warnings: Vec::new(),
         },
         files,
         downloads,
@@ -396,10 +406,35 @@ mod tests {
             timestamp: 0,
             action,
             packages,
+            removed: Vec::new(),
             status: TxStatus::Committed,
             error: None,
             rollback_of: None,
         }
+    }
+
+    #[test]
+    fn undoing_a_transaction_that_also_removed_packages_says_it_cannot_restore_them() {
+        let mut record = rec(
+            "tx-1",
+            PlanAction::Install,
+            vec![pkg("pipewire-jack", "1-1", None)],
+        );
+        record.removed = vec![crate::plan::PlannedRemoval {
+            name: "jack2".into(),
+            version: "1.9-1".into(),
+            reason: "conflicts with pipewire-jack".into(),
+        }];
+        let world = World::new(&[("pipewire-jack", "1-1")], &[]);
+        let plan = world.plan(&record, &[]).unwrap();
+        let note = plan.note.expect("a note");
+        assert!(note.contains("also removed jack2"), "{note}");
+        assert!(note.contains("does not put them back"), "{note}");
+
+        // An ordinary install has no such note.
+        let plain = rec("tx-2", PlanAction::Install, vec![pkg("tree", "1-1", None)]);
+        let world = World::new(&[("tree", "1-1")], &[]);
+        assert!(world.plan(&plain, &[]).unwrap().note.is_none());
     }
 
     struct World {

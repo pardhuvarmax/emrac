@@ -2,7 +2,10 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 
-use alpm::{Alpm, SigLevel};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use alpm::{Alpm, Question, SigLevel, TransFlag};
 
 use crate::deps::{DepEntry, Orphan};
 use crate::error::{Error, Result};
@@ -18,6 +21,23 @@ pub struct AlpmBackend {
     handle: Alpm,
 }
 
+/// What `AlpmBackend::simulate` should prepare.
+pub enum SimOp<'a> {
+    /// `pacman -S <names>`: the named packages and their dependencies.
+    Install(&'a [String]),
+    /// `pacman -Su`, with these packages held back.
+    Upgrade { ignore: &'a [String] },
+}
+
+/// A package a simulated transaction removes, and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Removal {
+    pub name: String,
+    pub version: String,
+    pub installed_size: u64,
+    pub reason: String,
+}
+
 impl AlpmBackend {
     pub fn init() -> Result<Self> {
         Self::init_with(None)
@@ -30,6 +50,13 @@ impl AlpmBackend {
     }
 
     fn init_with(db_path_override: Option<String>) -> Result<Self> {
+        Ok(Self {
+            handle: Self::open_handle(db_path_override)?,
+        })
+    }
+
+    /// A libalpm handle on pacman's configured root and sync repositories.
+    fn open_handle(db_path_override: Option<String>) -> Result<Alpm> {
         let root = pacman_conf("RootDir")?;
         let db_path = match db_path_override {
             Some(path) => path,
@@ -45,7 +72,92 @@ impl AlpmBackend {
                 .map_err(|source| Error::RegisterSyncDb { repo, source })?;
         }
 
-        Ok(Self { handle })
+        Ok(handle)
+    }
+
+    /// Prepares — never commits — the transaction pacman would run, and says
+    /// what libalpm would remove besides what was asked for. This is pacman's
+    /// own conflict and replacement logic, answering its two questions "yes"
+    /// (what a user who accepts the transaction answers), so the plan can show
+    /// the removals instead of leaving them to a prompt at execution time.
+    ///
+    /// `db_path` selects a different database directory (the freshly synced
+    /// throwaway one); `None` is pacman's own. Needs no root: the transaction
+    /// is initialised without taking the database lock and is released
+    /// unchanged.
+    pub fn simulate(db_path: Option<&Path>, op: SimOp) -> Result<Vec<Removal>> {
+        let fail = |what: String| Error::Simulation(what);
+        let mut handle = Self::open_handle(db_path.map(|p| p.display().to_string()))?;
+
+        let decided: Rc<RefCell<Vec<(String, String)>>> = Rc::new(RefCell::new(Vec::new()));
+        handle.set_question_cb(Rc::clone(&decided), |question, decided| {
+            match question.question() {
+                Question::Conflict(mut q) => {
+                    // "package1 and package2 are in conflict. Remove package2?"
+                    let removed = q.conflict().package2().name().to_string();
+                    let by = q.conflict().package1().name().to_string();
+                    decided
+                        .borrow_mut()
+                        .push((removed, format!("conflicts with {by}")));
+                    q.set_remove(true);
+                }
+                Question::Replace(q) => {
+                    let old = q.oldpkg().name().to_string();
+                    let new = q.newpkg().name().to_string();
+                    decided
+                        .borrow_mut()
+                        .push((old, format!("replaced by {new}")));
+                    q.set_replace(true);
+                }
+                _ => {}
+            }
+        });
+
+        handle
+            .trans_init(TransFlag::NO_LOCK)
+            .map_err(|e| fail(e.to_string()))?;
+        match op {
+            SimOp::Install(names) => {
+                for name in names {
+                    let pkg = handle
+                        .syncdbs()
+                        .find_satisfier(name.as_str())
+                        .ok_or_else(|| fail(format!("'{name}' isn't in the repositories")))?;
+                    handle
+                        .trans_add_pkg(pkg)
+                        .map_err(|e| fail(e.error.to_string()))?;
+                }
+            }
+            SimOp::Upgrade { ignore } => {
+                for name in ignore {
+                    handle
+                        .add_ignorepkg(name.as_str())
+                        .map_err(|e| fail(e.to_string()))?;
+                }
+                handle
+                    .sync_sysupgrade(false)
+                    .map_err(|e| fail(e.to_string()))?;
+            }
+        }
+        handle.trans_prepare().map_err(|e| fail(e.to_string()))?;
+
+        let reasons = decided.borrow();
+        let removals: Vec<Removal> = handle
+            .trans_remove()
+            .iter()
+            .map(|pkg| Removal {
+                name: pkg.name().to_string(),
+                version: pkg.version().to_string(),
+                installed_size: pkg.isize().max(0) as u64,
+                reason: reasons
+                    .iter()
+                    .find(|(n, _)| n == pkg.name())
+                    .map(|(_, why)| why.clone())
+                    .unwrap_or_else(|| "removed by the transaction".to_string()),
+            })
+            .collect();
+        let _ = handle.trans_release();
+        Ok(removals)
     }
 
     pub fn search(&self, query: &str, limit: Option<usize>) -> Vec<PackageSummary> {

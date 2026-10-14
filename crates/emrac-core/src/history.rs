@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::plan::{Plan, PlanAction, PlannedPackage};
+use crate::plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -25,6 +25,10 @@ pub struct TransactionRecord {
     pub timestamp: u64,
     pub action: PlanAction,
     pub packages: Vec<PlannedPackage>,
+    /// Packages the transaction additionally removed to resolve conflicts or
+    /// replacements (`emrac undo` cannot restore these).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub removed: Vec<PlannedRemoval>,
     pub status: TxStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
@@ -94,6 +98,7 @@ impl History {
             timestamp,
             action: plan.action,
             packages: plan.packages.clone(),
+            removed: plan.removals.clone(),
             status: if outcome.is_ok() {
                 TxStatus::Committed
             } else {
@@ -261,6 +266,8 @@ mod tests {
                 .collect(),
             total_download_size: 0,
             total_installed_size_delta: 0,
+            removals: Vec::new(),
+            warnings: Vec::new(),
         }
     }
 

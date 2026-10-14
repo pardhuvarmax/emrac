@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::audit::{self, AuditReport};
 use crate::backend::{
     version_is_newer, AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome,
-    BuildOptions, FreshDb, InstalledSource, PacmanBackend, ResolvedPackage,
+    BuildOptions, FreshDb, InstalledSource, PacmanBackend, Removal, ResolvedPackage, SimOp,
 };
 use crate::config::Config;
 use crate::deps::{self, DepsReport, Orphan, RdepsReport, WhyReport};
@@ -16,7 +16,7 @@ use crate::history::{now, History, TxStatus};
 use crate::manifest::{self, Manifest};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::pins::{self, Pin, PinStore};
-use crate::plan::{Plan, PlanAction, PlannedPackage};
+use crate::plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval};
 use crate::purge::PurgePlan;
 use crate::reinstall::{self, ReinstallItem, ReinstallPlan, ReinstallSource};
 use crate::rollback::{self, Download, RemoteFile, RollbackPlan};
@@ -246,12 +246,21 @@ impl Sources {
             });
         }
 
-        Ok(Plan {
+        let mut plan = Plan {
             action: PlanAction::Install,
             packages,
             total_download_size,
             total_installed_size_delta,
-        })
+            removals: Vec::new(),
+            warnings: Vec::new(),
+        };
+        if !official.is_empty() {
+            attach_removals(
+                &mut plan,
+                AlpmBackend::simulate(None, SimOp::Install(&official)),
+            );
+        }
+        Ok(plan)
     }
 
     /// Actually installs `names` (official repos only) via `sudo pacman
@@ -483,13 +492,22 @@ impl Sources {
             }
         }
 
+        let mut plan = Plan {
+            action: PlanAction::Upgrade,
+            packages,
+            total_download_size,
+            total_installed_size_delta,
+            removals: Vec::new(),
+            warnings: Vec::new(),
+        };
+        // What `-Syu` would remove to resolve conflicts and replacements,
+        // worked out against the same (fresh) databases as the plan itself.
+        attach_removals(
+            &mut plan,
+            AlpmBackend::simulate(dbpath, SimOp::Upgrade { ignore: &ignore }),
+        );
         Ok(UpgradePlan {
-            plan: Plan {
-                action: PlanAction::Upgrade,
-                packages,
-                total_download_size,
-                total_installed_size_delta,
-            },
+            plan,
             aur_warning,
             package_list: view.list,
             held: active
@@ -583,13 +601,22 @@ impl Sources {
             });
         }
 
+        let mut plan = Plan {
+            action: PlanAction::Upgrade,
+            packages,
+            total_download_size,
+            total_installed_size_delta,
+            removals: Vec::new(),
+            warnings: Vec::new(),
+        };
+        if !official.is_empty() {
+            attach_removals(
+                &mut plan,
+                AlpmBackend::simulate(None, SimOp::Install(&official)),
+            );
+        }
         Ok(UpgradePlan {
-            plan: Plan {
-                action: PlanAction::Upgrade,
-                packages,
-                total_download_size,
-                total_installed_size_delta,
-            },
+            plan,
             aur_warning: None,
             // Named packages are resolved and installed against the current
             // local databases both times, so preview and execution agree.
@@ -858,6 +885,8 @@ impl Sources {
                 }],
                 total_download_size: 0,
                 total_installed_size_delta: 0,
+                removals: Vec::new(),
+                warnings: Vec::new(),
             },
             files,
             downloads,
@@ -1024,6 +1053,8 @@ impl Sources {
                 packages,
                 total_download_size: 0,
                 total_installed_size_delta: 0,
+                removals: Vec::new(),
+                warnings: Vec::new(),
             },
             items,
             files,
@@ -1510,6 +1541,8 @@ impl Sources {
                     packages,
                     total_download_size: 0,
                     total_installed_size_delta: 0,
+                    removals: Vec::new(),
+                    warnings: Vec::new(),
                 })
             })
             .collect()
@@ -1547,6 +1580,8 @@ impl Sources {
                     .collect(),
                 total_download_size: 0,
                 total_installed_size_delta: 0,
+                removals: Vec::new(),
+                warnings: Vec::new(),
             };
             on_step(&plan, &result);
             result?;
@@ -1613,6 +1648,29 @@ fn build_plan(
         packages,
         total_download_size,
         total_installed_size_delta,
+        removals: Vec::new(),
+        warnings: Vec::new(),
+    }
+}
+
+/// Adds the removals libalpm says a transaction would cause to `plan`, and
+/// counts the space they free. If the simulation could not run, says so in the
+/// plan instead of silently leaving the section out.
+fn attach_removals(plan: &mut Plan, simulated: Result<Vec<Removal>>) {
+    match simulated {
+        Ok(removals) => {
+            for r in removals {
+                plan.total_installed_size_delta -= r.installed_size as i64;
+                plan.removals.push(PlannedRemoval {
+                    name: r.name,
+                    version: r.version,
+                    reason: r.reason,
+                });
+            }
+        }
+        Err(err) => plan.warnings.push(format!(
+            "couldn't work out whether pacman will also remove packages to resolve conflicts ({err}); it will ask when it runs"
+        )),
     }
 }
 
@@ -1827,6 +1885,86 @@ mod freshness_tests {
                 why: None
             },
             "no date at all is not 'fresh'"
+        );
+    }
+}
+
+#[cfg(test)]
+mod removal_tests {
+    use super::*;
+
+    fn empty_plan(delta: i64) -> Plan {
+        Plan {
+            action: PlanAction::Install,
+            packages: Vec::new(),
+            total_download_size: 0,
+            total_installed_size_delta: delta,
+            removals: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn removals_are_listed_with_their_reason_and_their_space_is_subtracted() {
+        let mut plan = empty_plan(1000);
+        attach_removals(
+            &mut plan,
+            Ok(vec![
+                Removal {
+                    name: "jack2".into(),
+                    version: "1.9-1".into(),
+                    installed_size: 300,
+                    reason: "conflicts with pipewire-jack".into(),
+                },
+                Removal {
+                    name: "old".into(),
+                    version: "2-1".into(),
+                    installed_size: 50,
+                    reason: "replaced by new".into(),
+                },
+            ]),
+        );
+        assert_eq!(plan.total_installed_size_delta, 650);
+        assert_eq!(plan.removals.len(), 2);
+        assert_eq!(plan.removals[0].name, "jack2");
+        assert_eq!(plan.removals[0].reason, "conflicts with pipewire-jack");
+        assert!(plan.warnings.is_empty());
+    }
+
+    #[test]
+    fn no_removals_leaves_the_plan_untouched() {
+        let mut plan = empty_plan(42);
+        attach_removals(&mut plan, Ok(Vec::new()));
+        assert_eq!(plan.total_installed_size_delta, 42);
+        assert!(plan.removals.is_empty() && plan.warnings.is_empty());
+    }
+
+    #[test]
+    fn a_failed_simulation_is_said_not_silently_dropped() {
+        let mut plan = empty_plan(7);
+        attach_removals(&mut plan, Err(Error::Simulation("boom".into())));
+        assert_eq!(plan.total_installed_size_delta, 7, "nothing was subtracted");
+        assert!(plan.removals.is_empty());
+        assert_eq!(plan.warnings.len(), 1);
+        assert!(plan.warnings[0].contains("boom") && plan.warnings[0].contains("it will ask"));
+    }
+
+    #[test]
+    fn plans_without_removals_serialize_without_the_empty_fields() {
+        let json = serde_json::to_value(empty_plan(0)).unwrap();
+        assert!(
+            json.get("removals").is_none() && json.get("warnings").is_none(),
+            "{json}"
+        );
+        let mut plan = empty_plan(0);
+        plan.removals.push(PlannedRemoval {
+            name: "x".into(),
+            version: "1".into(),
+            reason: "r".into(),
+        });
+        assert_eq!(
+            serde_json::to_value(&plan).unwrap()["removals"][0]["name"],
+            "x"
         );
     }
 }
