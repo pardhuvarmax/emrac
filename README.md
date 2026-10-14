@@ -111,4 +111,6 @@ For a release build that does not embed your home directory or the cargo registr
 
 ## License
 
-Not yet decided.
+emrac is free software, licensed under the GNU General Public License, version 3 or (at your option) any later version (`GPL-3.0-or-later`); the full text is in [`LICENSE`](./LICENSE). It links `libalpm` and the `alpm` crates, which are GPL, so the program as a whole has to be distributed under GPL-compatible terms.
+
+Copyright (C) 2026 Emrac contributors. This program comes with ABSOLUTELY NO WARRANTY; see the license for details.

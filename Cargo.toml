@@ -6,6 +6,7 @@ members = ["crates/emrac-core", "crates/emrac-cli"]
 version = "0.2.0"
 edition = "2021"
 authors = ["pardhuvarmax"]
+license = "GPL-3.0-or-later"
 repository = "https://github.com/pardhuvarmax/emrac"
 homepage = "https://github.com/pardhuvarmax/emrac"
 
