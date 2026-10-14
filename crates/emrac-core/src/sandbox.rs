@@ -173,8 +173,19 @@ const TAIL_BYTES: usize = 32 * 1024;
 /// output (which is still shown as it arrives). Output goes through pipes, so the program sees no terminal:
 /// no colours or progress bars. Its stdin stays attached.
 pub fn run_command_tail(
+    cmd: Command,
+    timeout: Option<Duration>,
+) -> std::io::Result<(Outcome, String)> {
+    run_command_capture(cmd, timeout, true)
+}
+
+/// `run_command_tail`, with the choice of whether the output is also shown.
+/// Tests that produce a lot of output pass `false` so they do not flood the
+/// log of `cargo test`.
+fn run_command_capture(
     mut cmd: Command,
     timeout: Option<Duration>,
+    echo: bool,
 ) -> std::io::Result<(Outcome, String)> {
     use std::io::{Read, Write};
     use std::sync::{Arc, Mutex};
@@ -211,13 +222,15 @@ pub fn run_command_tail(
                     break;
                 }
                 let chunk = &buf[..n];
-                let _ = if to_stderr {
-                    let mut e = std::io::stderr().lock();
-                    e.write_all(chunk).and_then(|_| e.flush())
-                } else {
-                    let mut o = std::io::stdout().lock();
-                    o.write_all(chunk).and_then(|_| o.flush())
-                };
+                if echo {
+                    let _ = if to_stderr {
+                        let mut e = std::io::stderr().lock();
+                        e.write_all(chunk).and_then(|_| e.flush())
+                    } else {
+                        let mut o = std::io::stdout().lock();
+                        o.write_all(chunk).and_then(|_| o.flush())
+                    };
+                }
                 let mut tail = tail.lock().unwrap();
                 tail.extend_from_slice(chunk);
                 if tail.len() > TAIL_BYTES {
@@ -678,7 +691,7 @@ mod tests {
             "-c",
             "echo out-line; echo err-line >&2; i=0; while [ $i -lt 5000 ]; do echo padding-padding-padding-padding; i=$((i+1)); done; echo the-end",
         ]);
-        let (out, tail) = run_command_tail(cmd, None).unwrap();
+        let (out, tail) = run_command_capture(cmd, None, false).unwrap();
         assert!(matches!(out, Outcome::Exited(ref s, _) if s.success()));
         assert!(tail.ends_with("the-end\n"), "{tail:?}");
         assert!(tail.len() <= TAIL_BYTES, "{}", tail.len());
