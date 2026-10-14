@@ -27,5 +27,10 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: Shell scripts parse
+        run: |
+          sh -n install.sh
+          for f in dev/*.sh; do sh -n "$f"; done
+
       - name: Test list is current
         run: sh dev/gen-tests-doc.sh --check

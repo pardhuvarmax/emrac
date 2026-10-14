@@ -89,6 +89,18 @@ The automated tests that pass are listed in [`docs/tests/emrac-tests.rst`](./doc
 
 See `SPEC.md` Part X for details.
 
+## Installing
+
+On Arch Linux or an Arch-based system, the install script builds a pacman package from the release tarball, after checking its SHA-256 against the value pinned in the script, and installs it with `sudo pacman -U`, so pacman tracks every file and `sudo pacman -Rns emrac` removes it. It never runs as root, asks only for `sudo` where pacman needs it, and cleans up its temporary folder. Read it before you run it:
+
+```sh
+curl -fsSLO https://pardhuvarmax.github.io/emrac/install.sh
+less install.sh
+sh install.sh          # asks before it does anything; --yes skips the questions
+```
+
+Or in one step: `curl -fsSL https://pardhuvarmax.github.io/emrac/install.sh | sh`. `sh install.sh --dry-run` shows what it would do, and `sh install.sh --uninstall` removes the package. The AUR package is not published yet.
+
 ## Building
 
 Requirements:

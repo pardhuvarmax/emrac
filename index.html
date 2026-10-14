@@ -519,9 +519,10 @@ use_agent = true</pre>
   </table>
 
   <h2 id="install">Download</h2>
-  <p>Emrac is at release r2. It has not been published to the AUR or a repository yet, so the commands below show the intended installation.</p>
+  <p>Emrac is at release r2. The install script builds a pacman package from the release tarball (after checking its checksum) and installs it with pacman, so <code>pacman -Rns emrac</code> removes it. The AUR and a binary repository are not published yet, so those tabs show the intended commands. Read a script before you run it.</p>
   <div class="tabs" role="tablist" aria-label="Installation method">
-    <button type="button" role="tab" aria-selected="true" data-tab="aur">AUR</button>
+    <button type="button" role="tab" aria-selected="true" data-tab="script">Install script</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="aur">AUR</button>
     <button type="button" role="tab" aria-selected="false" data-tab="pacman">pacman</button>
     <button type="button" role="tab" aria-selected="false" data-tab="source">From source</button>
   </div>
@@ -959,16 +960,18 @@ use_agent = true</pre>
   applyUI(false);
 
   var CODE = {
+    script:'<span class="k"># read it first, then run it</span>\ncurl -fsSLO https://pardhuvarmax.github.io/emrac/install.sh\nless install.sh\nsh install.sh\n\n<span class="k"># or in one step</span>\ncurl -fsSL https://pardhuvarmax.github.io/emrac/install.sh | sh',
     aur:'<span class="k"># once the package is published</span>\nparu -S emrac',
     pacman:'<span class="k"># once a binary repository is published</span>\nsudo pacman -S emrac',
-    source:'git clone &lt;repository-url&gt; emrac\ncd emrac\ncargo build --release\nsudo install -Dm755 target/release/emrac /usr/local/bin/emrac'
+    source:'git clone https://github.com/pardhuvarmax/emrac.git emrac\ncd emrac\ncargo build --release\nsudo install -Dm755 target/release/emrac /usr/local/bin/emrac'
   };
   var PLAIN = {
+    script:"curl -fsSL https://pardhuvarmax.github.io/emrac/install.sh | sh",
     aur:"paru -S emrac",
     pacman:"sudo pacman -S emrac",
-    source:"git clone <repository-url> emrac\ncd emrac\ncargo build --release\nsudo install -Dm755 target/release/emrac /usr/local/bin/emrac"
+    source:"git clone https://github.com/pardhuvarmax/emrac.git emrac\ncd emrac\ncargo build --release\nsudo install -Dm755 target/release/emrac /usr/local/bin/emrac"
   };
-  var current = "aur", codeText = document.getElementById("codeText");
+  var current = "script", codeText = document.getElementById("codeText");
   function setTab(k){
     current = k; codeText.innerHTML = CODE[k];
     document.querySelectorAll(".tabs button").forEach(function(b){
@@ -978,7 +981,7 @@ use_agent = true</pre>
   document.querySelectorAll(".tabs button").forEach(function(b){
     b.addEventListener("click",function(){ setTab(b.getAttribute("data-tab")); });
   });
-  setTab("aur");
+  setTab("script");
 
   var copyBtn = document.getElementById("copyBtn");
   copyBtn.addEventListener("click",function(){

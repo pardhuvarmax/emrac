@@ -9,4 +9,6 @@ End-to-end checks: the release binary against a real pacman, in the disposable c
 dev/e2e/run.sh
 ```
 
+`dev/e2e/run.sh install` runs [`install-script.sh`](./install-script.sh) instead: the root `install.sh` in the container — its options, its refusals (not Arch, no terminal, wrong checksum), a real install piped through `sh` the way `curl | sh` runs it, a second run and the removal.
+
 Needs podman and network access, so CI does not run these. The check titles are listed in [`docs/tests/emrac-tests.rst`](../../docs/tests/emrac-tests.rst), which `dev/gen-tests-doc.sh` regenerates.

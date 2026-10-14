@@ -10,6 +10,10 @@ A release build (`target/release/emrac`) that does not embed the builder's paths
 
 End-to-end checks of the release binary against a real pacman, run in the container below with `dev/e2e/run.sh`. See [`e2e/README.md`](./e2e/README.md).
 
+## pin-install-script.sh
+
+Points the root `install.sh` at a release tag: `dev/pin-install-script.sh <tag>` downloads the tag's tarball, computes its SHA-256, reads the version and rewrites the three pinned values at the top of the script. Run it after pushing a new tag and commit the result.
+
 ## gen-tests-doc.sh
 
 Runs the tests and rewrites [`docs/tests/emrac-tests.rst`](../docs/tests/emrac-tests.rst), the list of every passing test; `--check` fails if the committed file is stale, and CI runs it. See [`docs/tests/README.md`](../docs/tests/README.md).
