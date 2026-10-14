@@ -57,3 +57,5 @@ Current:
   builds.
 - [`u21-doctor.md`](./u21-doctor.md) — `emrac doctor`: read-only system health checks with a
   sanitized `--report`.
+- [`u22-fresh-upgrade-view.md`](./u22-fresh-upgrade-view.md) — upgrade previews built from a
+  freshly synced throwaway database, so they match what `-Syu` will do.
