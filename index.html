@@ -207,6 +207,8 @@ dl.layers div:last-child{border-bottom:0}
 dl.layers dt{color:var(--head);font-weight:700}
 dl.layers dt small{display:block;color:var(--muted);font-weight:400;font-size:12px}
 dl.layers dd{margin:0}
+dl.layers.wide div{grid-template-columns:230px 1fr}
+dl.layers dt .tag{margin-top:3px}
 
 /* checklist */
 .checks label{display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer}
@@ -245,7 +247,7 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
 @media (max-width:820px){
   #page{grid-template-columns:1fr}
   #nav a{padding:10px 12px}
-  dl.layers div{grid-template-columns:1fr;gap:2px}
+  dl.layers div,dl.layers.wide div{grid-template-columns:1fr;gap:2px}
   .tagline{display:none}
 }
 @media (max-width:560px){
@@ -363,7 +365,20 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
     </tbody>
   </table>
   <h3>Not built yet</h3>
-  <p><span class="tag mute">terminal interface</span> <span class="tag mute">build profiles</span> <span class="tag mute">build queue</span> <span class="tag mute">source-or-binary scoring</span> <span class="tag mute">news and advisories</span> <span class="tag mute"><code>locate</code></span> <span class="tag mute"><code>lock</code>/<code>unlock</code></span> <span class="tag mute">filesystem snapshots</span> <span class="tag mute">Landlock layer</span> <span class="tag mute">dependency graph and impact views</span></p>
+  <div class="box">
+    <dl class="layers wide">
+      <div><dt>Terminal interface<small>planned</small></dt><dd>The same functions as the commands, in a full-screen browser. Not started.</dd></div>
+      <div><dt>Build profiles<small>planned</small></dt><dd>Reusable compiler, linker and optimization settings. Builds use the <code>makepkg</code> defaults today.</dd></div>
+      <div><dt>Build queue<small>planned</small></dt><dd>Queue, pause and resume. Builds run one at a time, in the foreground.</dd></div>
+      <div><dt>Source-or-binary scoring<small>planned</small></dt><dd>A recommendation with its reasons. Plans do not recommend yet.</dd></div>
+      <div><dt>News and advisories<small>planned</small></dt><dd>Manual-intervention notices before an upgrade. The next small step; <code>doctor</code> does not read the Arch news yet.</dd></div>
+      <div><dt><code>locate</code><small>planned</small></dt><dd>Which package owns a file or a command.</dd></div>
+      <div><dt><code>lock</code> / <code>unlock</code><small>planned</small></dt><dd>Stricter than <code>pin</code>, which holds a package back from <code>upgrade</code> and is built.</dd></div>
+      <div><dt>Filesystem snapshots<small>planned</small></dt><dd>Btrfs and ZFS. <code>snapshot</code> saves the installed package set only.</dd></div>
+      <div><dt>Landlock layer<small>planned</small></dt><dd>A second sandbox layer. The bubblewrap sandbox is built.</dd></div>
+      <div><dt>Graph and impact views<small>planned</small></dt><dd>Dependency graphs and what a removal would affect. <code>deps</code>, <code>rdeps</code> and <code>why</code> print text.</dd></div>
+    </dl>
+  </div>
 
   <h2 id="features">Planned features</h2>
   <p>The design goals from <code>SPEC.md</code>. Those not listed under <a href="#built">Available now</a> are not built yet.</p>
