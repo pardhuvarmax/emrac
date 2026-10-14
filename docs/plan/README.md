@@ -59,3 +59,5 @@ Current:
   sanitized `--report`.
 - [`u22-fresh-upgrade-view.md`](./u22-fresh-upgrade-view.md) — upgrade previews built from a
   freshly synced throwaway database, so they match what `-Syu` will do.
+- [`u23-pacman-prompts.md`](./u23-pacman-prompts.md) — pacman asks its own questions unless
+  `--yes`; silence is never consent.

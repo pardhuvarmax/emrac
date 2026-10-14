@@ -12,6 +12,19 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u23 — 2026-10-14 — pacman's own prompts, and silence is not consent
+
+Asked whether emrac could pass pacman's prompts through. It could not: every mutating command ran pacman with `--noconfirm`, so a package conflict (`pipewire-jack` vs `jack2`: "Remove jack2? [y/N]"), a provider choice or a replacement took pacman's default — and the default for a conflict is *no*, so a conflicting install could only fail even when you wanted it. **Without `--yes`, pacman now runs with the terminal attached and no `--noconfirm`, so it asks** (install, remove, purge, upgrade, every `pacman -U` path, and the dependency step of `makepkg -s`); `--yes` keeps meaning fully non-interactive. The sandboxed build steps stay `--noconfirm` (no prompt can occur there). The cost is a second "Proceed with installation?" from pacman after emrac's own.
+
+**A real safety bug found on the way:** `confirm()` is documented to return false when it cannot read an answer, but end of input is not a read error — it came back as an empty line, which `[Y/n]` treats as yes. With a closed stdin and no `--yes`, `emrac install foo` **proceeded without anyone answering**. No answer at all (end of input, a read failure) is now always a no, whatever the default; an empty line still takes it. Also: prompts read one byte at a time up to the newline, because `std::io::stdin()` takes a whole buffered block and so, with piped input, emrac's first prompt swallowed every line and the pacman started afterwards saw end of input — scripted answers (`printf 'y
+y
+y
+' | emrac install …`) now reach pacman. Design in `docs/plan/u23-pacman-prompts.md`.
+
+Verified with 3 argument tests (`--noconfirm` present exactly when non-interactive, for install, upgrade and remove; the rest of each command identical; the default unchanged) and 4 tests of the decision rule incl. "end of input is never consent" — 201 core, 18 CLI integration, 8 CLI unit. Through a **real pseudo-terminal** in the container: answering yes to emrac, to pacman's `Remove jack2?` and to its final confirm replaces `jack2` with `pipewire-jack` (impossible before); answering no to the removal aborts cleanly with nothing changed; `--yes` behaves as before. With a closed stdin and no `--yes` nothing is installed (it used to install); a bare Enter still means yes; `n` declines; scripted answers reach pacman.
+
+Not done: emrac's plan for an install doesn't list packages that conflict resolution will remove (`install pipewire-jack` planned "1 package" without saying `jack2` goes); pacman's prompt now shows it at execution, but the preview should too — the same class of fault as u22, and next.
+
 ## Slice u22 — 2026-10-14 — upgrade previews that match reality
 
 **A bug in what I shipped, reported by the owner:** `emrac doctor` said "Pending upgrades: up to date" on a machine whose package list was 11 days old. Chasing it found the same flaw in `emrac upgrade` itself, which was worse: its plan was built from the sync databases *as last refreshed*, but the real step runs `pacman -Syu`, which refreshes first. On this host the plan listed **0** of the **347** official updates `checkupdates` finds (only 23 AUR packages showed); with an empty stale plan it printed "nothing to upgrade — you're already up to date" and returned before any refresh; and if even one official package had been in the stale view, the confirmed upgrade would have applied all the unseen ones. A preview that doesn't match what happens breaks the central promise of a preview-and-confirm tool.

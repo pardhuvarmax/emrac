@@ -1,35 +1,105 @@
 use std::io::{self, Write};
 
-/// Prompts on stdout/stdin, defaulting to yes on an empty answer (matches
-/// pacman's own `[Y/n]` convention). Returns `false` on any read failure
-/// (e.g. no attached terminal) rather than assuming consent.
-pub fn confirm(message: &str) -> bool {
-    print!("emrac asks: {message} [Y/n] ");
+/// Reads one line from standard input **one byte at a time**.
+///
+/// `std::io::stdin()` reads in blocks, so with piped input (`printf 'y\ny\n' |
+/// emrac …`) the first prompt would swallow every line and leave nothing for
+/// the pacman that emrac starts afterwards. Reading byte by byte takes exactly
+/// one line. `None` means end of input with nothing typed (no terminal, a
+/// closed pipe) or a read error: there is no answer to act on.
+fn read_line() -> Option<String> {
+    let mut line = Vec::new();
+    let mut byte = 0u8;
+    loop {
+        // SAFETY: reading one byte into a valid, writable one-byte buffer.
+        let n = unsafe { libc::read(0, (&mut byte as *mut u8).cast(), 1) };
+        match n {
+            1 if byte == b'\n' => break,
+            1 => line.push(byte),
+            0 => {
+                if line.is_empty() {
+                    return None;
+                }
+                break;
+            }
+            _ => {
+                if io::Error::last_os_error().kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return None;
+            }
+        }
+    }
+    Some(String::from_utf8_lossy(&line).into_owned())
+}
+
+/// Turns what was typed into a decision. **No answer at all (end of input) is
+/// never consent**, whatever the default: an empty *line* takes the default,
+/// but a closed terminal or pipe must not install anything.
+pub(crate) fn decide(line: Option<&str>, default_yes: bool) -> bool {
+    let Some(line) = line else {
+        return false;
+    };
+    match line.trim().to_lowercase().as_str() {
+        "" => default_yes,
+        "y" | "yes" => true,
+        _ => false,
+    }
+}
+
+fn ask(message: &str, hint: &str, default_yes: bool) -> bool {
+    print!("emrac asks: {message} {hint} ");
     if io::stdout().flush().is_err() {
         return false;
     }
+    decide(read_line().as_deref(), default_yes)
+}
 
-    let mut answer = String::new();
-    if io::stdin().read_line(&mut answer).is_err() {
-        return false;
-    }
-
-    let answer = answer.trim().to_lowercase();
-    answer.is_empty() || answer == "y" || answer == "yes"
+/// Prompts on stdout/stdin; an empty answer means yes (matches pacman's own
+/// `[Y/n]` convention). No answer at all — end of input, a read failure — is
+/// a no.
+pub fn confirm(message: &str) -> bool {
+    ask(message, "[Y/n]", true)
 }
 
 /// Like `confirm`, but an empty answer means no: for decisions where
 /// proceeding must be a deliberate act.
 pub fn confirm_default_no(message: &str) -> bool {
-    print!("emrac asks: {message} [y/N] ");
-    if io::stdout().flush().is_err() {
-        return false;
+    ask(message, "[y/N]", false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_line_takes_the_default() {
+        assert!(decide(Some(""), true));
+        assert!(decide(Some("  \t"), true));
+        assert!(!decide(Some(""), false));
     }
 
-    let mut answer = String::new();
-    if io::stdin().read_line(&mut answer).is_err() {
-        return false;
+    #[test]
+    fn yes_in_any_case_and_with_spaces_is_yes_either_way() {
+        for yes in ["y", "Y", "yes", "YES", " Yes "] {
+            assert!(decide(Some(yes), true), "{yes}");
+            assert!(decide(Some(yes), false), "{yes}");
+        }
     }
 
-    matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
+    #[test]
+    fn anything_else_is_no_even_when_the_default_is_yes() {
+        for no in ["n", "N", "no", "nope", "yy", "yes please", "0", "q"] {
+            assert!(!decide(Some(no), true), "{no}");
+            assert!(!decide(Some(no), false), "{no}");
+        }
+    }
+
+    #[test]
+    fn end_of_input_is_never_consent_whatever_the_default() {
+        // This used to be treated as an empty answer, i.e. "yes" for [Y/n]:
+        // `emrac install foo < /dev/null` installed without anyone agreeing.
+        assert!(!decide(None, true));
+        assert!(!decide(None, false));
+    }
 }

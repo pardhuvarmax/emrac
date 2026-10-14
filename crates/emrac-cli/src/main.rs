@@ -81,7 +81,10 @@ fn run(cli: &Cli) -> Result<()> {
     let json = cli.json || config.flags.json;
     let quiet = cli.quiet || config.flags.quiet;
 
-    let sources = Sources::init()?;
+    let mut sources = Sources::init()?;
+    // Without --yes, pacman asks its own questions (conflicts, provider
+    // choices, replacements); with it, every question takes its default.
+    sources.set_interactive(!yes);
 
     match &cli.command {
         Commands::Search {
@@ -108,7 +111,7 @@ fn run(cli: &Cli) -> Result<()> {
             offline,
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
-            BuildChoice::from_flags(review, &config.build),
+            BuildChoice::from_flags(review, &config.build, !yes),
             review.inspect || config.review.inspect_official,
             json,
         ),
@@ -130,7 +133,7 @@ fn run(cli: &Cli) -> Result<()> {
             offline,
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
-            BuildChoice::from_flags(review, &config.build),
+            BuildChoice::from_flags(review, &config.build, !yes),
             review.inspect || config.review.inspect_official,
             json,
             quiet,
@@ -167,6 +170,7 @@ fn run(cli: &Cli) -> Result<()> {
                 accept_risks: *accept_risks,
                 no_sandbox: *no_sandbox,
                 allow_network: *allow_network,
+                interactive: !yes,
                 limits: Limits::from_config(&config.build),
             };
             commands::reinstall::run(&sources, pkgs, dry_run, yes, offline, choice, json)
@@ -177,7 +181,7 @@ fn run(cli: &Cli) -> Result<()> {
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
             yes,
-            BuildChoice::from_flags(review, &config.build),
+            BuildChoice::from_flags(review, &config.build, !yes),
             json,
         ),
         Commands::Downgrade { pkg, version, list } => {

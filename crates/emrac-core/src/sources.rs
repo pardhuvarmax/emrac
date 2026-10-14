@@ -132,6 +132,13 @@ impl Sources {
         })
     }
 
+    /// Let pacman ask its own questions (package conflicts, provider choices,
+    /// replacements, key imports) instead of taking `--noconfirm` defaults.
+    /// The CLI turns this on unless `--yes` was given.
+    pub fn set_interactive(&mut self, interactive: bool) {
+        self.pacman.set_interactive(interactive);
+    }
+
     pub fn search(
         &self,
         query: &str,

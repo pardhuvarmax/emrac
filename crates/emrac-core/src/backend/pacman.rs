@@ -7,11 +7,20 @@ use crate::error::{Error, Result};
 /// Resolution (`-S`/`-R --print`) needs no privileges and never mutates
 /// anything; execution always goes through `sudo`, prompting interactively
 /// when needed, so emrac itself never has to run as root.
-pub struct PacmanBackend;
+pub struct PacmanBackend {
+    /// Let pacman ask its own questions (conflicts, provider choices,
+    /// replacements, key imports) instead of taking `--noconfirm` defaults.
+    interactive: bool,
+}
 
 impl PacmanBackend {
+    /// Non-interactive, as `--yes` means: every question takes its default.
     pub fn new() -> Self {
-        Self
+        Self { interactive: false }
+    }
+
+    pub fn set_interactive(&mut self, interactive: bool) {
+        self.interactive = interactive;
     }
 
     /// Resolved install target names (explicit packages + any new
@@ -111,11 +120,13 @@ impl PacmanBackend {
     /// Actually installs. Runs under `sudo`, with stdio inherited so
     /// pacman's real progress output goes straight to the terminal.
     pub fn execute_install(&self, pkgs: &[String]) -> Result<()> {
+        self.run_inherited("sudo", &self.install_args(pkgs))
+    }
+
+    fn install_args(&self, pkgs: &[String]) -> Vec<String> {
         let mut args = vec!["pacman".to_string(), "-S".to_string()];
         args.extend(pkgs.iter().cloned());
-        args.push("--noconfirm".to_string());
-
-        self.run_inherited("sudo", &args)
+        self.finish(args)
     }
 
     /// Downloads `pkgs` and their dependencies into the cache without
@@ -123,9 +134,7 @@ impl PacmanBackend {
     pub fn execute_download(&self, pkgs: &[String]) -> Result<()> {
         let mut args = vec!["pacman".to_string(), "-Sw".to_string()];
         args.extend(pkgs.iter().cloned());
-        args.push("--noconfirm".to_string());
-
-        self.run_inherited("sudo", &args)
+        self.run_inherited("sudo", &self.finish(args))
     }
 
     /// Syncs the databases and downloads every pending upgrade into the cache
@@ -133,20 +142,20 @@ impl PacmanBackend {
     pub fn execute_download_upgrade(&self, ignore: &[String]) -> Result<()> {
         let mut args = vec!["pacman".to_string(), "-Syuw".to_string()];
         args.extend(ignore_args(ignore));
-        args.push("--noconfirm".to_string());
-
-        self.run_inherited("sudo", &args)
+        self.run_inherited("sudo", &self.finish(args))
     }
 
     /// Actually syncs and upgrades everything. Runs under `sudo`, with
     /// stdio inherited — a real, single combined `-Syu` transaction, same
     /// as `execute_install` lets pacman own conflict/currency logic.
     pub fn execute_full_upgrade(&self, ignore: &[String]) -> Result<()> {
+        self.run_inherited("sudo", &self.full_upgrade_args(ignore))
+    }
+
+    fn full_upgrade_args(&self, ignore: &[String]) -> Vec<String> {
         let mut args = vec!["pacman".to_string(), "-Syu".to_string()];
         args.extend(ignore_args(ignore));
-        args.push("--noconfirm".to_string());
-
-        self.run_inherited("sudo", &args)
+        self.finish(args)
     }
 
     /// Actually removes. Runs under `sudo`, with stdio inherited. `nosave`
@@ -159,6 +168,16 @@ impl PacmanBackend {
         recursive: bool,
         nosave: bool,
     ) -> Result<()> {
+        self.run_inherited("sudo", &self.remove_args(pkgs, cascade, recursive, nosave))
+    }
+
+    fn remove_args(
+        &self,
+        pkgs: &[String],
+        cascade: bool,
+        recursive: bool,
+        nosave: bool,
+    ) -> Vec<String> {
         let mut args = vec!["pacman".to_string(), "-R".to_string()];
         if nosave {
             // Delete modified config files instead of saving them as .pacsave.
@@ -171,9 +190,7 @@ impl PacmanBackend {
             args.push("--recursive".to_string());
         }
         args.extend(pkgs.iter().cloned());
-        args.push("--noconfirm".to_string());
-
-        self.run_inherited("sudo", &args)
+        self.finish(args)
     }
 
     /// Actually installs local package files (`pacman -U`) — how a rollback
@@ -182,9 +199,17 @@ impl PacmanBackend {
     pub fn execute_install_files(&self, files: &[PathBuf]) -> Result<()> {
         let mut args = vec!["pacman".to_string(), "-U".to_string()];
         args.extend(files.iter().map(|f| f.display().to_string()));
-        args.push("--noconfirm".to_string());
+        self.run_inherited("sudo", &self.finish(args))
+    }
 
-        self.run_inherited("sudo", &args)
+    /// `--noconfirm` unless pacman has been told to ask: with it, pacman takes
+    /// the default answer to every question (and the default for a package
+    /// conflict is "no", so a conflicting install can only fail).
+    fn finish(&self, mut args: Vec<String>) -> Vec<String> {
+        if !self.interactive {
+            args.push("--noconfirm".to_string());
+        }
+        args
     }
 
     /// pacman's `NoExtract` patterns (`pacman-conf NoExtract`).
@@ -323,5 +348,68 @@ fn pacman_failed(program: &str, args: &[String], stderr: &str) -> Error {
     Error::CommandFailed {
         command: format!("{program} {}", args.join(" ")),
         stderr: stderr.trim().to_string(),
+    }
+}
+
+#[cfg(test)]
+mod prompt_tests {
+    use super::*;
+
+    fn backend(interactive: bool) -> PacmanBackend {
+        let mut b = PacmanBackend::new();
+        b.set_interactive(interactive);
+        b
+    }
+
+    fn names(l: &[&str]) -> Vec<String> {
+        l.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn non_interactive_takes_noconfirm_and_interactive_lets_pacman_ask() {
+        let pkgs = names(&["foo", "bar"]);
+        for (interactive, expect) in [(false, true), (true, false)] {
+            let b = backend(interactive);
+            let all = [
+                b.install_args(&pkgs),
+                b.full_upgrade_args(&names(&["held"])),
+                b.remove_args(&pkgs, true, false, true),
+            ];
+            for args in all {
+                assert_eq!(
+                    args.contains(&"--noconfirm".to_string()),
+                    expect,
+                    "interactive={interactive}: {args:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_rest_of_each_command_is_identical_either_way() {
+        let pkgs = names(&["foo"]);
+        let strip = |mut a: Vec<String>| {
+            a.retain(|x| x != "--noconfirm");
+            a
+        };
+        assert_eq!(
+            strip(backend(false).install_args(&pkgs)),
+            backend(true).install_args(&pkgs)
+        );
+        assert_eq!(
+            strip(backend(false).remove_args(&pkgs, true, true, true)),
+            backend(true).remove_args(&pkgs, true, true, true)
+        );
+        assert_eq!(
+            backend(true).full_upgrade_args(&names(&["a", "b"])),
+            ["pacman", "-Syu", "--ignore", "a,b"]
+        );
+    }
+
+    #[test]
+    fn the_default_is_the_old_non_interactive_behaviour() {
+        assert!(PacmanBackend::new()
+            .install_args(&names(&["x"]))
+            .contains(&"--noconfirm".to_string()));
     }
 }

@@ -17,11 +17,14 @@ pub struct BuildChoice {
     pub no_sandbox: bool,
     /// Give the sandboxed build network access without asking.
     pub allow_network: bool,
+    /// Let pacman ask its own questions (no `--yes`).
+    pub interactive: bool,
 }
 
 impl BuildChoice {
-    pub fn from_flags(flags: &AurReviewFlags, build: &BuildConfig) -> Self {
+    pub fn from_flags(flags: &AurReviewFlags, build: &BuildConfig, interactive: bool) -> Self {
         Self {
+            interactive,
             limits: Limits::from_config(build),
             accept_risks: flags.accept_risks,
             no_sandbox: flags.no_sandbox,
@@ -47,6 +50,7 @@ pub fn build_options(
             sandbox: false,
             allow_network: true,
             limits: choice.limits,
+            interactive: choice.interactive,
         });
     }
     sources.sandbox_check()?;
@@ -59,6 +63,7 @@ pub fn build_options(
         sandbox: true,
         allow_network,
         limits: choice.limits,
+        interactive: choice.interactive,
     })
 }
 

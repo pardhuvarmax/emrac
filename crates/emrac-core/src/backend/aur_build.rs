@@ -15,6 +15,9 @@ pub struct BuildOptions {
     pub allow_network: bool,
     /// Memory, process, tmpfs and time limits for the sandboxed steps.
     pub limits: Limits,
+    /// Let pacman (through `makepkg -s`) ask its own questions when it
+    /// installs build dependencies, instead of taking `--noconfirm` defaults.
+    pub interactive: bool,
 }
 
 impl Default for BuildOptions {
@@ -23,6 +26,7 @@ impl Default for BuildOptions {
             sandbox: true,
             allow_network: false,
             limits: Limits::default(),
+            interactive: false,
         }
     }
 }
@@ -173,7 +177,8 @@ impl AurBuildBackend {
     pub fn build_in(&self, dir: &Path, opts: BuildOptions) -> Result<()> {
         if !opts.sandbox {
             let status = Command::new("makepkg")
-                .args(["-s", "--noconfirm", "--needed"])
+                .args(["-s", "--needed"])
+                .args((!opts.interactive).then_some("--noconfirm"))
                 .current_dir(dir)
                 .status()
                 .map_err(|err| Error::CommandSpawn("makepkg".to_string(), err))?;
@@ -190,7 +195,8 @@ impl AurBuildBackend {
 
         // 1. Dependencies and verified sources, on the host.
         let status = Command::new("makepkg")
-            .args(["-s", "--verifysource", "--noconfirm", "--needed"])
+            .args(["-s", "--verifysource", "--needed"])
+            .args((!opts.interactive).then_some("--noconfirm"))
             .current_dir(dir)
             .status()
             .map_err(|err| Error::CommandSpawn("makepkg".to_string(), err))?;
