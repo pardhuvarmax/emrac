@@ -1078,7 +1078,13 @@ fn download_targets(stage: &Stage) -> Vec<String> {
     if !named || remote_name {
         out.extend(args.iter().filter(|a| a.contains("://")).map(|u| base(u)));
     }
-    out.extend(redirect_targets(&stage.text).iter().map(|t| base(t)));
+    // Output sent to /dev/null, /dev/stderr and the like saves no file.
+    out.extend(
+        redirect_targets(&stage.text)
+            .iter()
+            .filter(|t| !t.starts_with("/dev/"))
+            .map(|t| base(t)),
+    );
     out.retain(|n| !n.is_empty());
     out
 }
@@ -2767,6 +2773,9 @@ EOF
             "curl -o src.tar.gz http://x/a.tar.gz\ntar xf src.tar.gz",
             "curl -o a.sh http://x/a\nsh other.sh",
             "wget http://x/a.tar.gz\nmake",
+            // Discarded output is not a saved file (byobu).
+            "wget -q -O- http://x </dev/null >\"$c\" 2>/dev/null &\nif eval $T route >/dev/null 2>&1; then :; fi",
+            "curl -s http://x >/dev/null\nsh null",
         ] {
             assert!(
                 !has(&body("build", ok), "download-then-run", Severity::High),
