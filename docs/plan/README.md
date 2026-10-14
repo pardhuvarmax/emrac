@@ -74,3 +74,7 @@ Current:
 - [`u29-lean-cache.md`](./u29-lean-cache.md) — a lean cache policy that keeps one rollback set.
 - [`u30-pacnew-revert.md`](./u30-pacnew-revert.md) — `pacnew`: validate before applying, record
   every change, revert, edit by hand.
+- [`u6-history-integrity.md`](./u6-history-integrity.md) — history you can archive, acknowledge and
+  check: `history archive`, a hash chain, `history ack`.
+- [`u7-ledger.md`](./u7-ledger.md) — a second, root-owned append-only copy of the history that the
+  user's own programs cannot rewrite.
