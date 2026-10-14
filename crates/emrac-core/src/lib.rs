@@ -1,5 +1,6 @@
 mod audit;
 mod backend;
+mod cache;
 mod config;
 mod deps;
 mod doctor;
@@ -24,6 +25,10 @@ pub use audit::{
 };
 pub use backend::AurSyncOutcome;
 pub use backend::BuildOptions;
+pub use cache::{
+    parse_duration, parse_size, Decision as CacheDecision, Op as CacheOp, Outcome as CacheOutcome,
+    Scope as CacheScope,
+};
 pub use config::{BuildConfig, Config};
 pub use deps::{DepEntry, DepsReport, Orphan, RdepsReport, WhyReport};
 pub use doctor::{DoctorReport, Status as DoctorStatus};

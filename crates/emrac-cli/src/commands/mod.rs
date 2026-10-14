@@ -2,6 +2,7 @@ pub mod audit;
 pub mod aur_install;
 pub mod aur_review;
 pub mod build;
+pub mod cache;
 pub mod completion;
 pub mod config;
 pub mod deps;

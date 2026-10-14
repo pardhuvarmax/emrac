@@ -7,6 +7,7 @@ use crate::backend::{
     version_is_newer, AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome,
     BuildOptions, FreshDb, InstalledSource, PacmanBackend, ResolvedPackage, SimOp, Simulation,
 };
+use crate::cache;
 use crate::config::Config;
 use crate::deps::{self, DepsReport, Orphan, RdepsReport, WhyReport};
 use crate::doctor::{self, DiskFact, DoctorInputs, DoctorReport, ReportEnv, ToolFact};
@@ -430,6 +431,108 @@ impl Sources {
     /// Installs built package files with `sudo pacman -U`.
     pub fn install_built(&self, files: &[PathBuf]) -> Result<()> {
         self.pacman.execute_install_files(files)
+    }
+
+    /// What each cache entry would suffer under `op` in `scopes`: nothing is
+    /// removed here. `older_than` is in seconds.
+    pub fn cache_plan(
+        &self,
+        scopes: &[cache::Scope],
+        op: cache::Op,
+        older_than: Option<u64>,
+    ) -> Result<Vec<cache::Decision>> {
+        let home = std::env::var("HOME").map_err(|_| Error::NoHomeDir)?;
+        let dirs = self.pacman.cache_dirs().unwrap_or_default();
+        let entries = cache::scan(Path::new(&home), &dirs);
+        let mut facts = cache::Facts {
+            installed: self
+                .alpm
+                .installed_snapshot()
+                .into_iter()
+                .map(|p| (p.name, p.version))
+                .collect(),
+            older_than,
+            now: now(),
+            source_age: cache::DEFAULT_SOURCE_AGE,
+            ..cache::Facts::default()
+        };
+        // Versions the last transactions name are what `undo` and `redo` need.
+        for record in History::list(Some(20), None).unwrap_or_default() {
+            for p in &record.packages {
+                facts.recorded.insert((p.name.clone(), p.version.clone()));
+                if let Some(v) = &p.previous_version {
+                    facts.recorded.insert((p.name.clone(), v.clone()));
+                }
+            }
+            for r in &record.removed {
+                facts.recorded.insert((r.name.clone(), r.version.clone()));
+            }
+        }
+        Ok(cache::plan(&entries, scopes, op, &facts, &|a, b| {
+            version_is_newer(b, a)
+        }))
+    }
+
+    /// Removes the entries `decisions` mark. Everything must lie under the
+    /// emrac cache or pacman's; files pacman's cache holds are root-owned and
+    /// go through `sudo`. Returns what was freed and what could not be removed.
+    pub fn cache_apply(&self, decisions: &[cache::Decision]) -> Result<cache::Outcome> {
+        let home = PathBuf::from(std::env::var("HOME").map_err(|_| Error::NoHomeDir)?);
+        let mut roots = vec![home.join(".cache/emrac")];
+        roots.extend(self.pacman.cache_dirs().unwrap_or_default());
+        let doomed: Vec<&cache::Decision> = decisions.iter().filter(|d| d.remove).collect();
+        if doomed
+            .iter()
+            .any(|d| d.entry.scope == cache::Scope::Package)
+            && Path::new("/var/lib/pacman/db.lck").exists()
+        {
+            return Err(Error::Simulation(
+                "pacman is running (its database lock exists); not touching its package cache"
+                    .to_string(),
+            ));
+        }
+        let mut outcome = cache::Outcome::default();
+        let mut privileged: Vec<String> = Vec::new();
+        let mut privileged_bytes = 0;
+        for d in doomed {
+            let path = &d.entry.path;
+            if !cache::is_under(path, &roots) {
+                outcome
+                    .failed
+                    .push((path.clone(), "outside the cache folders; left alone".into()));
+                continue;
+            }
+            // A package file's detached signature goes with it.
+            let sig = PathBuf::from(format!("{}.sig", path.display()));
+            let mut paths = vec![path.clone()];
+            if d.entry.version.is_some() && sig.exists() {
+                paths.push(sig);
+            }
+            if cache::owned_like(path, &home) {
+                match cache::remove_tree(path) {
+                    Ok(()) => {
+                        outcome.removed += 1;
+                        outcome.freed += d.entry.bytes;
+                        for extra in &paths[1..] {
+                            let _ = std::fs::remove_file(extra);
+                        }
+                    }
+                    Err(err) => outcome.failed.push((path.clone(), err.to_string())),
+                }
+            } else {
+                privileged.extend(paths.iter().map(|p| p.display().to_string()));
+                privileged_bytes += d.entry.bytes;
+                outcome.removed += 1;
+            }
+        }
+        // Root-owned files, a batch per `sudo` call.
+        for batch in privileged.chunks(200) {
+            let mut args = vec!["-f".to_string(), "--".to_string()];
+            args.extend(batch.iter().cloned());
+            self.pacman.run_sudo("rm", &args)?;
+        }
+        outcome.freed += privileged_bytes;
+        Ok(outcome)
     }
 
     /// Every pending `.pacnew` / `.pacsave`, judged by comparing the live

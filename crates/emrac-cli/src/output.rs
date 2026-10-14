@@ -475,7 +475,7 @@ fn join_or_dash(items: &[String]) -> String {
     }
 }
 
-fn human_size(bytes: u64) -> String {
+pub(crate) fn human_size(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
     let mut size = bytes as f64;
     let mut unit = 0;

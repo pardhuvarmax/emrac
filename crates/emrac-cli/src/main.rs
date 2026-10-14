@@ -139,6 +139,23 @@ fn run(cli: &Cli) -> Result<()> {
             quiet,
             config.snapshot.before_upgrade,
         ),
+        Commands::Cache { command } => {
+            commands::cache::run(&sources, command.as_ref(), dry_run, yes, json)
+        }
+        Commands::CacheClean(args) => commands::cache::run(
+            &sources,
+            Some(&cli::CacheCommand::Clean(args.clone())),
+            dry_run,
+            yes,
+            json,
+        ),
+        Commands::CacheStats(scopes) => commands::cache::run(
+            &sources,
+            Some(&cli::CacheCommand::Stats(scopes.clone())),
+            dry_run,
+            yes,
+            json,
+        ),
         Commands::Pacnew { fetch, command } => commands::pacnew::run(
             &sources,
             *fetch && !offline,

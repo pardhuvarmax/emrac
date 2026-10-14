@@ -104,7 +104,7 @@ Complete Feature Catalog
    * - 13
      - Cache Management
      - Partial
-     - ``~/.cache/emrac/build/<pkg>`` git cache exists; no explorer, stats, or cleanup commands
+     - ``emrac cache [list|stats|clean|purge|trim]`` (``cc``/``cs`` shortcuts) over four categories: downloaded sources, build trees, built/fetched package files and pacman's cache; keeps the installed and previous versions and anything a recent transaction needs; dry-run, confirmation, ``--older-than``, size limit; no ``verify``/``export``/``import``/interactive manager/automatic cleanup
    * - 14
      - History & Recovery
      - Not started
@@ -183,8 +183,8 @@ here are not slippage, they are on schedule.
      - --
    * - 8
      - Build Cache Explorer
-     - Not started
-     - --
+     - Partial
+     - Per-package sizes in ``emrac cache list`` and per-path dry-runs; no browsable/selective-by-name deletion
    * - 9
      - Timeline
      - Not started

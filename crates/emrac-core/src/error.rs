@@ -230,6 +230,16 @@ pub enum Error {
     #[error("couldn't work out what the transaction would remove: {0}")]
     Simulation(String),
 
+    #[error("'{value}' isn't a {what} emrac understands: {hint}")]
+    InvalidCacheValue {
+        what: &'static str,
+        value: String,
+        hint: &'static str,
+    },
+
+    #[error("`cache purge` with no scope removes every cache; add --force to say that is what you mean, or name a scope (source, build, binary, package)")]
+    CacheNeedsForce,
+
     #[error("{0}")]
     DependencyConflict(Box<crate::backend::DependencyConflict>),
 
@@ -327,6 +337,8 @@ impl Error {
             | Error::FreshSync(_)
             | Error::Simulation(_)
             | Error::DependencyConflict(_)
+            | Error::InvalidCacheValue { .. }
+            | Error::CacheNeedsForce
             | Error::DependencySwapDeclined { .. }
             | Error::DependencySwapIncomplete { .. }
             | Error::ManifestBlocked { .. }

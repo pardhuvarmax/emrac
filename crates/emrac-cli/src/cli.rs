@@ -31,7 +31,7 @@ pub struct Cli {
     pub yes: bool,
 
     /// Show what would happen without doing it
-    #[arg(long, global = true)]
+    #[arg(short = 'n', long, global = true)]
     pub dry_run: bool,
 }
 
@@ -144,6 +144,21 @@ pub enum Commands {
         #[command(subcommand)]
         command: ConfigCommand,
     },
+
+    /// See, clean, trim and purge what emrac and pacman keep on disk
+    /// (no subcommand: list)
+    Cache {
+        #[command(subcommand)]
+        command: Option<CacheCommand>,
+    },
+
+    /// Shortcut for `cache clean`
+    #[command(name = "cc")]
+    CacheClean(CacheArgs),
+
+    /// Shortcut for `cache stats`
+    #[command(name = "cs")]
+    CacheStats(CacheScopes),
 
     /// Find, explain and resolve .pacnew / .pacsave files (no subcommand: list them)
     Pacnew {
@@ -315,6 +330,75 @@ pub enum CompletionShell {
     Bash,
     Zsh,
     Fish,
+}
+
+/// Which caches: the words `source`, `build`, `binary`, `package` or their
+/// letters `s`, `b`, `n`, `p`, or the flags below. None named: the command's
+/// own default.
+#[derive(Args, Clone, Default)]
+pub struct CacheScopes {
+    /// Cache categories, by word or letter (source|s build|b binary|n package|p)
+    pub scope: Vec<String>,
+
+    /// Downloaded sources
+    #[arg(long)]
+    pub source: bool,
+
+    /// Extraction and staging trees of AUR builds
+    #[arg(long)]
+    pub build: bool,
+
+    /// Built and fetched package files
+    #[arg(long)]
+    pub binary: bool,
+
+    /// pacman's package cache
+    #[arg(long)]
+    pub package: bool,
+}
+
+#[derive(Args, Clone)]
+pub struct CacheArgs {
+    #[command(flatten)]
+    pub scopes: CacheScopes,
+
+    /// Only entries at least this old (30d, 12h, 2w)
+    #[arg(short = 'o', long, value_name = "DURATION")]
+    pub older_than: Option<String>,
+
+    /// Confirm an operation on every cache
+    #[arg(short = 'f', long)]
+    pub force: bool,
+}
+
+#[derive(Subcommand)]
+pub enum CacheCommand {
+    /// Sizes per category and the largest packages
+    #[command(visible_alias = "l")]
+    List(CacheScopes),
+
+    /// Totals, and how much `clean` would free
+    #[command(visible_alias = "s")]
+    Stats(CacheScopes),
+
+    /// Remove what is safe to lose (default: build, binary and package)
+    #[command(visible_alias = "c")]
+    Clean(CacheArgs),
+
+    /// Remove everything in the scope (no scope needs --force)
+    #[command(visible_alias = "p")]
+    Purge(CacheArgs),
+
+    /// Remove the oldest removable entries until under a size limit
+    #[command(visible_alias = "t")]
+    Trim {
+        /// The most a category may keep (500M, 10G)
+        #[arg(short = 'm', long, value_name = "SIZE")]
+        size_limit: String,
+
+        #[command(flatten)]
+        args: CacheArgs,
+    },
 }
 
 #[derive(Subcommand)]
