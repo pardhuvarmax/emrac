@@ -82,6 +82,19 @@ impl AurBackend {
             .collect())
     }
 
+    /// The AUR git repo a package is built from. A split package such as
+    /// `stm32cubemx-jre` lives in its base's repo (`stm32cubemx`); cloning
+    /// it under its own name gives an empty repository.
+    pub fn package_base(&self, name: &str) -> Result<Option<String>> {
+        let params = [("v", "5"), ("type", "info"), ("arg[]", name)];
+        let response: RpcResponse<AurBaseResult> = self.request(&params)?;
+        Ok(response
+            .results
+            .into_iter()
+            .find(|r| r.name == name)
+            .map(|r| r.package_base))
+    }
+
     fn request<T>(&self, params: &[(&str, &str)]) -> Result<RpcResponse<T>>
     where
         T: for<'de> Deserialize<'de>,
@@ -160,6 +173,14 @@ struct AurSearchResult {
 }
 
 #[derive(Debug, Deserialize)]
+struct AurBaseResult {
+    #[serde(rename = "Name")]
+    name: String,
+    #[serde(rename = "PackageBase")]
+    package_base: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct AurInfoResult {
     #[serde(rename = "Name")]
     name: String,
@@ -186,6 +207,14 @@ struct AurInfoResult {
 #[cfg(test)]
 mod retry_tests {
     use super::*;
+
+    #[test]
+    fn package_base_is_read_from_the_rpc_answer() {
+        let body = r#"{"type":"multiinfo","results":[{"Name":"x-jre","PackageBase":"x"}]}"#;
+        let parsed: RpcResponse<AurBaseResult> = serde_json::from_str(body).unwrap();
+        assert_eq!(parsed.results[0].name, "x-jre");
+        assert_eq!(parsed.results[0].package_base, "x");
+    }
 
     #[test]
     fn only_transient_failures_are_retried() {

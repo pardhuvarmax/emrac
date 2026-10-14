@@ -86,6 +86,21 @@ impl AurBuildBackend {
                 })?;
             }
 
+            // A split package shares its base's repo: clone that once and
+            // point this package's directory at it.
+            let base = super::AurBackend::new()
+                .package_base(pkg)?
+                .unwrap_or_else(|| pkg.to_string());
+            if base != pkg {
+                let base_dir = self.build_dir(&base)?;
+                if !base_dir.exists() {
+                    let url = format!("https://aur.archlinux.org/{base}.git");
+                    self.git(None, &["clone", &url, &base_dir.to_string_lossy()])?;
+                }
+                link_to_base(&dir, &base)?;
+                return Ok(AurSyncOutcome::FirstClone);
+            }
+
             let url = format!("https://aur.archlinux.org/{pkg}.git");
             self.git(None, &["clone", &url, &dir.to_string_lossy()])?;
             return Ok(AurSyncOutcome::FirstClone);
@@ -360,5 +375,35 @@ impl AurBuildBackend {
 impl Default for AurBuildBackend {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Points a split package's directory at its base's checkout, which sits
+/// beside it in the build cache.
+fn link_to_base(dir: &Path, base: &str) -> Result<()> {
+    std::os::unix::fs::symlink(base, dir).map_err(|source| Error::Io {
+        context: format!("couldn't link '{}' to '{base}'", dir.display()),
+        source,
+    })
+}
+
+#[cfg(test)]
+mod split_tests {
+    use super::*;
+
+    #[test]
+    fn split_package_dir_resolves_to_the_base_checkout() {
+        let root = env::temp_dir().join(format!("emrac-split-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("base")).unwrap();
+        fs::write(root.join("base/PKGBUILD"), "pkgbase=base\n").unwrap();
+
+        link_to_base(&root.join("base-jre"), "base").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(root.join("base-jre/PKGBUILD")).unwrap(),
+            "pkgbase=base\n"
+        );
+        fs::remove_dir_all(&root).unwrap();
     }
 }
