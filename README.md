@@ -6,7 +6,7 @@ A hybrid next generation package management platform for Arch Linux — an orche
 
 ---
 
-Status: **Slice r1.** The core loop (`search`, `info`, `install`, `remove`, `upgrade` against the official repos and the AUR) works, with a transaction preview and confirmation before every change and a PKGBUILD review for AUR builds. Still missing: the TUI, build profiles, and everything else in `SPEC.md` Part IV.
+Status: **Slice u30** (release r1 plus thirty updates). The core loop (`search`, `info`, `install`, `remove`, `upgrade` against the official repos and the AUR) works, with a transaction preview and confirmation before every change, audited and sandboxed AUR builds, history with rollback, health checks, and tools for config files and caches (see Highlights). Still missing: the TUI, build profiles and the source-or-binary recommendation, and most of `SPEC.md` Part IV.
 
 | Area | Commands |
 |---|---|
@@ -49,12 +49,23 @@ Errors go to stderr as `emrac found: …` (something you can fix) or `emrac says
 ## Highlights
 
 - **Emrac is a hybrid package manager.** It builds from PKGBUILD locally when it's worthwhile, installs binaries when it isn't, and tells you why.
-- **Source Suitability Score & ETA engine** — estimates build time, download size, and performance gain per package before you commit, refined by local build history.
-- **One interface, every source** — official repos, AUR, local/custom repos, and locally built packages all searched, inspected, and installed the same way.
-- **CLI and TUI parity** — no capability is exclusive to either interface.
-- **Build profiles with inheritance** — reusable compiler/linker/LTO/PGO/march-mtune configurations instead of long flag lists per install.
+- **Plans that match what pacman will do.** The upgrade preview is built from repositories synced just now, and it lists what conflicts and replacements will also remove and which provider pacman will pick, so what you confirm is what happens.
+- **AUR builds you can trust a little more.** Each package is reviewed (PKGBUILD or diff), audited for risky code, built in a bubblewrap sandbox (read-only root, empty home, no network unless you allow it, memory, process and time limits), and its built package is inspected before it is installed. Findings are info, warning, high (needs an explicit answer that `--yes` does not give) or critical (refused).
+- **Silence is never consent.** pacman asks its own questions unless you pass `--yes`, and a closed terminal or empty stdin is always a no.
+- **Undo that works after a real upgrade.** `history`, `undo` / `redo`, `downgrade`, `reinstall`, `snapshot` and `restore` reverse changes using files from the pacman cache, the AUR build folder, the repositories or the Arch Linux Archive, after checking the system is still in the state they expect.
+- **Conflicts are explained, not dumped.** When an AUR build stops because one package conflicts with another that something still requires, emrac says which, why, and whether the swap looks safe, and offers it (default no).
+- **`.pacnew` files without guesswork.** `emrac pacnew` compares the file the old package shipped, your file and the new one, so your edits are told from upstream's. It merges what is safe, checks the result before applying it (sudoers, sshd_config, pacman.conf, fstab, the mirrorlist, JSON, shell-sourced files), saves both files, records every change and can revert it.
+- **Caches you can trim safely.** `emrac cache` shows the source, build, binary and pacman caches; `clean` keeps what `undo` needs, and `--lean` keeps one rollback set instead of every file pacman downloaded.
+- **Health checks with a fix for each finding.** `emrac doctor` checks dependencies, databases, pending upgrades against fresh repositories, the running kernel, disk, caches, orphans, `.pacnew` files, failed units, pins and the sandbox, and can write a sanitized bug report.
+- **Holds that remember why.** `pin` holds a package back from `upgrade` with a reason and an expiry date.
+- **Tested against a real pacman.** 271 tests run on every change, and each command that changes the system was also run against a real pacman in a container; the changelog says what was seen for each slice.
+- **No telemetry.** emrac talks only to your mirrors, the AUR and the Arch Linux Archive, and only when a command needs them.
+- **Source Suitability Score & ETA engine** *(planned)* — estimates build time, download size, and performance gain per package before you commit, refined by local build history.
+- **One interface, every source** — official repos and the AUR are searched, inspected, and installed the same way today; local/custom repos and locally built packages *(planned)*.
+- **CLI and TUI parity** *(planned)* — no capability is exclusive to either interface.
+- **Build profiles with inheritance** *(planned)* — reusable compiler/linker/LTO/PGO/march-mtune configurations instead of long flag lists per install.
 - **Transactional and reversible** — dry-run previews, rollback, and snapshots for every mutating operation.
-- **Integrated modal editor** — edit PKGBUILDs and configs without leaving the TUI, or fall back to `$EDITOR`.
+- **Integrated modal editor** *(planned)* — edit PKGBUILDs and configs without leaving the TUI, or fall back to `$EDITOR`.
 
 ## Documentation
 
