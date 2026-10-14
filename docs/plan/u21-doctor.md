@@ -53,3 +53,16 @@ text of `systemctl --failed`, free/total bytes, …) and are unit-tested;
 `doctor.rs` (new, core), `backend/alpm.rs` (`unsatisfied_dependencies`),
 `backend/pacman.rs` (`db_path`), `sources.rs`, `error.rs`; CLI
 `commands/doctor.rs`, `output.rs`, `cli.rs`, `main.rs`.
+
+## Found while testing (all fixed)
+
+- **A kernel false alarm in containers.** "The running kernel's modules are
+  gone" fired in a container, which shares the host's kernel and has no modules
+  of its own. The check now applies only where `/usr/lib/modules` actually holds
+  a kernel.
+- The missing-tools hint named the same packages whatever was missing
+  (`base-devel` for a missing `pacdiff`). Each tool now carries its own package.
+- pacman's version line came out behind its ASCII-art banner; it is now cut at
+  "Pacman v".
+- Wording: "1 dependency is unmet can't find what they need" and a closing
+  "found … found" were garbled.

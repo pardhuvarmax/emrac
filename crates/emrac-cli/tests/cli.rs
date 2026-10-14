@@ -899,3 +899,103 @@ fn without_a_systemd_session_the_build_says_so_and_still_runs() {
         stderr(&out)
     );
 }
+
+#[test]
+fn doctor_reports_checks_as_json_and_exits_with_the_problem_count() {
+    // Needs libalpm and a pacman configuration, like any command that reads
+    // the package databases.
+    if !Command::new("pacman-conf")
+        .arg("DBPath")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        eprintln!("pacman-conf not usable here; skipping");
+        return;
+    }
+    let home = Home::new("doctor");
+    let out = home.run(&["doctor", "--json"]);
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out))
+        .unwrap_or_else(|e| panic!("{e}: {}{}", stdout(&out), stderr(&out)));
+    let checks = json["checks"].as_array().expect("a list of checks");
+    let ids: Vec<&str> = checks.iter().map(|c| c["id"].as_str().unwrap()).collect();
+    for expected in [
+        "dependencies",
+        "lock",
+        "sync-db",
+        "pacnew",
+        "units",
+        "orphans",
+        "config",
+        "tools",
+    ] {
+        assert!(ids.contains(&expected), "{expected} missing from {ids:?}");
+    }
+    for c in checks {
+        assert!(c["summary"].as_str().is_some_and(|s| !s.is_empty()), "{c}");
+        assert!(
+            ["ok", "note", "warning", "problem"].contains(&c["status"].as_str().unwrap()),
+            "{c}"
+        );
+    }
+    // Problems sort first, and the exit status is 1 exactly when there is one.
+    let rank = |s: &str| {
+        ["ok", "note", "warning", "problem"]
+            .iter()
+            .position(|x| *x == s)
+            .unwrap()
+    };
+    let ranks: Vec<usize> = checks
+        .iter()
+        .map(|c| rank(c["status"].as_str().unwrap()))
+        .collect();
+    assert!(ranks.windows(2).all(|w| w[0] >= w[1]), "{ranks:?}");
+    let problems = checks.iter().filter(|c| c["status"] == "problem").count();
+    assert_eq!(out.status.code(), Some(if problems > 0 { 1 } else { 0 }));
+    if problems > 0 {
+        assert!(stderr(&out).starts_with("emrac found:"), "{}", stderr(&out));
+    }
+}
+
+#[test]
+fn doctor_report_is_markdown_without_the_users_identity() {
+    if !Command::new("pacman-conf")
+        .arg("DBPath")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        eprintln!("pacman-conf not usable here; skipping");
+        return;
+    }
+    let home = Home::new("doctor-report");
+    let hostname = fs::read_to_string("/proc/sys/kernel/hostname")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let out = home
+        .command(&["doctor", "--report"])
+        .env("USER", "zebrafish42")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let text = stdout(&out);
+    assert!(text.starts_with("### emrac doctor report"), "{text}");
+    assert!(
+        text.contains("- emrac ") && text.contains("installed packages"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Pacman v"),
+        "the version line is clean: {text}"
+    );
+    assert!(
+        !text.contains("--."),
+        "no ASCII-art banner leaked in: {text}"
+    );
+    assert!(!text.contains("zebrafish42"));
+    assert!(!text.contains(home.0.to_str().unwrap()));
+    if hostname.len() > 2 {
+        assert!(!text.contains(&hostname), "the host name is scrubbed");
+    }
+}

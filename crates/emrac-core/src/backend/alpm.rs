@@ -190,6 +190,31 @@ impl AlpmBackend {
             .map(|pkg| pkg.version().to_string())
     }
 
+    /// Dependencies of installed packages that nothing installed satisfies:
+    /// `(package, dependency)`. What `pacman -Dk` reports.
+    pub fn unsatisfied_dependencies(&self) -> Vec<(String, String)> {
+        let local = self.handle.localdb();
+        let mut out = Vec::new();
+        for pkg in local.pkgs() {
+            for dep in pkg.depends() {
+                let spec = dep.to_string();
+                if local.pkgs().find_satisfier(spec.as_str()).is_none() {
+                    out.push((pkg.name().to_string(), spec));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    /// How many packages are installed, and how many of those are foreign.
+    pub fn package_counts(&self) -> (usize, usize) {
+        (
+            self.handle.localdb().pkgs().len(),
+            self.foreign_package_names().len(),
+        )
+    }
+
     /// Every installed package, as a snapshot records it.
     pub fn installed_snapshot(&self) -> Vec<SnapshotPackage> {
         let foreign: HashSet<String> = self.foreign_package_names().into_iter().collect();

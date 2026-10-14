@@ -170,6 +170,14 @@ pub enum Commands {
         targets: Vec<String>,
     },
 
+    /// Check this system for common problems (read-only)
+    Doctor {
+        /// Print a markdown report for a bug report, with your home
+        /// directory, user name and host name scrubbed out
+        #[arg(long)]
+        report: bool,
+    },
+
     /// Show a package's dependencies
     #[command(visible_alias = "depends")]
     Deps {

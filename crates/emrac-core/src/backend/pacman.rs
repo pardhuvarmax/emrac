@@ -196,6 +196,25 @@ impl PacmanBackend {
         Ok(parse_names(&output.stdout))
     }
 
+    /// pacman's database directory (`pacman-conf DBPath`).
+    pub fn db_path(&self) -> Result<PathBuf> {
+        let output = Command::new("pacman-conf")
+            .arg("DBPath")
+            .output()
+            .map_err(Error::PacmanConfSpawn)?;
+        if !output.status.success() {
+            return Err(Error::PacmanConfStatus(format!(
+                "pacman-conf DBPath failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
+        parse_names(&output.stdout)
+            .into_iter()
+            .next()
+            .map(PathBuf::from)
+            .ok_or_else(|| Error::PacmanConfStatus("pacman-conf DBPath printed nothing".into()))
+    }
+
     /// pacman's package cache directories (`pacman-conf CacheDir`).
     pub fn cache_dirs(&self) -> Result<Vec<PathBuf>> {
         let output = Command::new("pacman-conf")

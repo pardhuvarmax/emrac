@@ -142,6 +142,7 @@ fn run(cli: &Cli) -> Result<()> {
             until,
         } => commands::pin::pin(&sources, pkgs, reason.as_deref(), until.as_deref(), json),
         Commands::Unpin { .. } => unreachable!("handled above"),
+        Commands::Doctor { report } => commands::doctor::run(&sources, *report, json),
         Commands::Audit { targets } => commands::audit::run(Some(&sources), targets, json),
         Commands::Deps { pkg, recursive } => commands::deps::deps(&sources, pkg, *recursive, json),
         Commands::Rdeps { pkg } => commands::deps::rdeps(&sources, pkg, json),

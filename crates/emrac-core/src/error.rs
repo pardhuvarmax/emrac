@@ -227,6 +227,9 @@ pub enum Error {
     #[error("makepkg finished but left no package file for '{0}'")]
     NoBuiltPackage(String),
 
+    #[error("{0} in the report above — fix them in the order listed")]
+    DoctorProblems(String),
+
     #[error("high-risk or critical findings in: {0}")]
     AuditFlagged(String),
 
@@ -285,6 +288,7 @@ impl Error {
             | Error::AuditBlocked { .. }
             | Error::NoPkgbuild(_)
             | Error::AuditFlagged(_)
+            | Error::DoctorProblems(_)
             | Error::ManifestBlocked { .. }
             | Error::InstallDeclined { .. }
             | Error::NoBuiltPackage(_)

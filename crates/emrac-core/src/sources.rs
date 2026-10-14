@@ -1,12 +1,15 @@
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use crate::audit::{self, AuditReport};
 use crate::backend::{
     version_is_newer, AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome,
     BuildOptions, InstalledSource, PacmanBackend, ResolvedPackage,
 };
+use crate::config::Config;
 use crate::deps::{self, DepsReport, Orphan, RdepsReport, WhyReport};
+use crate::doctor::{self, DiskFact, DoctorInputs, DoctorReport, ReportEnv, ToolFact};
 use crate::downgrade::{self, DowngradePlan, VersionList};
 use crate::error::{Error, Result};
 use crate::history::{now, History, TxStatus};
@@ -985,6 +988,196 @@ impl Sources {
         PinStore::pin(names, reason, until)
     }
 
+    /// `emrac doctor`: gathers the facts and evaluates them. Read-only; nothing
+    /// here needs root or the network.
+    pub fn doctor(&self) -> Result<DoctorReport> {
+        Ok(doctor::evaluate(&self.doctor_inputs()))
+    }
+
+    /// The facts for the bug-report header.
+    pub fn doctor_env(&self) -> ReportEnv {
+        let (installed, foreign) = self.alpm.package_counts();
+        let pacman_version = Command::new("pacman")
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .find_map(|l| l.find("Pacman v").map(|at| l[at..].trim().to_string()))
+            })
+            .unwrap_or_else(|| "pacman (version unknown)".into());
+        ReportEnv {
+            emrac_version: env!("CARGO_PKG_VERSION").to_string(),
+            pacman_version,
+            kernel: read_trimmed("/proc/sys/kernel/osrelease").unwrap_or_default(),
+            installed,
+            foreign,
+        }
+    }
+
+    /// The report as a markdown block for a bug report, with the home
+    /// directory, user name and host name scrubbed out.
+    pub fn doctor_markdown(&self, report: &DoctorReport) -> String {
+        let md = doctor::report_markdown(report, &self.doctor_env());
+        let home = std::env::var("HOME").unwrap_or_default();
+        let user = std::env::var("USER")
+            .or_else(|_| std::env::var("LOGNAME"))
+            .unwrap_or_default();
+        let host = read_trimmed("/proc/sys/kernel/hostname").unwrap_or_default();
+        doctor::scrub(
+            &md,
+            &doctor::Scrub {
+                home: &home,
+                user: &user,
+                host: &host,
+            },
+        )
+    }
+
+    fn doctor_inputs(&self) -> DoctorInputs {
+        let db_path = self
+            .pacman
+            .db_path()
+            .unwrap_or_else(|_| PathBuf::from("/var/lib/pacman"));
+        let cache_dirs = self.pacman.cache_dirs().unwrap_or_default();
+        let now_secs = now();
+
+        let sync_db_age_days = std::fs::read_dir(db_path.join("sync"))
+            .ok()
+            .and_then(|d| {
+                d.flatten()
+                    .filter(|e| e.path().extension().is_some_and(|x| x == "db"))
+                    .filter_map(|e| e.metadata().ok()?.modified().ok())
+                    .max()
+            })
+            .map(|m| {
+                std::time::SystemTime::now()
+                    .duration_since(m)
+                    .map(|d| d.as_secs() / 86_400)
+                    .unwrap_or(0)
+            });
+
+        let mut disks = Vec::new();
+        let mut df_targets: Vec<(String, PathBuf)> = vec![("/".into(), PathBuf::from("/"))];
+        if let Some(c) = cache_dirs.first() {
+            df_targets.push((c.display().to_string(), c.clone()));
+        }
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        for (label, path) in df_targets {
+            let out = Command::new("df").arg("-Pk").arg(&path).output();
+            if let Some((avail, total)) = out
+                .ok()
+                .and_then(|o| doctor::parse_df(&String::from_utf8_lossy(&o.stdout)))
+            {
+                // The cache usually sits on `/`: report each filesystem once.
+                if !seen.contains(&(avail, total)) {
+                    seen.push((avail, total));
+                    disks.push(DiskFact {
+                        label,
+                        available: avail,
+                        total,
+                    });
+                }
+            }
+        }
+
+        // Only meaningful where a kernel's modules are installed at all: a
+        // container shares the host's kernel and has none of its own.
+        let has_kernel_modules = std::fs::read_dir("/usr/lib/modules")
+            .map(|mut d| d.next().is_some())
+            .unwrap_or(false);
+        let kernel_release =
+            read_trimmed("/proc/sys/kernel/osrelease").filter(|_| has_kernel_modules);
+        let kernel_modules_present = kernel_release
+            .as_deref()
+            .is_some_and(|r| Path::new("/usr/lib/modules").join(r).is_dir());
+
+        let orphans = self.alpm.orphans();
+        let (config_error, config_world_writable) = match Config::path() {
+            Ok(path) => (
+                Config::load().err().map(|e| e.to_string()),
+                std::fs::metadata(&path)
+                    .map(|m| {
+                        use std::os::unix::fs::PermissionsExt;
+                        m.permissions().mode() & 0o002 != 0
+                    })
+                    .unwrap_or(false),
+            ),
+            Err(_) => (None, false),
+        };
+
+        let expired_pins = self
+            .pins()
+            .map(|(_, expired)| expired.into_iter().map(|p| p.name).collect())
+            .unwrap_or_default();
+        let recent_failed_transactions = History::all()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|r| r.status == TxStatus::Failed && r.timestamp + 7 * 86_400 >= now_secs)
+            .map(|r| format!("{} ({} {})", r.id, r.timestamp_utc(), action_word(r.action)))
+            .collect();
+
+        let tool = |name: &'static str,
+                    package: &'static str,
+                    needed_for: &'static str,
+                    required: bool| ToolFact {
+            name,
+            package,
+            present: on_path(name),
+            needed_for,
+            required,
+        };
+
+        DoctorInputs {
+            unsatisfied: self.alpm.unsatisfied_dependencies(),
+            lock_present: db_path.join("db.lck").exists(),
+            pacman_running: Command::new("pgrep")
+                .args(["-x", "pacman"])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false),
+            sync_db_age_days,
+            pending_upgrades: self.pacman.resolve_full_upgrade(&[]).ok().map(|v| v.len()),
+            pacnew_files: find_pacnew(Path::new("/etc")),
+            failed_system_units: failed_units(&[]),
+            failed_user_units: failed_units(&["--user"]),
+            kernel_release,
+            kernel_modules_present,
+            disks,
+            pacman_cache_bytes: (!cache_dirs.is_empty())
+                .then(|| cache_dirs.iter().map(|d| dir_size(d, 2)).sum()),
+            emrac_cache_bytes: std::env::var("HOME")
+                .ok()
+                .map(|h| dir_size(&PathBuf::from(h).join(".cache/emrac"), 6))
+                .filter(|b| *b > 0),
+            orphan_count: orphans.len(),
+            orphan_bytes: orphans.iter().map(|o| o.installed_size).sum(),
+            expired_pins,
+            recent_failed_transactions,
+            config: doctor::ConfigFacts {
+                parse_error: config_error,
+                world_writable: config_world_writable,
+            },
+            tools: vec![
+                tool("makepkg", "base-devel", "building AUR packages", true),
+                tool("git", "git", "fetching AUR packages", true),
+                tool("bsdtar", "libarchive", "inspecting built packages", true),
+                tool("fakeroot", "fakeroot", "building packages", true),
+                tool("sudo", "sudo", "installing and removing packages", true),
+                tool(
+                    "pacman-conf",
+                    "pacman",
+                    "reading pacman's configuration",
+                    true,
+                ),
+                tool("pacdiff", "pacman-contrib", "merging .pacnew files", false),
+            ],
+            sandbox: Some(sandbox::probe()),
+            scope_available: Some(sandbox::scope_available(&sandbox::Limits::default())),
+        }
+    }
+
     /// `emrac deps`: direct dependencies, optionally the whole closure.
     pub fn deps(&self, pkg: &str, recursive: bool) -> Result<DepsReport> {
         let (version, installed, depends, optional) = self
@@ -1379,4 +1572,91 @@ pub fn inspect_package(path: &std::path::Path) -> Result<Manifest> {
         scriptlet.as_deref(),
         &|member| extracted.read(member),
     ))
+}
+
+fn action_word(action: PlanAction) -> &'static str {
+    match action {
+        PlanAction::Install => "install",
+        PlanAction::Remove => "remove",
+        PlanAction::Upgrade => "upgrade",
+        PlanAction::Downgrade => "downgrade",
+        PlanAction::Reinstall => "reinstall",
+        PlanAction::Purge => "purge",
+    }
+}
+
+fn read_trimmed(path: &str) -> Option<String> {
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+}
+
+/// Is `name` an executable somewhere on `$PATH`?
+fn on_path(name: &str) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::env::var_os("PATH").is_some_and(|paths| {
+        std::env::split_paths(&paths).any(|dir| {
+            std::fs::metadata(dir.join(name))
+                .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+                .unwrap_or(false)
+        })
+    })
+}
+
+/// Names of failed systemd units (`extra` is `--user` for the user manager).
+fn failed_units(extra: &[&str]) -> Vec<String> {
+    Command::new("systemctl")
+        .args(extra)
+        .args(["--failed", "--no-legend", "--plain", "--no-pager"])
+        .output()
+        .map(|o| doctor::parse_failed_units(&String::from_utf8_lossy(&o.stdout)))
+        .unwrap_or_default()
+}
+
+/// `*.pacnew` / `*.pacsave` files under `root`, a few levels deep.
+fn find_pacnew(root: &Path) -> Vec<String> {
+    fn walk(dir: &Path, depth: usize, out: &mut Vec<String>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            if out.len() >= 200 {
+                return;
+            }
+            let path = entry.path();
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_dir() {
+                if depth < 5 {
+                    walk(&path, depth + 1, out);
+                }
+            } else if kind.is_file() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.ends_with(".pacnew") || name.ends_with(".pacsave") {
+                    out.push(path.display().to_string());
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, 0, &mut out);
+    out.sort();
+    out
+}
+
+/// Total size of the files under `dir`, `depth` levels down.
+fn dir_size(dir: &Path, depth: usize) -> u64 {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .map(|e| match e.file_type() {
+            Ok(t) if t.is_dir() && depth > 0 => dir_size(&e.path(), depth - 1),
+            Ok(t) if t.is_file() => e.metadata().map(|m| m.len()).unwrap_or(0),
+            _ => 0,
+        })
+        .sum()
 }

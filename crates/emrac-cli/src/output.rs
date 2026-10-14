@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::io::Write;
 
 use emrac_core::{
-    AuditReport, ConfigState, DepEntry, DepsReport, DowngradePlan, Download, IssueKind, Manifest,
-    Orphan, PackageDetails, PackageSummary, Pin, Plan, PlanAction, PurgePlan, RdepsReport,
-    ReinstallPlan, ReinstallSource, RestorePlan, RestoreSource, RollbackPlan, Severity, Snapshot,
-    TransactionRecord, TxStatus, Verdict, VerifyReport, VersionList, WhyReport,
+    AuditReport, ConfigState, DepEntry, DepsReport, DoctorReport, DoctorStatus, DowngradePlan,
+    Download, IssueKind, Manifest, Orphan, PackageDetails, PackageSummary, Pin, Plan, PlanAction,
+    PurgePlan, RdepsReport, ReinstallPlan, ReinstallSource, RestorePlan, RestoreSource,
+    RollbackPlan, Severity, Snapshot, TransactionRecord, TxStatus, Verdict, VerifyReport,
+    VersionList, WhyReport,
 };
 
 pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool) {
@@ -958,4 +959,44 @@ pub fn print_official_manifests(manifests: &[&Manifest], missing: &[String]) {
         }
     );
     let _ = std::io::stderr().write_all(&buf);
+}
+
+pub fn print_doctor(report: &DoctorReport, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(report).unwrap());
+        return;
+    }
+
+    for c in &report.checks {
+        let mark = match c.status {
+            DoctorStatus::Ok => "  ok     ",
+            DoctorStatus::Note => "  note   ",
+            DoctorStatus::Warning => "  warning",
+            DoctorStatus::Problem => "  PROBLEM",
+        };
+        println!("{mark}  {}: {}", c.title, c.summary);
+        for d in &c.detail {
+            println!("            - {d}");
+        }
+        if let Some(fix) = &c.fix {
+            if c.status != DoctorStatus::Ok {
+                println!("            fix: {fix}");
+            }
+        }
+    }
+
+    let (problems, warnings) = (
+        report.count(DoctorStatus::Problem),
+        report.count(DoctorStatus::Warning),
+    );
+    println!();
+    if problems + warnings == 0 {
+        println!("emrac found: nothing wrong.");
+    } else {
+        println!(
+            "emrac found: {} and {}.",
+            plural(problems, "problem"),
+            plural(warnings, "warning")
+        );
+    }
 }
