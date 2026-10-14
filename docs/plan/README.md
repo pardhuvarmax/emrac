@@ -63,3 +63,5 @@ Current:
   `--yes`; silence is never consent.
 - [`u24-plan-removals.md`](./u24-plan-removals.md) — plans list the removals that conflict and
   replacement resolution will cause, from libalpm itself.
+- [`u25-remaining-plan-gaps.md`](./u25-remaining-plan-gaps.md) — provider choices, replacements and
+  built-package conflicts in plans and manifests.
