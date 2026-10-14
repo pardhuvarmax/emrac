@@ -80,3 +80,6 @@ Current:
   user's own programs cannot rewrite.
 - [`u8-ledger-watch.md`](./u8-ledger-watch.md) — the kernel audit system watches the ledger, emrac
   reports any write that is not its own, and chain anchors catch a rewrite.
+- [`u9-voice.md`](./u9-voice.md) — emrac's voice: twelve verbs (says, found, notes, plans, asks,
+  warns, suspects, thinks, suggests, refuses, confirms, remembers) that tell the reader how sure
+  emrac is and what to do with a line.
