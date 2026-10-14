@@ -20,6 +20,50 @@ pub struct Config {
     pub search: Search,
     #[serde(default)]
     pub snapshot: SnapshotConfig,
+    #[serde(default)]
+    pub build: BuildConfig,
+}
+
+/// Limits on sandboxed AUR builds. `0` turns a limit off. Unlike
+/// `--no-sandbox` these may live in the config: they only restrict a build.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildConfig {
+    /// Kill the build after this many minutes.
+    #[serde(default = "default_timeout_minutes")]
+    pub timeout_minutes: u32,
+    /// Memory ceiling as a percentage of total RAM (swap is disallowed).
+    #[serde(default = "default_memory_percent")]
+    pub memory_percent: u32,
+    /// Most processes/threads the build may have.
+    #[serde(default = "default_max_tasks")]
+    pub max_tasks: u32,
+    /// Size cap for the build's `/tmp` and `$HOME`, in GiB.
+    #[serde(default = "default_tmpfs_gib")]
+    pub tmpfs_gib: u32,
+}
+
+fn default_timeout_minutes() -> u32 {
+    120
+}
+fn default_memory_percent() -> u32 {
+    75
+}
+fn default_max_tasks() -> u32 {
+    4096
+}
+fn default_tmpfs_gib() -> u32 {
+    8
+}
+
+impl Default for BuildConfig {
+    fn default() -> Self {
+        Self {
+            timeout_minutes: default_timeout_minutes(),
+            memory_percent: default_memory_percent(),
+            max_tasks: default_max_tasks(),
+            tmpfs_gib: default_tmpfs_gib(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -133,6 +177,10 @@ impl Config {
             "search.official" => self.search.official.to_string(),
             "search.aur" => self.search.aur.to_string(),
             "snapshot.before_upgrade" => self.snapshot.before_upgrade.to_string(),
+            "build.timeout_minutes" => self.build.timeout_minutes.to_string(),
+            "build.memory_percent" => self.build.memory_percent.to_string(),
+            "build.max_tasks" => self.build.max_tasks.to_string(),
+            "build.tmpfs_gib" => self.build.tmpfs_gib.to_string(),
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         })
     }
@@ -168,6 +216,22 @@ impl Config {
             "snapshot.before_upgrade" => {
                 self.snapshot.before_upgrade = parse_bool(value).ok_or_else(invalid)?;
             }
+            "build.timeout_minutes" => {
+                self.build.timeout_minutes = value.parse().map_err(|_| invalid())?;
+            }
+            "build.memory_percent" => {
+                let pct: u32 = value.parse().map_err(|_| invalid())?;
+                if pct > 100 {
+                    return Err(invalid());
+                }
+                self.build.memory_percent = pct;
+            }
+            "build.max_tasks" => {
+                self.build.max_tasks = value.parse().map_err(|_| invalid())?;
+            }
+            "build.tmpfs_gib" => {
+                self.build.tmpfs_gib = value.parse().map_err(|_| invalid())?;
+            }
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         }
         Ok(())
@@ -187,6 +251,10 @@ impl Config {
             "search.official" => self.search.official = false,
             "search.aur" => self.search.aur = false,
             "snapshot.before_upgrade" => self.snapshot.before_upgrade = false,
+            "build.timeout_minutes" => self.build.timeout_minutes = default_timeout_minutes(),
+            "build.memory_percent" => self.build.memory_percent = default_memory_percent(),
+            "build.max_tasks" => self.build.max_tasks = default_max_tasks(),
+            "build.tmpfs_gib" => self.build.tmpfs_gib = default_tmpfs_gib(),
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         }
         Ok(())
@@ -244,6 +312,47 @@ mod tests {
         "search.aur",
         "snapshot.before_upgrade",
     ];
+
+    #[test]
+    fn build_limits_have_safe_defaults_and_validate() {
+        let mut config = Config::default();
+        for (key, default) in [
+            ("build.timeout_minutes", "120"),
+            ("build.memory_percent", "75"),
+            ("build.max_tasks", "4096"),
+            ("build.tmpfs_gib", "8"),
+        ] {
+            assert_eq!(config.get(key).unwrap(), default, "{key}");
+            config.set(key, "7").unwrap();
+            assert_eq!(config.get(key).unwrap(), "7", "{key}");
+            config.set(key, "0").unwrap();
+            assert_eq!(config.get(key).unwrap(), "0", "0 turns a limit off: {key}");
+            config.unset(key).unwrap();
+            assert_eq!(config.get(key).unwrap(), default, "unset restores {key}");
+            for bad in ["-1", "abc", "1.5", ""] {
+                assert!(config.set(key, bad).is_err(), "{key}={bad:?}");
+            }
+        }
+        assert!(
+            config.set("build.memory_percent", "101").is_err(),
+            "a percentage"
+        );
+        config.set("build.memory_percent", "100").unwrap();
+    }
+
+    #[test]
+    fn a_partial_build_section_keeps_the_other_defaults() {
+        let config: Config = toml::from_str("[build]\nmemory_percent = 50\n").unwrap();
+        assert_eq!(config.build.memory_percent, 50);
+        assert_eq!(config.build.timeout_minutes, 120);
+        assert_eq!(config.build.max_tasks, 4096);
+        assert_eq!(config.build.tmpfs_gib, 8);
+        let empty: Config = toml::from_str("").unwrap();
+        assert_eq!(
+            empty.build.timeout_minutes, 120,
+            "no [build] section at all"
+        );
+    }
 
     #[test]
     fn defaults_are_all_off() {

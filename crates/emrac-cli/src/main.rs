@@ -4,7 +4,7 @@ mod output;
 mod prompt;
 
 use clap::Parser;
-use emrac_core::{Config, Result, Sources};
+use emrac_core::{Config, Limits, Result, Sources};
 
 use cli::{Cli, Commands, SnapshotCommand};
 use commands::aur_install::BuildChoice;
@@ -108,7 +108,7 @@ fn run(cli: &Cli) -> Result<()> {
             offline,
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
-            BuildChoice::from_flags(review),
+            BuildChoice::from_flags(review, &config.build),
             review.inspect || config.review.inspect_official,
             json,
         ),
@@ -130,7 +130,7 @@ fn run(cli: &Cli) -> Result<()> {
             offline,
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
-            BuildChoice::from_flags(review),
+            BuildChoice::from_flags(review, &config.build),
             review.inspect || config.review.inspect_official,
             json,
             quiet,
@@ -164,6 +164,7 @@ fn run(cli: &Cli) -> Result<()> {
                 accept_risks: *accept_risks,
                 no_sandbox: *no_sandbox,
                 allow_network: *allow_network,
+                limits: Limits::from_config(&config.build),
             };
             commands::reinstall::run(&sources, pkgs, dry_run, yes, offline, choice, json)
         }
@@ -173,7 +174,7 @@ fn run(cli: &Cli) -> Result<()> {
             review.skip_pkgbuild || config.review.skip_pkgbuild,
             review.skip_diff || config.review.skip_diff,
             yes,
-            BuildChoice::from_flags(review),
+            BuildChoice::from_flags(review, &config.build),
             json,
         ),
         Commands::Downgrade { pkg, version, list } => {

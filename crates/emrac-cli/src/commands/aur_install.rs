@@ -1,4 +1,6 @@
-use emrac_core::{inspect_package, BuildOptions, Error, Result, Sources, Verdict};
+use emrac_core::{
+    inspect_package, BuildConfig, BuildOptions, Error, Limits, Result, Sources, Verdict,
+};
 
 use crate::cli::AurReviewFlags;
 use crate::output;
@@ -7,6 +9,8 @@ use crate::prompt::confirm_default_no;
 /// The safety switches that apply when an AUR package is built and installed.
 #[derive(Clone, Copy, Default)]
 pub struct BuildChoice {
+    /// Memory, process, size and time limits for the sandboxed steps.
+    pub limits: Limits,
     /// Proceed past high-risk audit/manifest findings without asking.
     pub accept_risks: bool,
     /// Build without the sandbox (explicit consent; never a config key).
@@ -16,8 +20,9 @@ pub struct BuildChoice {
 }
 
 impl BuildChoice {
-    pub fn from_flags(flags: &AurReviewFlags) -> Self {
+    pub fn from_flags(flags: &AurReviewFlags, build: &BuildConfig) -> Self {
         Self {
+            limits: Limits::from_config(build),
             accept_risks: flags.accept_risks,
             no_sandbox: flags.no_sandbox,
             allow_network: flags.allow_network,
@@ -41,6 +46,7 @@ pub fn build_options(
         return Ok(BuildOptions {
             sandbox: false,
             allow_network: true,
+            limits: choice.limits,
         });
     }
     sources.sandbox_check()?;
@@ -52,6 +58,7 @@ pub fn build_options(
     Ok(BuildOptions {
         sandbox: true,
         allow_network,
+        limits: choice.limits,
     })
 }
 

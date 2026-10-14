@@ -48,3 +48,20 @@ off by the timeout; the degrade path with the probe forced off.
 
 `sandbox.rs` (limits, wrapper, timeout runner), `backend/aur_build.rs`,
 `config.rs`, CLI `aur_install.rs`/`main.rs`, `error.rs` (none new expected).
+
+## Found while testing (all fixed)
+
+- systemd's default `OOMPolicy=stop` answers the first OOM kill by terminating
+  the whole scope: everything gets SIGTERM and nothing is left to report.
+  The scope is created with `OOMPolicy=continue`, so only the offender dies and
+  the build fails normally.
+- **Polling the scope's cgroup from outside can't work**: the cgroup is removed
+  within milliseconds of its last process exiting, i.e. just after the OOM kill.
+  Measured: it named the cause in 4 of 12 runs. Worse, matching "a cgroup ending
+  in `.scope`" latched onto the *terminal's* scope (`kitty-….scope`) before
+  `systemd-run` moved the process. The scope now runs a small wrapper shell that
+  stays inside it until it has read `memory.events` and `pids.events` itself
+  and handed them over in a file: **12 of 12** memory kills and **6 of 6**
+  fork-bomb runs are explained, deterministically.
+- Killing on timeout leaves nothing behind (checked with a marker process), and
+  no stray event files remain.

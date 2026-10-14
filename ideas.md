@@ -46,7 +46,7 @@ Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress
 - `[built u19]` **Split fetch and build phases**: sources are downloaded and checksum/PGP-verified first, then the build runs with **no network** inside the sandbox. Stops a malicious PKGBUILD from phoning home or pulling extra payloads mid-build.
 - `[idea]` **Reproducible-build check**: build twice in separate sandboxes and compare hashes. A mismatch is flagged in the TUI as "non-deterministic build".
 - `[idea]` **AUR trust signals**: surface maintainer changes, orphaned status, package age, votes, and recent PKGBUILD diffs in the preview, so risky updates stand out before Phase 1 completes.
-- `[idea]` **cgroups v2 limits** on builds (CPU, RAM, PIDs, build time) so a runaway or hostile build cannot take down the host.
+- `[built u20]` **cgroups v2 limits** on builds (CPU, RAM, PIDs, build time) so a runaway or hostile build cannot take down the host.
 - `[idea]` **Signed, tamper-evident transaction log**: each transaction records plan, hashes, and outcome in an append-only chained log for auditing.
 - `[idea]` **SBOM / provenance output** per build (what source, which flags, which toolchain), exportable for compliance or personal records.
 

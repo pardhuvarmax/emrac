@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::error::{Error, Result};
-use crate::sandbox::{self, SandboxSpec};
+use crate::sandbox::{self, Limits, Outcome, SandboxSpec};
 
 /// How an AUR build is run.
 #[derive(Debug, Clone, Copy)]
@@ -13,6 +13,8 @@ pub struct BuildOptions {
     pub sandbox: bool,
     /// Give the sandboxed build network access.
     pub allow_network: bool,
+    /// Memory, process, tmpfs and time limits for the sandboxed steps.
+    pub limits: Limits,
 }
 
 impl Default for BuildOptions {
@@ -20,6 +22,7 @@ impl Default for BuildOptions {
         Self {
             sandbox: true,
             allow_network: false,
+            limits: Limits::default(),
         }
     }
 }
@@ -201,7 +204,17 @@ impl AurBuildBackend {
         } else {
             ". The sandbox gives the build no network; if this package downloads dependencies while building, run again with `--allow-network`".to_string()
         };
-        let spec = self.sandbox_spec(dir, opts.allow_network);
+        let spec = self.sandbox_spec(dir, opts.allow_network, &opts.limits);
+        // Memory and process limits need a cgroup scope from the user's systemd
+        // manager; if there is none, say so and carry on with the timeout and
+        // tmpfs caps, which need nothing.
+        let wants_scope = opts.limits.memory_percent > 0 || opts.limits.max_tasks > 0;
+        let use_scope = wants_scope && sandbox::scope_available(&opts.limits);
+        if wants_scope && !use_scope {
+            eprintln!(
+                "emrac warns: memory and process limits aren't available here (no systemd user session with cgroup v2); the build runs with the time and size limits only."
+            );
+        }
         let steps: [(&str, &[&str]); 2] = [
             (
                 "extract and prepare",
@@ -215,18 +228,43 @@ impl AurBuildBackend {
         for (phase, args) in steps {
             let mut command = vec!["makepkg".to_string()];
             command.extend(args.iter().map(|a| a.to_string()));
-            let status = sandbox::run(&spec, &command)
+            let outcome = sandbox::run(&spec, &command, &opts.limits, use_scope)
                 .map_err(|err| Error::CommandSpawn("bwrap".to_string(), err))?;
-            match status.code() {
-                Some(0) => {}
-                Some(MAKEPKG_ALREADY_BUILT) if phase == "build and package" => {}
-                _ => return Err(failed(phase, &status, &hint)),
+            match &outcome {
+                Outcome::TimedOut => {
+                    return Err(Error::BuildFailed {
+                        phase: phase.to_string(),
+                        status: format!("timed out after {} minutes", opts.limits.timeout_minutes),
+                        hint: ". Raise `build.timeout_minutes` (0 removes the limit)".into(),
+                    });
+                }
+                Outcome::Exited(status, _) if status.success() => {}
+                Outcome::Exited(status, _)
+                    if status.code() == Some(MAKEPKG_ALREADY_BUILT)
+                        && phase == "build and package" => {}
+                Outcome::Exited(status, events) => {
+                    // The kernel's own counters say why, when a limit did it.
+                    let hint = if events.oom_kills > 0 {
+                        format!(
+                            ". It hit its memory limit ({}% of RAM) and was killed; raise `build.memory_percent` (0 removes the limit)",
+                            opts.limits.memory_percent
+                        )
+                    } else if events.fork_denials > 0 {
+                        format!(
+                            ". It hit its process limit ({} tasks); raise `build.max_tasks` (0 removes the limit)",
+                            opts.limits.max_tasks
+                        )
+                    } else {
+                        hint.clone()
+                    };
+                    return Err(failed(phase, status, &hint));
+                }
             }
         }
         Ok(())
     }
 
-    fn sandbox_spec(&self, dir: &Path, network: bool) -> SandboxSpec {
+    fn sandbox_spec(&self, dir: &Path, network: bool, limits: &Limits) -> SandboxSpec {
         let host_env: Vec<(String, String)> = env::vars().collect();
         let home = env::var("HOME").map(PathBuf::from).unwrap_or_default();
         let mut extra_rw: Vec<PathBuf> = sandbox::makepkg_dirs();
@@ -236,6 +274,7 @@ impl AurBuildBackend {
             extra_rw,
             home,
             network,
+            tmpfs_bytes: limits.tmpfs_bytes(),
             hide_run_user: Path::new("/run/user").is_dir(),
             env: sandbox::clean_env(&host_env),
         }

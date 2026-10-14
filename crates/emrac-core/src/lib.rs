@@ -22,7 +22,7 @@ pub use audit::{
 };
 pub use backend::AurSyncOutcome;
 pub use backend::BuildOptions;
-pub use config::Config;
+pub use config::{BuildConfig, Config};
 pub use deps::{DepEntry, DepsReport, Orphan, RdepsReport, WhyReport};
 pub use downgrade::{DowngradePlan, ListedVersion, VersionList};
 pub use error::{Error, Result};
@@ -34,6 +34,7 @@ pub use plan::{Plan, PlanAction, PlannedPackage};
 pub use purge::{ConfigFile, ConfigState, PurgePlan};
 pub use reinstall::{ReinstallItem, ReinstallPlan, ReinstallSource};
 pub use rollback::{rolled_back_by, Download, RollbackPlan, SkippedPackage};
+pub use sandbox::Limits;
 pub use snapshot::{
     RestoreDiff, RestoreEntry, RestoreItem, RestorePlan, RestoreSource, Snapshot, SnapshotPackage,
     SnapshotStore,

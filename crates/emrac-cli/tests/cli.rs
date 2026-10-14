@@ -751,3 +751,151 @@ fn the_sandbox_hides_the_network_secrets_and_home_from_a_build() {
     assert!(report(&dir).contains("token=none"));
     assert!(!home.0.join("emrac-probe-leak").exists());
 }
+
+/// Can this machine give a build a memory/process-limited cgroup scope?
+fn scope_usable() -> bool {
+    Command::new("systemd-run")
+        .args([
+            "--user",
+            "--scope",
+            "--quiet",
+            "-p",
+            "MemoryMax=1G",
+            "-p",
+            "TasksMax=100",
+            "true",
+        ])
+        .stdin(Stdio::null())
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// A PKGBUILD whose `build()` is `body`.
+fn limit_pkgbuild(body: &str) -> String {
+    format!(
+        "pkgname=lim\npkgver=1\npkgrel=1\narch=(any)\nlicense=(MIT)\nbuild() {{\n{body}\n}}\npackage() {{ install -Dm644 /dev/null \"$pkgdir/usr/share/lim/x\"; }}\n"
+    )
+}
+
+#[test]
+fn a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named() {
+    if !sandbox_usable() || !scope_usable() {
+        eprintln!("bwrap or a systemd user scope is not usable here; skipping");
+        return;
+    }
+    let home = Home::new("limits");
+    let dir = home.0.join("pkg");
+    let build = |body: &str, args: &[&str]| {
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        write(&dir.join("PKGBUILD"), &limit_pkgbuild(body));
+        let mut a = vec!["build", dir.to_str().unwrap()];
+        a.extend_from_slice(args);
+        home.command(&a).stdin(Stdio::null()).output().unwrap()
+    };
+
+    // Memory: a cap of 1% of RAM, a build that eats memory without end
+    // (`tail` on a file with no newlines buffers all of it).
+    assert_eq!(
+        home.run(&["config", "set", "build.memory_percent", "1"])
+            .status
+            .code(),
+        Some(0)
+    );
+    let out = build("  tail /dev/zero", &[]);
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
+    assert!(
+        stderr(&out).contains("hit its memory limit (1% of RAM)"),
+        "the cause is named: {}",
+        stderr(&out)
+    );
+    assert!(
+        stderr(&out).contains("build.memory_percent"),
+        "and the knob: {}",
+        stderr(&out)
+    );
+
+    // Back to the default memory limit before testing the process limit.
+    assert_eq!(
+        home.run(&["config", "unset", "build.memory_percent"])
+            .status
+            .code(),
+        Some(0)
+    );
+
+    // Processes: more tasks than the cap allows.
+    assert_eq!(
+        home.run(&["config", "set", "build.max_tasks", "32"])
+            .status
+            .code(),
+        Some(0)
+    );
+    let out = build("  for i in $(seq 1 200); do sleep 30 & done; wait", &[]);
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
+    assert!(
+        stderr(&out).contains("hit its process limit (32 tasks)"),
+        "{}",
+        stderr(&out)
+    );
+}
+
+#[test]
+fn without_a_systemd_session_the_build_says_so_and_still_runs() {
+    if !sandbox_usable() {
+        eprintln!("bwrap/makepkg not usable here; skipping");
+        return;
+    }
+    let home = Home::new("no-scope");
+    let dir = home.0.join("pkg");
+    fs::create_dir_all(&dir).unwrap();
+    write(&dir.join("PKGBUILD"), &limit_pkgbuild("  true"));
+    let out = home
+        .command(&["build", dir.to_str().unwrap()])
+        .env_remove("XDG_RUNTIME_DIR")
+        .env_remove("DBUS_SESSION_BUS_ADDRESS")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        stdout(&out),
+        stderr(&out)
+    );
+    assert!(
+        stderr(&out).contains("memory and process limits aren't available here"),
+        "{}",
+        stderr(&out)
+    );
+
+    // With both limits turned off there is nothing to enforce, so no warning.
+    home.run(&["config", "set", "build.memory_percent", "0"]);
+    home.run(&["config", "set", "build.max_tasks", "0"]);
+    let out = home
+        .command(&["build", dir.to_str().unwrap()])
+        .env_remove("XDG_RUNTIME_DIR")
+        .env_remove("DBUS_SESSION_BUS_ADDRESS")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        !stderr(&out).contains("limits aren't available"),
+        "{}",
+        stderr(&out)
+    );
+}
