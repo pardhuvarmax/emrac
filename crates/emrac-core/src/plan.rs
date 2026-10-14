@@ -41,6 +41,16 @@ pub struct PlannedRemoval {
     pub reason: String,
 }
 
+/// A dependency several packages can satisfy: pacman asks which one
+/// ("Enter a number (default=1)"), and takes the first when run with `--yes`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProviderChoice {
+    /// What is being provided, as written in the dependency (`jack`).
+    pub dependency: String,
+    /// The candidates in pacman's order; the first is the default.
+    pub providers: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Plan {
     pub action: PlanAction,
@@ -52,6 +62,9 @@ pub struct Plan {
     /// according to libalpm itself.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub removals: Vec<PlannedRemoval>,
+    /// Dependencies with more than one possible provider.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub provider_choices: Vec<ProviderChoice>,
     /// Things the user should know about how far this plan can be trusted
     /// (e.g. the removals could not be worked out).
     #[serde(skip_serializing_if = "Vec::is_empty")]

@@ -6,7 +6,9 @@ pub mod fresh_db;
 pub mod package_file;
 pub mod pacman;
 
-pub use alpm::{version_is_newer, AlpmBackend, InstalledSource, Removal, ResolvedPackage, SimOp};
+pub use alpm::{
+    version_is_newer, AlpmBackend, InstalledSource, ResolvedPackage, SimOp, Simulation,
+};
 pub use archive::ArchiveBackend;
 pub use aur::AurBackend;
 pub use aur_build::{AurBuildBackend, AurSyncOutcome, BuildOptions};

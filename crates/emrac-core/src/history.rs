@@ -268,6 +268,7 @@ mod tests {
             total_installed_size_delta: 0,
             removals: Vec::new(),
             warnings: Vec::new(),
+            provider_choices: Vec::new(),
         }
     }
 

@@ -27,6 +27,22 @@ pub enum SimOp<'a> {
     Install(&'a [String]),
     /// `pacman -Su`, with these packages held back.
     Upgrade { ignore: &'a [String] },
+    /// `pacman -U <files>`: built or downloaded package files.
+    Files(&'a [std::path::PathBuf]),
+}
+
+/// A dependency with several possible providers, as pacman would ask about it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Providers {
+    pub dependency: String,
+    pub providers: Vec<String>,
+}
+
+/// What a simulated transaction does besides what was asked for.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Simulation {
+    pub removals: Vec<Removal>,
+    pub providers: Vec<Providers>,
 }
 
 /// A package a simulated transaction removes, and why.
@@ -85,11 +101,13 @@ impl AlpmBackend {
     /// throwaway one); `None` is pacman's own. Needs no root: the transaction
     /// is initialised without taking the database lock and is released
     /// unchanged.
-    pub fn simulate(db_path: Option<&Path>, op: SimOp) -> Result<Vec<Removal>> {
+    pub fn simulate(db_path: Option<&Path>, op: SimOp) -> Result<Simulation> {
         let fail = |what: String| Error::Simulation(what);
         let mut handle = Self::open_handle(db_path.map(|p| p.display().to_string()))?;
 
-        let decided: Rc<RefCell<Vec<(String, String)>>> = Rc::new(RefCell::new(Vec::new()));
+        // (removed package, why) pairs, and the provider choices met on the way.
+        type Decisions = (Vec<(String, String)>, Vec<Providers>);
+        let decided: Rc<RefCell<Decisions>> = Rc::new(RefCell::new((Vec::new(), Vec::new())));
         handle.set_question_cb(Rc::clone(&decided), |question, decided| {
             match question.question() {
                 Question::Conflict(mut q) => {
@@ -98,6 +116,7 @@ impl AlpmBackend {
                     let by = q.conflict().package1().name().to_string();
                     decided
                         .borrow_mut()
+                        .0
                         .push((removed, format!("conflicts with {by}")));
                     q.set_remove(true);
                 }
@@ -106,8 +125,18 @@ impl AlpmBackend {
                     let new = q.newpkg().name().to_string();
                     decided
                         .borrow_mut()
+                        .0
                         .push((old, format!("replaced by {new}")));
                     q.set_replace(true);
+                }
+                // Several packages can satisfy a dependency. pacman asks; the
+                // default (the first) is what `--yes` takes and what the rest
+                // of this simulation assumes.
+                Question::SelectProvider(q) => {
+                    decided.borrow_mut().1.push(Providers {
+                        dependency: q.depend().to_string(),
+                        providers: q.providers().iter().map(|p| p.name().to_string()).collect(),
+                    });
                 }
                 _ => {}
             }
@@ -128,6 +157,16 @@ impl AlpmBackend {
                         .map_err(|e| fail(e.error.to_string()))?;
                 }
             }
+            SimOp::Files(files) => {
+                for file in files {
+                    let pkg = handle
+                        .pkg_load(file.display().to_string(), true, SigLevel::NONE)
+                        .map_err(|e| fail(format!("{}: {e}", file.display())))?;
+                    handle
+                        .trans_add_pkg(pkg)
+                        .map_err(|e| fail(e.error.to_string()))?;
+                }
+            }
             SimOp::Upgrade { ignore } => {
                 for name in ignore {
                     handle
@@ -141,7 +180,7 @@ impl AlpmBackend {
         }
         handle.trans_prepare().map_err(|e| fail(e.to_string()))?;
 
-        let reasons = decided.borrow();
+        let decisions = decided.borrow();
         let removals: Vec<Removal> = handle
             .trans_remove()
             .iter()
@@ -149,15 +188,20 @@ impl AlpmBackend {
                 name: pkg.name().to_string(),
                 version: pkg.version().to_string(),
                 installed_size: pkg.isize().max(0) as u64,
-                reason: reasons
+                reason: decisions
+                    .0
                     .iter()
                     .find(|(n, _)| n == pkg.name())
                     .map(|(_, why)| why.clone())
                     .unwrap_or_else(|| "removed by the transaction".to_string()),
             })
             .collect();
+        let providers = decisions.1.clone();
         let _ = handle.trans_release();
-        Ok(removals)
+        Ok(Simulation {
+            removals,
+            providers,
+        })
     }
 
     pub fn search(&self, query: &str, limit: Option<usize>) -> Vec<PackageSummary> {

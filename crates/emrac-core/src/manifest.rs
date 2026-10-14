@@ -240,6 +240,39 @@ fn push(
     });
 }
 
+/// Records what installing the package would remove from the system — the
+/// installed packages it conflicts with or replaces, as libalpm works them out
+/// (`(name, version, reason)`). Pacman will ask about each at install time;
+/// this puts it in front of the user beforehand.
+pub fn note_removals(m: &mut Manifest, removals: &[(String, String, String)]) {
+    if removals.is_empty() {
+        return;
+    }
+    for (name, version, reason) in removals {
+        m.report.findings.push(Finding {
+            rule: "conflict-removal",
+            severity: Severity::Warning,
+            // The package that goes. (Findings are de-duplicated by rule, file
+            // and line, so keying on the installing package would collapse
+            // several removals into one.)
+            file: name.clone(),
+            line: 0,
+            message: format!(
+                "installing {} removes {name} {version} ({reason})",
+                m.package
+            ),
+            excerpt: name.clone(),
+        });
+    }
+    audit::sort_findings(&mut m.report.findings);
+    let names: Vec<String> = removals
+        .iter()
+        .map(|(n, v, r)| format!("{n} {v} ({r})"))
+        .collect();
+    m.summary
+        .push(format!("installing it REMOVES: {}", names.join(", ")));
+}
+
 /// `.PKGINFO` text and the archive listing → a manifest. `read` returns the
 /// text of a member (for the few small files whose content matters).
 pub fn inspect(
@@ -916,6 +949,50 @@ depend = bash
             .map(|i| format!("-rwxr-xr-x  0 root root 10 Oct 13 15:14 usr/bin/t{i:03}\n"))
             .collect();
         assert_eq!(wanted_members(&many).len(), MAX_SCRIPTS);
+    }
+
+    #[test]
+    fn what_installing_would_remove_is_a_warning_and_a_summary_line() {
+        let mut m = inspect("pkgname = p\npkgver = 1-1\n", "", None, &|_| None);
+        assert_eq!(m.report.verdict(), Verdict::Allow);
+        note_removals(
+            &mut m,
+            &[
+                ("jack2".into(), "1.9-1".into(), "conflicts with p".into()),
+                ("old".into(), "2-1".into(), "replaced by p".into()),
+            ],
+        );
+        assert!(has(&m, "conflict-removal", Severity::Warning, "jack2"));
+        assert!(
+            has(&m, "conflict-removal", Severity::Warning, "old"),
+            "both removals survive"
+        );
+        let messages: Vec<&str> = m
+            .report
+            .findings
+            .iter()
+            .map(|f| f.message.as_str())
+            .collect();
+        assert!(
+            messages.contains(&"installing p removes jack2 1.9-1 (conflicts with p)"),
+            "{messages:?}"
+        );
+        assert!(messages.contains(&"installing p removes old 2-1 (replaced by p)"));
+        let line = m.summary.last().unwrap();
+        assert!(
+            line.starts_with("installing it REMOVES: jack2 1.9-1 (conflicts with p), old 2-1"),
+            "{line}"
+        );
+        // A warning informs; it doesn't make emrac stop and ask.
+        assert_eq!(m.report.verdict(), Verdict::Allow);
+    }
+
+    #[test]
+    fn no_removals_adds_nothing() {
+        let mut m = inspect("pkgname = p\npkgver = 1-1\n", "", None, &|_| None);
+        let before = (m.report.findings.len(), m.summary.len());
+        note_removals(&mut m, &[]);
+        assert_eq!((m.report.findings.len(), m.summary.len()), before);
     }
 
     #[test]

@@ -113,11 +113,25 @@ pub fn print_plan(plan: &Plan, json: bool) {
     // conflicts, or because another package replaces them.
     if !plan.removals.is_empty() {
         println!(
-            "Will also REMOVE {} (a conflict or replacement; pacman will ask you again):",
+            "Will also REMOVE {} (pacman asks first; with --yes a conflict is refused and a replacement accepted):",
             plural(plan.removals.len(), "installed package"),
         );
         for r in &plan.removals {
             println!("  local/{} {}  — {}", r.name, r.version, r.reason);
+        }
+        println!();
+    }
+    // Dependencies several packages could satisfy: pacman asks which one (and
+    // takes the first with --yes).
+    if !plan.provider_choices.is_empty() {
+        println!("Provider choices (pacman asks; with --yes it takes the first):");
+        for choice in &plan.provider_choices {
+            let first = choice.providers.first().map(String::as_str).unwrap_or("?");
+            println!(
+                "  {}: {}  (default: {first})",
+                choice.dependency,
+                choice.providers.join(", ")
+            );
         }
         println!();
     }

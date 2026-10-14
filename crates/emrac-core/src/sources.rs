@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::audit::{self, AuditReport};
 use crate::backend::{
     version_is_newer, AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome,
-    BuildOptions, FreshDb, InstalledSource, PacmanBackend, Removal, ResolvedPackage, SimOp,
+    BuildOptions, FreshDb, InstalledSource, PacmanBackend, ResolvedPackage, SimOp, Simulation,
 };
 use crate::config::Config;
 use crate::deps::{self, DepsReport, Orphan, RdepsReport, WhyReport};
@@ -16,7 +16,7 @@ use crate::history::{now, History, TxStatus};
 use crate::manifest::{self, Manifest};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::pins::{self, Pin, PinStore};
-use crate::plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval};
+use crate::plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval, ProviderChoice};
 use crate::purge::PurgePlan;
 use crate::reinstall::{self, ReinstallItem, ReinstallPlan, ReinstallSource};
 use crate::rollback::{self, Download, RemoteFile, RollbackPlan};
@@ -253,6 +253,7 @@ impl Sources {
             total_installed_size_delta,
             removals: Vec::new(),
             warnings: Vec::new(),
+            provider_choices: Vec::new(),
         };
         if !official.is_empty() {
             attach_removals(
@@ -499,6 +500,7 @@ impl Sources {
             total_installed_size_delta,
             removals: Vec::new(),
             warnings: Vec::new(),
+            provider_choices: Vec::new(),
         };
         // What `-Syu` would remove to resolve conflicts and replacements,
         // worked out against the same (fresh) databases as the plan itself.
@@ -608,6 +610,7 @@ impl Sources {
             total_installed_size_delta,
             removals: Vec::new(),
             warnings: Vec::new(),
+            provider_choices: Vec::new(),
         };
         if !official.is_empty() {
             attach_removals(
@@ -887,6 +890,7 @@ impl Sources {
                 total_installed_size_delta: 0,
                 removals: Vec::new(),
                 warnings: Vec::new(),
+                provider_choices: Vec::new(),
             },
             files,
             downloads,
@@ -1055,6 +1059,7 @@ impl Sources {
                 total_installed_size_delta: 0,
                 removals: Vec::new(),
                 warnings: Vec::new(),
+                provider_choices: Vec::new(),
             },
             items,
             files,
@@ -1543,6 +1548,7 @@ impl Sources {
                     total_installed_size_delta: 0,
                     removals: Vec::new(),
                     warnings: Vec::new(),
+                    provider_choices: Vec::new(),
                 })
             })
             .collect()
@@ -1582,6 +1588,7 @@ impl Sources {
                 total_installed_size_delta: 0,
                 removals: Vec::new(),
                 warnings: Vec::new(),
+                provider_choices: Vec::new(),
             };
             on_step(&plan, &result);
             result?;
@@ -1650,16 +1657,23 @@ fn build_plan(
         total_installed_size_delta,
         removals: Vec::new(),
         warnings: Vec::new(),
+        provider_choices: Vec::new(),
     }
 }
 
 /// Adds the removals libalpm says a transaction would cause to `plan`, and
 /// counts the space they free. If the simulation could not run, says so in the
 /// plan instead of silently leaving the section out.
-fn attach_removals(plan: &mut Plan, simulated: Result<Vec<Removal>>) {
+fn attach_removals(plan: &mut Plan, simulated: Result<Simulation>) {
     match simulated {
-        Ok(removals) => {
-            for r in removals {
+        Ok(sim) => {
+            for p in sim.providers {
+                plan.provider_choices.push(ProviderChoice {
+                    dependency: p.dependency,
+                    providers: p.providers,
+                });
+            }
+            for r in sim.removals {
                 plan.total_installed_size_delta -= r.installed_size as i64;
                 plan.removals.push(PlannedRemoval {
                     name: r.name,
@@ -1756,12 +1770,26 @@ pub fn inspect_package(path: &std::path::Path) -> Result<Manifest> {
     // One extraction of just the small files worth reading, into a private
     // temporary directory that is removed afterwards.
     let extracted = Extracted::new(path, &manifest::wanted_members(&listing))?;
-    Ok(manifest::inspect(
-        &pkginfo,
-        &listing,
-        scriptlet.as_deref(),
-        &|member| extracted.read(member),
-    ))
+    let mut manifest = manifest::inspect(&pkginfo, &listing, scriptlet.as_deref(), &|member| {
+        extracted.read(member)
+    });
+    // What installing it would remove: libalpm's own conflict and replacement
+    // logic, run on the built file as `pacman -U` would. An AUR package's
+    // conflicts are only known once it is built, so this is where they show.
+    match AlpmBackend::simulate(None, SimOp::Files(&[path.to_path_buf()])) {
+        Ok(sim) => {
+            let removals: Vec<(String, String, String)> = sim
+                .removals
+                .into_iter()
+                .map(|r| (r.name, r.version, r.reason))
+                .collect();
+            manifest::note_removals(&mut manifest, &removals);
+        }
+        Err(err) => manifest.summary.push(format!(
+            "couldn't check for conflicts with installed packages: {err}"
+        )),
+    }
+    Ok(manifest)
 }
 
 fn action_word(action: PlanAction) -> &'static str {
@@ -1892,6 +1920,7 @@ mod freshness_tests {
 #[cfg(test)]
 mod removal_tests {
     use super::*;
+    use crate::backend::alpm::{Providers, Removal};
 
     fn empty_plan(delta: i64) -> Plan {
         Plan {
@@ -1901,6 +1930,16 @@ mod removal_tests {
             total_installed_size_delta: delta,
             removals: Vec::new(),
             warnings: Vec::new(),
+            provider_choices: Vec::new(),
+        }
+    }
+
+    fn removal(name: &str, size: u64, reason: &str) -> Removal {
+        Removal {
+            name: name.into(),
+            version: "1-1".into(),
+            installed_size: size,
+            reason: reason.into(),
         }
     }
 
@@ -1909,34 +1948,52 @@ mod removal_tests {
         let mut plan = empty_plan(1000);
         attach_removals(
             &mut plan,
-            Ok(vec![
-                Removal {
-                    name: "jack2".into(),
-                    version: "1.9-1".into(),
-                    installed_size: 300,
-                    reason: "conflicts with pipewire-jack".into(),
-                },
-                Removal {
-                    name: "old".into(),
-                    version: "2-1".into(),
-                    installed_size: 50,
-                    reason: "replaced by new".into(),
-                },
-            ]),
+            Ok(Simulation {
+                removals: vec![
+                    removal("jack2", 300, "conflicts with pipewire-jack"),
+                    removal("old", 50, "replaced by new"),
+                ],
+                providers: Vec::new(),
+            }),
         );
         assert_eq!(plan.total_installed_size_delta, 650);
         assert_eq!(plan.removals.len(), 2);
         assert_eq!(plan.removals[0].name, "jack2");
         assert_eq!(plan.removals[0].reason, "conflicts with pipewire-jack");
+        assert_eq!(plan.removals[1].reason, "replaced by new");
         assert!(plan.warnings.is_empty());
     }
 
     #[test]
-    fn no_removals_leaves_the_plan_untouched() {
+    fn provider_choices_are_carried_into_the_plan_in_pacmans_order() {
+        let mut plan = empty_plan(0);
+        attach_removals(
+            &mut plan,
+            Ok(Simulation {
+                removals: Vec::new(),
+                providers: vec![Providers {
+                    dependency: "jack".into(),
+                    providers: vec!["jack2".into(), "pipewire-jack".into()],
+                }],
+            }),
+        );
+        assert_eq!(plan.provider_choices.len(), 1);
+        assert_eq!(plan.provider_choices[0].dependency, "jack");
+        assert_eq!(
+            plan.provider_choices[0].providers,
+            ["jack2", "pipewire-jack"]
+        );
+        let json = serde_json::to_value(&plan).unwrap();
+        assert_eq!(json["provider_choices"][0]["providers"][1], "pipewire-jack");
+    }
+
+    #[test]
+    fn nothing_found_leaves_the_plan_untouched() {
         let mut plan = empty_plan(42);
-        attach_removals(&mut plan, Ok(Vec::new()));
+        attach_removals(&mut plan, Ok(Simulation::default()));
         assert_eq!(plan.total_installed_size_delta, 42);
         assert!(plan.removals.is_empty() && plan.warnings.is_empty());
+        assert!(plan.provider_choices.is_empty());
     }
 
     #[test]
@@ -1950,21 +2007,10 @@ mod removal_tests {
     }
 
     #[test]
-    fn plans_without_removals_serialize_without_the_empty_fields() {
+    fn plans_without_extras_serialize_without_the_empty_fields() {
         let json = serde_json::to_value(empty_plan(0)).unwrap();
-        assert!(
-            json.get("removals").is_none() && json.get("warnings").is_none(),
-            "{json}"
-        );
-        let mut plan = empty_plan(0);
-        plan.removals.push(PlannedRemoval {
-            name: "x".into(),
-            version: "1".into(),
-            reason: "r".into(),
-        });
-        assert_eq!(
-            serde_json::to_value(&plan).unwrap()["removals"][0]["name"],
-            "x"
-        );
+        for field in ["removals", "warnings", "provider_choices"] {
+            assert!(json.get(field).is_none(), "{field}: {json}");
+        }
     }
 }

@@ -32,7 +32,7 @@ pub use history::{parse_date, History, TransactionRecord, TxStatus};
 pub use manifest::Manifest;
 pub use package::{PackageDetails, PackageSummary};
 pub use pins::{Pin, PinStore};
-pub use plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval};
+pub use plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval, ProviderChoice};
 pub use purge::{ConfigFile, ConfigState, PurgePlan};
 pub use reinstall::{ReinstallItem, ReinstallPlan, ReinstallSource};
 pub use rollback::{rolled_back_by, Download, RollbackPlan, SkippedPackage};
