@@ -176,6 +176,11 @@ pub enum Commands {
         /// directory, user name and host name scrubbed out
         #[arg(long)]
         report: bool,
+
+        /// Check for pending upgrades against freshly synced repositories
+        /// (uses the network; otherwise the age of the local list is reported)
+        #[arg(long)]
+        online: bool,
     },
 
     /// Show a package's dependencies

@@ -42,7 +42,7 @@ pub use snapshot::{
     SnapshotStore,
 };
 pub use sources::{
-    audit_path, inspect_package, OfficialInspection, SearchResults, SearchScope, Sources,
-    UpgradePlan,
+    audit_path, inspect_package, package_list_state, OfficialInspection, PackageList,
+    SearchResults, SearchScope, Sources, UpgradePlan,
 };
 pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};

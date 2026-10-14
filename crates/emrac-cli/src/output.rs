@@ -3,8 +3,8 @@ use std::io::Write;
 
 use emrac_core::{
     AuditReport, ConfigState, DepEntry, DepsReport, DoctorReport, DoctorStatus, DowngradePlan,
-    Download, IssueKind, Manifest, Orphan, PackageDetails, PackageSummary, Pin, Plan, PlanAction,
-    PurgePlan, RdepsReport, ReinstallPlan, ReinstallSource, RestorePlan, RestoreSource,
+    Download, IssueKind, Manifest, Orphan, PackageDetails, PackageList, PackageSummary, Pin, Plan,
+    PlanAction, PurgePlan, RdepsReport, ReinstallPlan, ReinstallSource, RestorePlan, RestoreSource,
     RollbackPlan, Severity, Snapshot, TransactionRecord, TxStatus, Verdict, VerifyReport,
     VersionList, WhyReport,
 };
@@ -998,5 +998,74 @@ pub fn print_doctor(report: &DoctorReport, json: bool) {
             plural(problems, "problem"),
             plural(warnings, "warning")
         );
+    }
+}
+
+/// Said alongside an upgrade plan that was not computed from freshly synced
+/// repositories. `None` when the plan can be trusted as it stands.
+pub fn stale_list_note(list: &PackageList) -> Option<String> {
+    let PackageList::Stale { days, why } = list else {
+        return None;
+    };
+    let age = match days {
+        Some(d) => format!("{d} days old"),
+        None => "of unknown age".to_string(),
+    };
+    let reason = match why.as_deref() {
+        Some("--offline") => " (you passed --offline)".to_string(),
+        Some(err) => {
+            let err = err
+                .strip_prefix("couldn't refresh the package list: ")
+                .unwrap_or(err);
+            format!(" (it couldn't be refreshed for this preview: {err})")
+        }
+        None => String::new(),
+    };
+    Some(format!(
+        "this plan comes from a package list that is {age}{reason}, so anything the repositories published since is not in it. The real upgrade refreshes first and may include more."
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_fresh_list_needs_no_note() {
+        assert_eq!(stale_list_note(&PackageList::Fresh), None);
+    }
+
+    #[test]
+    fn a_stale_list_says_how_old_it_is_and_why() {
+        let note = stale_list_note(&PackageList::Stale {
+            days: Some(10),
+            why: Some("couldn't refresh the package list: `fakeroot` isn't installed".into()),
+        })
+        .unwrap();
+        assert!(note.contains("10 days old"), "{note}");
+        assert!(
+            note.contains(
+                "(it couldn't be refreshed for this preview: `fakeroot` isn't installed)"
+            ),
+            "{note}"
+        );
+        assert!(note.contains("may include more"), "{note}");
+        assert!(!note.contains("up to date"), "{note}");
+    }
+
+    #[test]
+    fn the_offline_flag_and_an_unknown_age_are_named_plainly() {
+        let offline = stale_list_note(&PackageList::Stale {
+            days: Some(3),
+            why: Some("--offline".into()),
+        })
+        .unwrap();
+        assert!(offline.contains("(you passed --offline)"), "{offline}");
+        let unknown = stale_list_note(&PackageList::Stale {
+            days: None,
+            why: None,
+        })
+        .unwrap();
+        assert!(unknown.contains("of unknown age"), "{unknown}");
     }
 }

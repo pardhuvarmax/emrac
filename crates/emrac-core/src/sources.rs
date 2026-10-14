@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::audit::{self, AuditReport};
 use crate::backend::{
     version_is_newer, AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome,
-    BuildOptions, InstalledSource, PacmanBackend, ResolvedPackage,
+    BuildOptions, FreshDb, InstalledSource, PacmanBackend, ResolvedPackage,
 };
 use crate::config::Config;
 use crate::deps::{self, DepsReport, Orphan, RdepsReport, WhyReport};
@@ -49,6 +49,42 @@ pub struct SearchResults {
     pub aur_warning: Option<String>,
 }
 
+/// How current the repository package list behind a plan is. An upgrade plan
+/// is only meaningful against the repositories as they are *now*; against an
+/// old list it silently leaves out everything published since.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "state", rename_all = "lowercase")]
+pub enum PackageList {
+    /// Freshly synced, or refreshed within the last day.
+    Fresh,
+    /// Older than a day. `days` is its age (`None` if unknown); `why` says why
+    /// it could not be refreshed for the preview.
+    Stale {
+        days: Option<u64>,
+        why: Option<String>,
+    },
+}
+
+/// Fresh if the list was refreshed within a day, otherwise stale.
+pub fn package_list_state(age_days: Option<u64>, why: Option<String>) -> PackageList {
+    if age_days.is_some_and(|d| d <= 1) {
+        PackageList::Fresh
+    } else {
+        PackageList::Stale {
+            days: age_days,
+            why,
+        }
+    }
+}
+
+/// The repositories a full-upgrade plan was computed against.
+struct UpgradeView {
+    /// A handle on the fresh database, if there is one.
+    alpm: Option<AlpmBackend>,
+    dbpath: Option<PathBuf>,
+    list: PackageList,
+}
+
 /// What `Sources::inspect_official` found.
 pub struct OfficialInspection {
     /// Each inspected package file with its manifest.
@@ -59,6 +95,8 @@ pub struct OfficialInspection {
 
 pub struct UpgradePlan {
     pub plan: Plan,
+    /// How current the repository list this plan was computed from is.
+    pub package_list: PackageList,
     /// Set on a full upgrade (no explicit targets) when the AUR couldn't be
     /// reached while checking for upgradable foreign packages — official
     /// upgrades are still returned in that case. A targeted AUR upgrade
@@ -389,17 +427,21 @@ impl Sources {
     fn plan_full_upgrade(&self, offline: bool) -> Result<UpgradePlan> {
         let (active, expired_pins) = self.pins()?;
         let ignore: Vec<String> = active.iter().map(|p| p.name.clone()).collect();
-        let names = self.pacman.resolve_full_upgrade(&ignore)?;
+        // The real upgrade syncs first, so the preview must too: against a
+        // stale list it would leave out everything published since.
+        let view = self.upgrade_view(offline);
+        let dbpath = view.dbpath.as_deref();
+        let names = self.pacman.resolve_full_upgrade(&ignore, dbpath)?;
         let mut held_names: Vec<String> = if ignore.is_empty() {
             Vec::new()
         } else {
             // What would be upgraded without the pins: the difference is
             // what they hold back.
-            let all = self.pacman.resolve_full_upgrade(&[])?;
+            let all = self.pacman.resolve_full_upgrade(&[], dbpath)?;
             all.into_iter().filter(|n| ignore.contains(n)).collect()
         };
         let (mut packages, total_download_size, total_installed_size_delta) =
-            self.official_upgrade_packages(&names);
+            self.official_upgrade_packages(&names, view.alpm.as_ref().unwrap_or(&self.alpm));
 
         let mut aur_warning = None;
 
@@ -442,12 +484,60 @@ impl Sources {
                 total_installed_size_delta,
             },
             aur_warning,
+            package_list: view.list,
             held: active
                 .into_iter()
                 .filter(|p| held_names.contains(&p.name))
                 .collect(),
             expired_pins,
         })
+    }
+
+    /// The repositories to plan a full upgrade against: a freshly synced
+    /// throwaway database when the network is reachable, otherwise pacman's
+    /// own (possibly stale) one — and then the plan says so.
+    fn upgrade_view(&self, offline: bool) -> UpgradeView {
+        let age = self.sync_db_age_days();
+        if offline {
+            return UpgradeView {
+                alpm: None,
+                dbpath: None,
+                list: package_list_state(age, Some("--offline".into())),
+            };
+        }
+        let fresh = FreshDb::sync().and_then(|db| {
+            let alpm = AlpmBackend::init_with_dbpath(db.path())?;
+            Ok((alpm, db.path().to_path_buf()))
+        });
+        match fresh {
+            Ok((alpm, path)) => UpgradeView {
+                alpm: Some(alpm),
+                dbpath: Some(path),
+                list: PackageList::Fresh,
+            },
+            Err(err) => UpgradeView {
+                alpm: None,
+                dbpath: None,
+                list: package_list_state(age, Some(err.to_string())),
+            },
+        }
+    }
+
+    /// Age in days of the newest sync database, if there is one.
+    pub fn sync_db_age_days(&self) -> Option<u64> {
+        let db_path = self.pacman.db_path().ok()?;
+        std::fs::read_dir(db_path.join("sync"))
+            .ok()?
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "db"))
+            .filter_map(|e| e.metadata().ok()?.modified().ok())
+            .max()
+            .map(|m| {
+                std::time::SystemTime::now()
+                    .duration_since(m)
+                    .map(|d| d.as_secs() / 86_400)
+                    .unwrap_or(0)
+            })
     }
 
     fn plan_targeted_upgrade(&self, pkgs: &[String]) -> Result<UpgradePlan> {
@@ -470,7 +560,7 @@ impl Sources {
             self.pacman.resolve_install(&official)?
         };
         let (mut packages, total_download_size, total_installed_size_delta) =
-            self.official_upgrade_packages(&names);
+            self.official_upgrade_packages(&names, &self.alpm);
 
         for name in &aur {
             let details = self
@@ -494,6 +584,9 @@ impl Sources {
                 total_installed_size_delta,
             },
             aur_warning: None,
+            // Named packages are resolved and installed against the current
+            // local databases both times, so preview and execution agree.
+            package_list: PackageList::Fresh,
             held: Vec::new(),
             expired_pins: Vec::new(),
         })
@@ -517,8 +610,12 @@ impl Sources {
     /// resolved official target names into `PlannedPackage`s with the *net*
     /// size delta (new installed size − old), unlike `build_plan`'s flat
     /// `size_sign` (install/remove never have both an old and new size).
-    fn official_upgrade_packages(&self, names: &[String]) -> (Vec<PlannedPackage>, u64, i64) {
-        let new = self.alpm.sync_resolved(names);
+    fn official_upgrade_packages(
+        &self,
+        names: &[String],
+        sync_view: &AlpmBackend,
+    ) -> (Vec<PlannedPackage>, u64, i64) {
+        let new = sync_view.sync_resolved(names);
         let old = self.alpm.local_resolved(names);
 
         let mut packages = Vec::new();
@@ -990,8 +1087,12 @@ impl Sources {
 
     /// `emrac doctor`: gathers the facts and evaluates them. Read-only; nothing
     /// here needs root or the network.
-    pub fn doctor(&self) -> Result<DoctorReport> {
-        Ok(doctor::evaluate(&self.doctor_inputs()))
+    ///
+    /// With `online`, the pending-upgrade count comes from a freshly synced
+    /// throwaway database (needs the network); without it the check reports
+    /// honestly how old the package list is instead.
+    pub fn doctor(&self, online: bool) -> Result<DoctorReport> {
+        Ok(doctor::evaluate(&self.doctor_inputs(online)))
     }
 
     /// The facts for the bug-report header.
@@ -1035,7 +1136,7 @@ impl Sources {
         )
     }
 
-    fn doctor_inputs(&self) -> DoctorInputs {
+    fn doctor_inputs(&self, online: bool) -> DoctorInputs {
         let db_path = self
             .pacman
             .db_path()
@@ -1087,6 +1188,28 @@ impl Sources {
         let has_kernel_modules = std::fs::read_dir("/usr/lib/modules")
             .map(|mut d| d.next().is_some())
             .unwrap_or(false);
+        let (pending_upgrades, pending_fresh, pending_error) = if online {
+            match FreshDb::sync() {
+                Ok(db) => (
+                    self.pacman
+                        .resolve_full_upgrade(&[], Some(db.path()))
+                        .ok()
+                        .map(|v| v.len()),
+                    true,
+                    None,
+                ),
+                Err(err) => (None, false, Some(err.to_string())),
+            }
+        } else {
+            (
+                self.pacman
+                    .resolve_full_upgrade(&[], None)
+                    .ok()
+                    .map(|v| v.len()),
+                false,
+                None,
+            )
+        };
         let kernel_release =
             read_trimmed("/proc/sys/kernel/osrelease").filter(|_| has_kernel_modules);
         let kernel_modules_present = kernel_release
@@ -1138,7 +1261,9 @@ impl Sources {
                 .map(|o| o.status.success())
                 .unwrap_or(false),
             sync_db_age_days,
-            pending_upgrades: self.pacman.resolve_full_upgrade(&[]).ok().map(|v| v.len()),
+            pending_upgrades,
+            pending_fresh,
+            pending_error,
             pacnew_files: find_pacnew(Path::new("/etc")),
             failed_system_units: failed_units(&[]),
             failed_user_units: failed_units(&["--user"]),
@@ -1659,4 +1784,42 @@ fn dir_size(dir: &Path, depth: usize) -> u64 {
             _ => 0,
         })
         .sum()
+}
+
+#[cfg(test)]
+mod freshness_tests {
+    use super::*;
+
+    #[test]
+    fn a_list_refreshed_today_or_yesterday_is_fresh() {
+        for days in [0, 1] {
+            assert_eq!(package_list_state(Some(days), None), PackageList::Fresh);
+            // Even if a refresh was attempted and failed: the list is recent.
+            assert_eq!(
+                package_list_state(Some(days), Some("no network".into())),
+                PackageList::Fresh
+            );
+        }
+    }
+
+    #[test]
+    fn anything_older_or_of_unknown_age_is_stale_and_keeps_the_reason() {
+        for days in [2, 10, 400] {
+            assert_eq!(
+                package_list_state(Some(days), Some("--offline".into())),
+                PackageList::Stale {
+                    days: Some(days),
+                    why: Some("--offline".into())
+                }
+            );
+        }
+        assert_eq!(
+            package_list_state(None, None),
+            PackageList::Stale {
+                days: None,
+                why: None
+            },
+            "no date at all is not 'fresh'"
+        );
+    }
 }

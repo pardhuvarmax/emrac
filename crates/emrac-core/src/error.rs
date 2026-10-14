@@ -227,6 +227,9 @@ pub enum Error {
     #[error("makepkg finished but left no package file for '{0}'")]
     NoBuiltPackage(String),
 
+    #[error("couldn't refresh the package list: {0}")]
+    FreshSync(String),
+
     #[error("{0} in the report above — fix them in the order listed")]
     DoctorProblems(String),
 
@@ -289,6 +292,7 @@ impl Error {
             | Error::NoPkgbuild(_)
             | Error::AuditFlagged(_)
             | Error::DoctorProblems(_)
+            | Error::FreshSync(_)
             | Error::ManifestBlocked { .. }
             | Error::InstallDeclined { .. }
             | Error::NoBuiltPackage(_)

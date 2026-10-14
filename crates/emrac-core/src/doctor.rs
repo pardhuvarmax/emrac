@@ -97,6 +97,11 @@ pub struct DoctorInputs {
     pub sync_db_age_days: Option<u64>,
     /// Packages `pacman -Su` would upgrade; `None` if that couldn't be asked.
     pub pending_upgrades: Option<usize>,
+    /// `pending_upgrades` was computed against freshly synced repositories
+    /// (`--online`), not against the possibly old local list.
+    pub pending_fresh: bool,
+    /// Why `--online` couldn't refresh.
+    pub pending_error: Option<String>,
     pub pacnew_files: Vec<String>,
     pub failed_system_units: Vec<String>,
     pub failed_user_units: Vec<String>,
@@ -296,22 +301,43 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
         ),
     });
 
-    // Pending upgrades. This is only ever as good as the sync database it
-    // was computed from, so it is never reported as plain "up to date" unless
-    // that database was refreshed today or yesterday.
-    if let Some(n) = i.pending_upgrades {
-        let fresh = i.sync_db_age_days.is_some_and(|d| d <= 1);
-        let as_of = age_phrase(i.sync_db_age_days);
-        const REFRESH: &str = "emrac upgrade (it refreshes the databases first, and shows the plan before changing anything)";
+    // Pending upgrades. Only ever as good as the package list it was computed
+    // from: against an old local list it is never reported as "up to date"
+    // (that once hid 347 pending updates); `--online` checks against freshly
+    // synced repositories instead.
+    const REFRESH: &str = "emrac doctor --online checks against freshly synced repositories; emrac upgrade previews against them, then refreshes and upgrades";
+    if let Some(why) = &i.pending_error {
+        checks.push(
+            check(
+                "upgrades",
+                "Pending upgrades",
+                Status::Note,
+                format!("couldn't check against fresh repositories: {why}"),
+            )
+            .fix(REFRESH),
+        );
+    } else if let Some(n) = i.pending_upgrades {
+        let fresh = i.pending_fresh || i.sync_db_age_days.is_some_and(|d| d <= 1);
+        let as_of = if i.pending_fresh {
+            "just now".to_string()
+        } else {
+            age_phrase(i.sync_db_age_days)
+        };
         let count = plural(n, "package can be upgraded", "packages can be upgraded");
-        checks.push(match (n, fresh) {
-            (0, true) => check(
+        checks.push(match (n, fresh, i.pending_fresh) {
+            (0, true, true) => check(
+                "upgrades",
+                "Pending upgrades",
+                Status::Ok,
+                "none, checked against freshly synced repositories",
+            ),
+            (0, true, false) => check(
                 "upgrades",
                 "Pending upgrades",
                 Status::Ok,
                 format!("none, according to the database refreshed {as_of}"),
             ),
-            (0, false) => check(
+            (0, false, _) => check(
                 "upgrades",
                 "Pending upgrades",
                 Status::Note,
@@ -320,14 +346,21 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
                 ),
             )
             .fix(REFRESH),
-            (_, true) => check(
+            (_, true, true) => check(
+                "upgrades",
+                "Pending upgrades",
+                Status::Note,
+                format!("{count} (checked against freshly synced repositories)"),
+            )
+            .fix("emrac upgrade"),
+            (_, true, false) => check(
                 "upgrades",
                 "Pending upgrades",
                 Status::Note,
                 format!("{count} (database refreshed {as_of})"),
             )
             .fix(REFRESH),
-            (_, false) => check(
+            (_, false, _) => check(
                 "upgrades",
                 "Pending upgrades",
                 Status::Note,
@@ -805,11 +838,7 @@ mod tests {
             );
             assert!(c.summary.starts_with("can't tell"), "{}", c.summary);
             assert!(!c.summary.contains("up to date"), "{}", c.summary);
-            assert!(c
-                .fix
-                .as_deref()
-                .unwrap()
-                .contains("refreshes the databases"));
+            assert!(c.fix.as_deref().unwrap().contains("doctor --online"));
         }
         // No database date at all is stale too.
         i.sync_db_age_days = None;
@@ -840,6 +869,48 @@ mod tests {
             c.summary
         );
         assert!(!c.summary.contains("probably more"));
+    }
+
+    #[test]
+    fn online_results_are_trusted_regardless_of_the_local_lists_age() {
+        let mut i = healthy();
+        i.sync_db_age_days = Some(30);
+        i.pending_fresh = true;
+        i.pending_upgrades = Some(0);
+        let c = one(&evaluate(&i), "upgrades").clone();
+        assert_eq!(c.status, Status::Ok);
+        assert_eq!(
+            c.summary,
+            "none, checked against freshly synced repositories"
+        );
+        i.pending_upgrades = Some(347);
+        let c = one(&evaluate(&i), "upgrades").clone();
+        assert_eq!(c.status, Status::Note);
+        assert!(
+            c.summary
+                .starts_with("347 packages can be upgraded (checked against freshly"),
+            "{}",
+            c.summary
+        );
+        assert!(!c.summary.contains("probably more"));
+        // The local list is still flagged as old by its own check.
+        assert_eq!(one(&evaluate(&i), "sync-db").status, Status::Warning);
+    }
+
+    #[test]
+    fn a_failed_online_check_says_so_instead_of_guessing() {
+        let mut i = healthy();
+        i.pending_error = Some("Could not resolve host".into());
+        i.pending_upgrades = Some(0);
+        let c = one(&evaluate(&i), "upgrades").clone();
+        assert_eq!(c.status, Status::Note);
+        assert!(
+            c.summary
+                .contains("couldn't check against fresh repositories: Could not resolve host"),
+            "{}",
+            c.summary
+        );
+        assert!(!c.summary.contains("none") && !c.summary.contains("up to date"));
     }
 
     #[test]

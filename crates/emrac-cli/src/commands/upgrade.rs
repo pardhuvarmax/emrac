@@ -29,6 +29,21 @@ pub fn run(
         }
     }
 
+    // What the plan is based on. An empty plan from an old package list says
+    // nothing about what is available now, so it must not be reported as
+    // "already up to date".
+    if let Some(note) = output::stale_list_note(&upgrade.package_list) {
+        eprintln!("emrac warns: {note}");
+        if upgrade.plan.is_empty() {
+            if !json {
+                println!(
+                    "emrac notes: nothing to upgrade in that list — which says nothing about what is available now. Run `emrac upgrade` with the network to see the real plan."
+                );
+            }
+            output::print_pin_notes(&upgrade.held, &upgrade.expired_pins, quiet);
+            return Ok(());
+        }
+    }
     output::print_plan(&upgrade.plan, json);
     output::print_pin_notes(&upgrade.held, &upgrade.expired_pins, quiet);
 

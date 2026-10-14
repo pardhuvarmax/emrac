@@ -81,9 +81,17 @@ impl PacmanBackend {
     /// truly fresh one — same "may be a little stale" caveat previews
     /// already carry elsewhere. The real upgrade (`execute_full_upgrade`)
     /// still does a genuine `-Syu`.
-    pub fn resolve_full_upgrade(&self, ignore: &[String]) -> Result<Vec<String>> {
+    pub fn resolve_full_upgrade(
+        &self,
+        ignore: &[String],
+        dbpath: Option<&std::path::Path>,
+    ) -> Result<Vec<String>> {
         let mut args = vec!["-Su".to_string()];
         args.extend(ignore_args(ignore));
+        // A freshly synced throwaway database (`FreshDb`) instead of pacman's own.
+        if let Some(path) = dbpath {
+            args.extend(["--dbpath".to_string(), path.display().to_string()]);
+        }
         args.extend([
             "--print".to_string(),
             "--print-format".to_string(),

@@ -20,8 +20,21 @@ pub struct AlpmBackend {
 
 impl AlpmBackend {
     pub fn init() -> Result<Self> {
+        Self::init_with(None)
+    }
+
+    /// A handle on a different database directory — the freshly synced
+    /// throwaway one (`FreshDb`) — instead of pacman's own.
+    pub fn init_with_dbpath(db_path: &Path) -> Result<Self> {
+        Self::init_with(Some(db_path.display().to_string()))
+    }
+
+    fn init_with(db_path_override: Option<String>) -> Result<Self> {
         let root = pacman_conf("RootDir")?;
-        let db_path = pacman_conf("DBPath")?;
+        let db_path = match db_path_override {
+            Some(path) => path,
+            None => pacman_conf("DBPath")?,
+        };
         let repos = pacman_conf_list("--repo-list")?;
 
         let handle = Alpm::new(root, db_path).map_err(Error::AlpmInit)?;

@@ -60,3 +60,19 @@ fallback paths (`--offline`, no network).
 `backend/fresh_db.rs` (new), `backend/pacman.rs` (`--dbpath`),
 `backend/alpm.rs` (`init_with_dbpath`), `sources.rs`, `doctor.rs`, `error.rs`;
 CLI `commands/upgrade.rs`, `commands/doctor.rs`, `cli.rs`, `output.rs`.
+
+## Result (measured)
+
+- This host, package list 11 days old: the old plan listed 0 official packages;
+  `checkupdates` finds 347; the new plan lists 365. The 18 extra are not
+  installed — new dependencies the upgrade pulls in, which `pacman -Qu` (what
+  `checkupdates` uses) cannot show and `pacman -Su` (what the real upgrade
+  runs) installs. Nothing `checkupdates` finds is missing. The real database's
+  modification time was unchanged by the preview.
+- Clean container, list 4 days old: old method 0, `checkupdates` 3, new plan 3.
+- `--offline`, and a refresh that cannot happen (no `fakeroot`), both fall back
+  to the stale list *and say so*; an empty stale plan is never "up to date".
+- A mistake of mine worth recording: the first fix to `doctor`'s wording told
+  the user that `emrac upgrade` "refreshes the databases first, and shows the
+  plan before changing anything" — which was not yet true. This slice made it
+  true.
