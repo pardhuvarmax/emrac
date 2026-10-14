@@ -240,6 +240,18 @@ pub enum Error {
     #[error("`cache purge` with no scope removes every cache; add --force to say that is what you mean, or name a scope (source, build, binary, package)")]
     CacheNeedsForce,
 
+    #[error("won't put the new {file} in place: {message}")]
+    PacnewInvalid { file: String, message: String },
+
+    #[error("{file} was changed after emrac last changed it, so reverting would overwrite those edits; type its path to revert anyway")]
+    PacnewDrift { file: String },
+
+    #[error("there is no change of emrac's to revert{0}")]
+    PacnewNothingToRevert(String),
+
+    #[error("{0} still has merge conflict markers (<<<<<<<, |||||||, >>>>>>>); resolve every one")]
+    PacnewMarkers(String),
+
     #[error("{0}")]
     DependencyConflict(Box<crate::backend::DependencyConflict>),
 
@@ -339,6 +351,10 @@ impl Error {
             | Error::DependencyConflict(_)
             | Error::InvalidCacheValue { .. }
             | Error::CacheNeedsForce
+            | Error::PacnewInvalid { .. }
+            | Error::PacnewDrift { .. }
+            | Error::PacnewNothingToRevert(_)
+            | Error::PacnewMarkers(_)
             | Error::DependencySwapDeclined { .. }
             | Error::DependencySwapIncomplete { .. }
             | Error::ManifestBlocked { .. }

@@ -414,12 +414,22 @@ pub enum PacnewCommand {
         file: String,
     },
 
-    /// Go through the pending files and keep, take or merge each
+    /// Go through the pending files and keep, take, merge or edit each
     /// (asks every time; --yes does not answer)
     Resolve {
         /// Only these files (default: all of them)
         files: Vec<String>,
     },
+
+    /// Put back the file as it was before emrac's latest change to it
+    /// (asks; --yes does not answer)
+    Revert {
+        /// The live file (default: emrac's latest change to any file)
+        file: Option<String>,
+    },
+
+    /// Pending files and what emrac has changed so far
+    Status,
 }
 
 #[derive(Subcommand)]

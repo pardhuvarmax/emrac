@@ -120,7 +120,7 @@ pub struct Sources {
     aur: AurBackend,
     aur_build: AurBuildBackend,
     archive: ArchiveBackend,
-    pacman: PacmanBackend,
+    pub(crate) pacman: PacmanBackend,
 }
 
 impl Sources {
@@ -767,111 +767,6 @@ impl Sources {
             None => return None,
         };
         crate::backend::PackageFile::read(&path, member)
-    }
-
-    /// Carries out the user's choice for one pending file. The live file is
-    /// copied to `~/.local/share/emrac/config-backups/` before it is
-    /// replaced; the change itself goes through `sudo`. Returns the backup's
-    /// path, if one was made.
-    pub fn pacnew_apply(&self, file: &Pending, action: PacnewAction) -> Result<Option<PathBuf>> {
-        let sudo = |program: &str, args: &[&str]| {
-            self.pacman.run_sudo(
-                program,
-                &args.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
-            )
-        };
-        match action {
-            PacnewAction::Keep => {
-                sudo("rm", &["-f", &file.pending])?;
-                Ok(None)
-            }
-            PacnewAction::Take | PacnewAction::Merge => {
-                let merged = match (action, &file.merged) {
-                    (PacnewAction::Merge, Some(Merge::Clean(text))) => Some(text.clone()),
-                    (PacnewAction::Merge, _) => {
-                        return Err(Error::Simulation(format!(
-                            "{} has no clean merge to apply",
-                            file.live
-                        )))
-                    }
-                    _ => None,
-                };
-                let backup = self.back_up_live(&file.live)?;
-                match merged {
-                    None => sudo("mv", &["-f", &file.pending, &file.live])?,
-                    Some(text) => {
-                        use std::os::unix::fs::MetadataExt;
-                        let meta = std::fs::metadata(&file.live).map_err(|source| Error::Io {
-                            context: format!("couldn't read {}", file.live),
-                            source,
-                        })?;
-                        let tmp = backup.with_extension("merged");
-                        std::fs::write(&tmp, text).map_err(|source| Error::Io {
-                            context: format!("couldn't write {}", tmp.display()),
-                            source,
-                        })?;
-                        let result = sudo(
-                            "install",
-                            &[
-                                "-m",
-                                &format!("{:o}", meta.mode() & 0o7777),
-                                "-o",
-                                &meta.uid().to_string(),
-                                "-g",
-                                &meta.gid().to_string(),
-                                &tmp.display().to_string(),
-                                &file.live,
-                            ],
-                        );
-                        let _ = std::fs::remove_file(&tmp);
-                        result?;
-                        sudo("rm", &["-f", &file.pending])?;
-                    }
-                }
-                Ok(Some(backup))
-            }
-        }
-    }
-
-    /// Copies `live` into the config-backups folder (private, mode 0600).
-    fn back_up_live(&self, live: &str) -> Result<PathBuf> {
-        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
-        let io = |context: String| move |source| Error::Io { context, source };
-        let home = std::env::var("HOME").map_err(|_| Error::NoHomeDir)?;
-        let dest = pacnew::backup_path(Path::new(&home), &now().to_string(), live);
-        if let Some(parent) = dest.parent() {
-            std::fs::DirBuilder::new()
-                .recursive(true)
-                .mode(0o700)
-                .create(parent)
-                .map_err(io(format!("couldn't create {}", parent.display())))?;
-        }
-        let bytes = match std::fs::read(live) {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                // Not readable by the user: ask sudo to read it.
-                let out = Command::new("sudo")
-                    .args(["cat", live])
-                    .output()
-                    .map_err(|e| Error::CommandSpawn("sudo".to_string(), e))?;
-                if !out.status.success() {
-                    return Err(Error::CommandFailed {
-                        command: format!("sudo cat {live}"),
-                        stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
-                    });
-                }
-                out.stdout
-            }
-        };
-        let mut f = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&dest)
-            .map_err(io(format!("couldn't create {}", dest.display())))?;
-        std::io::Write::write_all(&mut f, &bytes)
-            .map_err(io(format!("couldn't write {}", dest.display())))?;
-        Ok(dest)
     }
 
     /// Splits explicitly-named upgrade targets into official vs. AUR.
@@ -2425,17 +2320,6 @@ fn find_pacnew(root: &Path) -> Vec<String> {
     walk(root, 0, &mut out);
     out.sort();
     out
-}
-
-/// What to do with a pending file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PacnewAction {
-    /// Keep the live file; delete the `.pacnew` / `.pacsave`.
-    Keep,
-    /// Replace the live file with the `.pacnew`.
-    Take,
-    /// Replace the live file with the clean three-way merge.
-    Merge,
 }
 
 /// md5 of a file as `md5sum` prints it (what pacman records for config files).

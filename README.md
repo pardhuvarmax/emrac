@@ -13,7 +13,7 @@ Status: **Slice r1.** The core loop (`search`, `info`, `install`, `remove`, `upg
 | Find & inspect | `search`, `info`, `deps`, `rdeps`, `why`, `orphans` |
 | Change | `install`, `remove`, `purge`, `upgrade`, `reinstall`, `downgrade`, `build` (AUR/PKGBUILD dir in the sandbox, no install) |
 | Undo | `history`, `rollback [tx]` / `undo`, `redo`, `snapshot`, `restore <name>` |
-| Protect | `doctor` (read-only system health checks), `audit` (read a PKGBUILD or inspect a built package for risky code; runs automatically before AUR builds and again on the built package before it is installed), `pin` / `unpin` (holds with a reason and expiry), `verify` (files vs. pacman's record), `cache` (sizes of the source, build, binary and pacman caches; `clean`, `trim`, `purge` keep what `undo` needs), `pacnew` (tells your edits from upstream's in `.pacnew` files, then keeps, takes or merges each) |
+| Protect | `doctor` (read-only system health checks), `audit` (read a PKGBUILD or inspect a built package for risky code; runs automatically before AUR builds and again on the built package before it is installed), `pin` / `unpin` (holds with a reason and expiry), `verify` (files vs. pacman's record), `cache` (sizes of the source, build, binary and pacman caches; `clean`, `trim`, `purge` keep what `undo` needs), `pacnew` (tells your edits from upstream's in `.pacnew` files, then keeps, takes, merges or edits each after checking it; every change is recorded and revertible) |
 | Setup | `config`, `completion bash\|zsh\|fish` |
 
 Global flags: `--dry-run`, `--yes`, `--offline`, `--json`, `--quiet`. Defaults can be set with `emrac config`.

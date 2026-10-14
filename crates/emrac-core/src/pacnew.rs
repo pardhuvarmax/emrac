@@ -222,6 +222,153 @@ pub fn merge3(base: &str, ours: &str, theirs: &str) -> Result<Merge> {
     result
 }
 
+/// The three-way result as text, with `diff3`-style conflict markers where the
+/// two sides disagree, and how many conflicts there are.
+pub fn merge3_markers(base: &str, ours: &str, theirs: &str) -> Result<(String, u32)> {
+    let dir = private_temp_dir("markers")?;
+    let result = (|| {
+        let mut paths = Vec::new();
+        for (name, text) in [("ours", ours), ("base", base), ("theirs", theirs)] {
+            let path = dir.join(name);
+            std::fs::write(&path, text).map_err(|source| Error::Io {
+                context: format!("couldn't write {}", path.display()),
+                source,
+            })?;
+            paths.push(path);
+        }
+        let output = Command::new("git")
+            .args(["merge-file", "-p", "--diff3"])
+            .args([
+                "-L",
+                "your file",
+                "-L",
+                "the old package's file",
+                "-L",
+                "the new file",
+            ])
+            .args(&paths)
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|err| Error::CommandSpawn("git".to_string(), err))?;
+        match output.status.code() {
+            Some(n) if (0..=127).contains(&n) => Ok((
+                String::from_utf8_lossy(&output.stdout).into_owned(),
+                n as u32,
+            )),
+            _ => Err(Error::CommandFailed {
+                command: "git merge-file".to_string(),
+                stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            }),
+        }
+    })();
+    let _ = std::fs::remove_dir_all(&dir);
+    result
+}
+
+/// Does `text` still have a merge conflict marker line?
+pub fn has_conflict_markers(text: &str) -> bool {
+    text.lines().any(|l| {
+        ["<<<<<<<", ">>>>>>>", "|||||||"]
+            .iter()
+            .any(|m| l == *m || l.starts_with(&format!("{m} ")))
+    })
+}
+
+/// What checking a candidate file found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Validation {
+    /// Checked, and fine: what was checked.
+    Valid(String),
+    /// Nothing here knows how to check this file.
+    NoValidator,
+    /// Checked, and wrong: why.
+    Invalid(String),
+}
+
+/// Files `bash -n` can check because they are sourced as shell.
+const SHELL_SOURCED: &[&str] = &[
+    "/etc/mkinitcpio.conf",
+    "/etc/makepkg.conf",
+    "/etc/default/grub",
+];
+
+/// Checks `candidate`, the text that would become `live`, with whatever can
+/// check that kind of file (`docs/plan/u30-pacnew-revert.md`).
+pub fn validate(live: &str, candidate: &str) -> Result<Validation> {
+    if live == "/etc/pacman.d/mirrorlist" {
+        let has_server = candidate.lines().any(|l| {
+            let l = l.trim_start();
+            l.starts_with("Server") && l[6..].trim_start().starts_with('=')
+        });
+        return Ok(if has_server {
+            Validation::Valid("it has a Server line".into())
+        } else {
+            Validation::Invalid(
+                "no uncommented Server line: pacman would have no mirrors to use".into(),
+            )
+        });
+    }
+    if live.ends_with(".json") {
+        return Ok(match serde_json::from_str::<serde_json::Value>(candidate) {
+            Ok(_) => Validation::Valid("it parses as JSON".into()),
+            Err(e) => Validation::Invalid(format!("not valid JSON: {e}")),
+        });
+    }
+    // (tool, arguments before the file, needs root, exit codes that pass)
+    let tool: Option<(&str, Vec<&str>, bool, &[i32])> =
+        if live == "/etc/sudoers" || live.starts_with("/etc/sudoers.d/") {
+            Some(("visudo", vec!["-cf"], true, &[0]))
+        } else if live == "/etc/ssh/sshd_config" {
+            Some(("sshd", vec!["-t", "-f"], true, &[0]))
+        } else if live == "/etc/pacman.conf" {
+            Some(("pacman-conf", vec!["--config"], false, &[0]))
+        } else if live == "/etc/fstab" {
+            Some(("findmnt", vec!["--verify", "--tab-file"], false, &[0, 64]))
+        } else if SHELL_SOURCED.contains(&live) {
+            Some(("bash", vec!["-n"], false, &[0]))
+        } else {
+            None
+        };
+    let Some((program, args, root, ok_codes)) = tool else {
+        return Ok(Validation::NoValidator);
+    };
+    let dir = private_temp_dir("validate")?;
+    let result = (|| {
+        let path = dir.join("candidate");
+        std::fs::write(&path, candidate).map_err(|source| Error::Io {
+            context: format!("couldn't write {}", path.display()),
+            source,
+        })?;
+        let mut cmd = if root {
+            let mut c = Command::new("sudo");
+            c.arg(program);
+            c
+        } else {
+            Command::new(program)
+        };
+        cmd.args(&args).arg(&path);
+        let output = match cmd.output() {
+            Ok(o) => o,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Validation::NoValidator)
+            }
+            Err(e) => return Err(Error::CommandSpawn(program.to_string(), e)),
+        };
+        let code = output.status.code().unwrap_or(-1);
+        if ok_codes.contains(&code) {
+            return Ok(Validation::Valid(format!("{program} accepts it")));
+        }
+        let mut said = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if said.is_empty() {
+            said = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        }
+        let said: String = said.chars().take(400).collect();
+        Ok(Validation::Invalid(format!("{program} says: {said}")))
+    })();
+    let _ = std::fs::remove_dir_all(&dir);
+    result
+}
+
 /// `diff -u` of two texts, empty when they are the same.
 pub fn unified_diff(a_label: &str, a: &str, b_label: &str, b: &str) -> Result<String> {
     if a == b {
@@ -363,6 +510,57 @@ garbage line
             merge3(base, "a\nB\nc\nd\ne\n", "a\nX\nc\nd\ne\n").unwrap(),
             Merge::Conflicts(1)
         );
+    }
+
+    #[test]
+    fn markers_are_written_where_both_sides_differ_and_found_again() {
+        let base = "a\nb\nc\n";
+        let (text, n) = merge3_markers(base, "a\nB\nc\n", "a\nX\nc\n").unwrap();
+        assert_eq!(n, 1);
+        assert!(text.contains("<<<<<<< your file") && text.contains("B"));
+        assert!(text.contains("||||||| the old package's file"));
+        assert!(text.contains(">>>>>>> the new file"));
+        assert!(has_conflict_markers(&text));
+        let (clean, n) = merge3_markers(base, "a\nB\nc\n", "a\nb\nc\nd\n").unwrap();
+        assert_eq!(n, 0);
+        assert_eq!(clean, "a\nB\nc\nd\n");
+        assert!(!has_conflict_markers(&clean));
+        assert!(!has_conflict_markers("# ======= a banner\nx <<<<<<< y\n"));
+    }
+
+    #[test]
+    fn candidates_are_checked_by_what_can_check_them() {
+        let mirrors = "/etc/pacman.d/mirrorlist";
+        let none = "## Arch Linux repository mirrorlist\n#Server = https://a/$repo/os/$arch\n";
+        assert!(matches!(
+            validate(mirrors, none).unwrap(),
+            Validation::Invalid(_)
+        ));
+        assert!(matches!(
+            validate(mirrors, "#x\nServer = https://a/$repo/os/$arch\n").unwrap(),
+            Validation::Valid(_)
+        ));
+        assert!(matches!(
+            validate("/etc/tpm2-tss/p.json", "{\"a\": 1}").unwrap(),
+            Validation::Valid(_)
+        ));
+        assert!(matches!(
+            validate("/etc/tpm2-tss/p.json", "{\"a\": ").unwrap(),
+            Validation::Invalid(_)
+        ));
+        assert_eq!(
+            validate("/etc/services", "x\n").unwrap(),
+            Validation::NoValidator
+        );
+        let conf = "/etc/mkinitcpio.conf";
+        assert!(matches!(
+            validate(conf, "HOOKS=(base udev)\n").unwrap(),
+            Validation::Valid(_)
+        ));
+        match validate(conf, "HOOKS=(base udev\n").unwrap() {
+            Validation::Invalid(why) => assert!(why.starts_with("bash says"), "{why}"),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]
