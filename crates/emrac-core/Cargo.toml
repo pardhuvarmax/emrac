@@ -2,6 +2,10 @@
 name = "emrac-core"
 version.workspace = true
 edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "The library behind emrac: package queries, plans, audits, history and rollback"
 
 [dependencies]
 alpm = { version = "5", features = ["generate"] }

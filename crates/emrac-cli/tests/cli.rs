@@ -60,9 +60,18 @@ fn version_and_help_succeed() {
     let out = home.run(&["--version"]);
     assert_eq!(out.status.code(), Some(0));
     assert!(stdout(&out).starts_with("emrac "), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("built by pardhuvarmax"),
+        "{}",
+        stdout(&out)
+    );
 
     let out = home.run(&["--help"]);
     assert_eq!(out.status.code(), Some(0));
+    assert!(
+        stdout(&out).contains("Built by pardhuvarmax"),
+        "help lacks the credit"
+    );
     for cmd in [
         "install", "rollback", "snapshot", "restore", "pin", "orphans",
     ] {

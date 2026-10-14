@@ -2,6 +2,10 @@
 name = "emrac-cli"
 version.workspace = true
 edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "A hybrid package management platform for Arch Linux"
 
 [[bin]]
 name = "emrac"

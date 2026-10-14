@@ -5,6 +5,9 @@ members = ["crates/emrac-core", "crates/emrac-cli"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+authors = ["pardhuvarmax"]
+repository = "https://github.com/pardhuvarmax/emrac"
+homepage = "https://github.com/pardhuvarmax/emrac"
 
 [profile.dev]
 debug = 1

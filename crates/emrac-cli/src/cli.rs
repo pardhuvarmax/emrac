@@ -3,8 +3,15 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 #[derive(Parser)]
 #[command(
     name = "emrac",
-    version,
-    about = "A hybrid package management platform for Arch Linux"
+    version = concat!(
+        env!("CARGO_PKG_VERSION"),
+        "\nbuilt by ",
+        env!("CARGO_PKG_AUTHORS"),
+        "\n",
+        env!("CARGO_PKG_HOMEPAGE")
+    ),
+    about = "A hybrid package management platform for Arch Linux",
+    after_help = concat!("Built by ", env!("CARGO_PKG_AUTHORS"), " — ", env!("CARGO_PKG_HOMEPAGE"))
 )]
 pub struct Cli {
     #[command(subcommand)]
