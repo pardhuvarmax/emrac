@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use std::io::{self, Write};
 
 /// Reads one line from standard input **one byte at a time**.
@@ -47,12 +48,34 @@ pub(crate) fn decide(line: Option<&str>, default_yes: bool) -> bool {
     }
 }
 
+/// The start of a question: `emrac asks:`.
+fn asks() -> String {
+    Voice::Asks.prefix_for(false)
+}
+
+/// When no answer came at all (the input is closed), say so once instead of
+/// silently changing nothing. The unanswered question left the cursor mid-line.
+fn no_answer() {
+    static SAID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !SAID.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        println!();
+        say!(
+            Voice::Refuses,
+            "no answer came (the input is closed), so nothing was changed."
+        );
+    }
+}
+
 fn ask(message: &str, hint: &str, default_yes: bool) -> bool {
-    print!("emrac asks: {message} {hint} ");
+    print!("{} {message} {hint} ", asks());
     if io::stdout().flush().is_err() {
         return false;
     }
-    decide(read_line().as_deref(), default_yes)
+    let line = read_line();
+    if line.is_none() {
+        no_answer();
+    }
+    decide(line.as_deref(), default_yes)
 }
 
 /// Prompts on stdout/stdin; an empty answer means yes (matches pacman's own
@@ -71,9 +94,13 @@ pub fn confirm_default_no(message: &str) -> bool {
 /// Asks which of `options` (single letters) to take. An empty answer, an
 /// unknown one and end of input all mean "none": nothing is changed.
 pub fn choose(message: &str, options: &str) -> Option<char> {
-    print!("emrac asks: {message} ");
+    print!("{} {message} ", asks());
     io::stdout().flush().ok()?;
-    pick(read_line().as_deref(), options)
+    let line = read_line();
+    if line.is_none() {
+        no_answer();
+    }
+    pick(line.as_deref(), options)
 }
 
 pub(crate) fn pick(line: Option<&str>, options: &str) -> Option<char> {
@@ -83,11 +110,17 @@ pub(crate) fn pick(line: Option<&str>, options: &str) -> Option<char> {
 
 /// The user must type `expected` exactly: for changes that can lock them out.
 pub fn confirm_typed(message: &str, expected: &str) -> bool {
-    print!("emrac asks: {message} ");
+    print!("{} {message} ", asks());
     if io::stdout().flush().is_err() {
         return false;
     }
-    read_line().is_some_and(|l| l.trim() == expected)
+    match read_line() {
+        Some(line) => line.trim() == expected,
+        None => {
+            no_answer();
+            false
+        }
+    }
 }
 
 #[cfg(test)]

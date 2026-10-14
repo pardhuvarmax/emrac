@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use emrac_core::{Result, Sources};
 
 use crate::commands::history;
@@ -21,7 +22,7 @@ pub fn run(
     }
 
     if !yes && !confirm("Proceed with the downgrade?") {
-        println!("emrac notes: okay, nothing downgraded.");
+        say!(Voice::Notes, "okay, nothing downgraded.");
         return Ok(());
     }
 
@@ -30,8 +31,9 @@ pub fn run(
     result?;
 
     if !json {
-        println!(
-            "emrac notes: the next `emrac upgrade` will bring {pkg} forward again — add it to IgnorePkg in /etc/pacman.conf to hold it here."
+        say!(
+            Voice::Suggests,
+            "the next `emrac upgrade` will bring {pkg} forward again — add it to IgnorePkg in /etc/pacman.conf to hold it here."
         );
     }
     Ok(())

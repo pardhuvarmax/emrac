@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use emrac_core::{Result, Sources};
 
 use crate::commands::aur_install::BuildChoice;
@@ -25,7 +26,7 @@ pub fn run(
 
     if let Some(warning) = &upgrade.aur_warning {
         if !quiet {
-            eprintln!("emrac warns: {warning}");
+            say!(Voice::Warns, "{warning}");
         }
     }
 
@@ -33,11 +34,12 @@ pub fn run(
     // nothing about what is available now, so it must not be reported as
     // "already up to date".
     if let Some(note) = output::stale_list_note(&upgrade.package_list) {
-        eprintln!("emrac warns: {note}");
+        say!(Voice::Warns, "{note}");
         if upgrade.plan.is_empty() {
             if !json {
-                println!(
-                    "emrac notes: nothing to upgrade in that list — which says nothing about what is available now. Run `emrac upgrade` with the network to see the real plan."
+                say!(
+                    Voice::Warns,
+                    "nothing to upgrade in that list — which says nothing about what is available now. Run `emrac upgrade` with the network to see the real plan."
                 );
             }
             output::print_pin_notes(&upgrade.held, &upgrade.expired_pins, quiet);
@@ -69,23 +71,27 @@ pub fn run(
             yes,
             choice.accept_risks,
         )? {
-            println!("emrac notes: okay, nothing upgraded.");
+            say!(Voice::Notes, "okay, nothing upgraded.");
             return Ok(());
         }
     }
 
     if !yes && !confirm("Proceed with the upgrade?") {
-        println!("emrac notes: okay, nothing upgraded.");
+        say!(Voice::Notes, "okay, nothing upgraded.");
         return Ok(());
     }
 
     if snapshot_first {
         match sources.auto_snapshot() {
-            Ok(snapshot) => eprintln!(
-                "emrac notes: saved snapshot '{0}' — `emrac restore {0}` returns to it.",
+            Ok(snapshot) => say!(
+                Voice::Confirms,
+                "saved snapshot '{0}' — `emrac restore {0}` returns to it.",
                 snapshot.name
             ),
-            Err(err) => eprintln!("emrac warns: couldn't save a snapshot before upgrading — {err}"),
+            Err(err) => say!(
+                Voice::Warns,
+                "couldn't save a snapshot before upgrading — {err}"
+            ),
         }
     }
 

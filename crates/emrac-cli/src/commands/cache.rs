@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use std::collections::BTreeMap;
 
 use emrac_core::{
@@ -122,8 +123,9 @@ fn overview(sources: &Sources, named: &CacheScopes, largest: bool, s: Settings) 
         .filter(|(s, _)| **s != CacheScope::Source)
         .map(|(_, r)| r.2)
         .sum();
-    println!(
-        "emrac found: {} in the caches; `emrac cache clean` would free {}.\n",
+    say!(
+        Voice::Found,
+        "{} in the caches; `emrac cache clean` would free {}.\n",
         human_size(total),
         human_size(reclaim)
     );
@@ -223,7 +225,7 @@ fn change(sources: &Sources, args: &CacheArgs, op: CacheOp, s: Settings) -> Resu
     }
     if doomed.is_empty() {
         if !json {
-            println!("emrac notes: nothing to remove.");
+            say!(Voice::Notes, "nothing to remove.");
         }
         return Ok(());
     }
@@ -238,7 +240,7 @@ fn change(sources: &Sources, args: &CacheArgs, op: CacheOp, s: Settings) -> Resu
             human_size(doomed.iter().map(|d| d.entry.bytes).sum())
         ))
     {
-        println!("emrac notes: okay, nothing removed.");
+        say!(Voice::Notes, "okay, nothing removed.");
         return Ok(());
     }
 
@@ -246,13 +248,14 @@ fn change(sources: &Sources, args: &CacheArgs, op: CacheOp, s: Settings) -> Resu
     if json {
         println!("{}", serde_json::to_string_pretty(&outcome).unwrap());
     } else {
-        println!(
-            "emrac notes: removed {}, freed {}.",
+        say!(
+            Voice::Confirms,
+            "removed {}, freed {}.",
             plural(outcome.removed, "entry", "entries"),
             human_size(outcome.freed)
         );
         for (path, why) in &outcome.failed {
-            eprintln!("emrac warns: couldn't remove {}: {why}", path.display());
+            say!(Voice::Warns, "couldn't remove {}: {why}", path.display());
         }
     }
     Ok(())
@@ -265,7 +268,7 @@ fn summary(doomed: &[&CacheDecision], op: CacheOp) {
         row.0 += 1;
         row.1 += d.entry.bytes;
     }
-    println!("emrac plans: remove");
+    say!(Voice::Plans, "remove");
     for (scope, (count, bytes)) in &per {
         println!(
             "  {:<8} {} ({})",

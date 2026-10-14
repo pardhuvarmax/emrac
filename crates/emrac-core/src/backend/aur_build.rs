@@ -227,8 +227,9 @@ impl AurBuildBackend {
         let wants_scope = opts.limits.memory_percent > 0 || opts.limits.max_tasks > 0;
         let use_scope = wants_scope && sandbox::scope_available(&opts.limits);
         if wants_scope && !use_scope {
-            eprintln!(
-                "emrac warns: memory and process limits aren't available here (no systemd user session with cgroup v2); the build runs with the time and size limits only."
+            crate::say!(
+                crate::voice::Voice::Warns,
+                "memory and process limits aren't available here (no systemd user session with cgroup v2); the build runs with the time and size limits only."
             );
         }
         let steps: [(&str, &[&str]); 2] = [

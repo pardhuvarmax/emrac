@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -16,12 +17,16 @@ pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool)
     }
 
     if results.is_empty() {
-        println!("emrac found: nothing matching '{query}'. Try a shorter or different term.");
+        say!(
+            Voice::Found,
+            "nothing matching '{query}'. Try a shorter or different term."
+        );
         return;
     }
 
-    println!(
-        "emrac found: {} matching '{query}'\n",
+    say!(
+        Voice::Found,
+        "{} matching '{query}'\n",
         plural(results.len(), "package")
     );
 
@@ -39,7 +44,7 @@ pub fn print_package_details(pkg: &PackageDetails, json: bool) {
         return;
     }
 
-    println!("emrac found: {} in {}\n", pkg.name, pkg.repo);
+    say!(Voice::Found, "{} in {}\n", pkg.name, pkg.repo);
 
     println!("Name            : {}", pkg.name);
     println!("Version         : {}", pkg.version);
@@ -86,7 +91,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
             PlanAction::Reinstall => "nothing to reinstall.",
             PlanAction::Purge => "nothing to purge.",
         };
-        println!("emrac notes: {note}");
+        say!(Voice::Notes, "{note}");
         return;
     }
 
@@ -99,8 +104,9 @@ pub fn print_plan(plan: &Plan, json: bool) {
         PlanAction::Purge => "purge",
     };
 
-    println!(
-        "emrac plans: {verb} {}\n",
+    say!(
+        Voice::Plans,
+        "{verb} {}\n",
         plural(plan.packages.len(), "package")
     );
     for pkg in &plan.packages {
@@ -136,7 +142,7 @@ pub fn print_plan(plan: &Plan, json: bool) {
         println!();
     }
     for warning in &plan.warnings {
-        eprintln!("emrac warns: {warning}");
+        say!(Voice::Warns, "{warning}");
     }
 
     if plan.total_download_size > 0 {
@@ -158,12 +164,15 @@ pub fn print_plan(plan: &Plan, json: bool) {
 }
 
 pub fn print_pkgbuild(pkg: &str, content: &str) {
-    println!("emrac notes: PKGBUILD for '{pkg}' (first build):\n");
+    say!(Voice::Notes, "PKGBUILD for '{pkg}' (first build):\n");
     println!("{content}");
 }
 
 pub fn print_pkgbuild_diff(pkg: &str, diff: &str) {
-    println!("emrac notes: PKGBUILD changes for '{pkg}' since your last build:\n");
+    say!(
+        Voice::Remembers,
+        "PKGBUILD changes for '{pkg}' since your last build:\n"
+    );
     println!("{diff}");
 }
 
@@ -174,8 +183,9 @@ pub fn print_verify(report: &VerifyReport, json: bool) {
     }
 
     let files: usize = report.packages.iter().map(|p| p.files_checked).sum();
-    println!(
-        "emrac found: checked {} ({} files)\n",
+    say!(
+        Voice::Found,
+        "checked {} ({} files)\n",
         plural(report.packages.len(), "package"),
         files
     );
@@ -256,8 +266,9 @@ pub fn print_reinstall(reinstall: &ReinstallPlan, json: bool) {
         return;
     }
 
-    println!(
-        "emrac plans: reinstall {}\n",
+    say!(
+        Voice::Plans,
+        "reinstall {}\n",
         plural(reinstall.items.len(), "package")
     );
     for (item, pkg) in reinstall.items.iter().zip(&reinstall.plan.packages) {
@@ -279,7 +290,7 @@ pub fn print_downgrade(downgrade: &DowngradePlan, json: bool) {
     }
 
     let pkg = &downgrade.plan.packages[0];
-    println!("emrac plans: downgrade 1 package\n");
+    say!(Voice::Plans, "downgrade 1 package\n");
     match &pkg.previous_version {
         Some(from) => println!("  {}/{} {} (from {from})", pkg.repo, pkg.name, pkg.version),
         None => println!("  {}/{} {}", pkg.repo, pkg.name, pkg.version),
@@ -294,21 +305,24 @@ pub fn print_versions(list: &VersionList, json: bool) {
     }
 
     if list.versions.is_empty() {
-        println!(
-            "emrac notes: no other versions of '{}' found on this machine or in the Arch Linux Archive.",
+        say!(
+            Voice::Notes,
+            "no other versions of '{}' found on this machine or in the Arch Linux Archive.",
             list.package
         );
         return;
     }
 
     match &list.installed {
-        Some(v) => println!(
-            "emrac found: {} of '{}' (installed: {v})\n",
+        Some(v) => say!(
+            Voice::Found,
+            "{} of '{}' (installed: {v})\n",
             plural(list.versions.len(), "version"),
             list.package
         ),
-        None => println!(
-            "emrac found: {} of '{}' (not installed)\n",
+        None => say!(
+            Voice::Found,
+            "{} of '{}' (not installed)\n",
             plural(list.versions.len(), "version"),
             list.package
         ),
@@ -337,8 +351,9 @@ pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
 
     let plan = &rollback.plan;
     if plan.is_empty() {
-        println!(
-            "emrac notes: nothing left to roll back for {} — none of its packages are as it left them.",
+        say!(
+            Voice::Notes,
+            "nothing left to roll back for {} — none of its packages are as it left them.",
             rollback.target
         );
     } else {
@@ -354,8 +369,9 @@ pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
             Some(original) => format!("redo {original} (by reversing {})", rollback.target),
             None => format!("roll back {}", rollback.target),
         };
-        println!(
-            "emrac plans: {what} — {verb} {}\n",
+        say!(
+            Voice::Plans,
+            "{what} — {verb} {}\n",
             plural(plan.packages.len(), "package")
         );
         for pkg in &plan.packages {
@@ -393,12 +409,13 @@ pub fn print_history(
     }
 
     if records.is_empty() {
-        println!("emrac notes: no transactions found.");
+        say!(Voice::Notes, "no transactions found.");
         return;
     }
 
-    println!(
-        "emrac found: {} (times are UTC)\n",
+    say!(
+        Voice::Found,
+        "{} (times are UTC)\n",
         plural(records.len(), "transaction")
     );
 
@@ -491,8 +508,9 @@ pub fn print_snapshot_created(snapshot: &Snapshot, json: bool) {
         println!("{}", serde_json::to_string_pretty(snapshot).unwrap());
         return;
     }
-    println!(
-        "emrac notes: saved snapshot '{}' ({}).",
+    say!(
+        Voice::Confirms,
+        "saved snapshot '{}' ({}).",
         snapshot.name,
         plural(snapshot.packages.len(), "package")
     );
@@ -504,11 +522,15 @@ pub fn print_snapshots(snapshots: &[Snapshot], json: bool) {
         return;
     }
     if snapshots.is_empty() {
-        println!("emrac notes: no snapshots yet — `emrac snapshot` saves one.");
+        say!(
+            Voice::Notes,
+            "no snapshots yet — `emrac snapshot` saves one."
+        );
         return;
     }
-    println!(
-        "emrac found: {} (times are UTC)\n",
+    say!(
+        Voice::Found,
+        "{} (times are UTC)\n",
         plural(snapshots.len(), "snapshot")
     );
     for s in snapshots {
@@ -531,8 +553,9 @@ pub fn print_snapshot(snapshot: &Snapshot, json: bool) {
         println!("{}", serde_json::to_string_pretty(snapshot).unwrap());
         return;
     }
-    println!(
-        "emrac found: snapshot '{}' from {} (UTC), {}",
+    say!(
+        Voice::Found,
+        "snapshot '{}' from {} (UTC), {}",
         snapshot.name,
         snapshot.timestamp_utc(),
         plural(snapshot.packages.len(), "package")
@@ -559,16 +582,18 @@ pub fn print_restore(restore: &RestorePlan, json: bool) {
     }
 
     if restore.entries.is_empty() && restore.extras.is_empty() {
-        println!(
-            "emrac notes: the installed packages already match '{}'.",
+        say!(
+            Voice::Notes,
+            "the installed packages already match '{}'.",
             restore.snapshot
         );
         return;
     }
 
     if !restore.entries.is_empty() {
-        println!(
-            "emrac plans: restore {} to match '{}'\n",
+        say!(
+            Voice::Plans,
+            "restore {} to match '{}'\n",
             plural(restore.entries.len(), "package"),
             restore.snapshot
         );
@@ -636,7 +661,7 @@ pub fn print_deps(report: &DepsReport, json: bool) {
     } else {
         " (not installed; from the repositories)"
     };
-    println!("emrac found: {} {}{source}\n", report.name, report.version);
+    say!(Voice::Found, "{} {}{source}\n", report.name, report.version);
     if report.depends.is_empty() {
         println!("Requires: nothing");
     } else {
@@ -662,10 +687,14 @@ pub fn print_rdeps(report: &RdepsReport, json: bool) {
     }
 
     if report.required_by.is_empty() && report.optional_for.is_empty() {
-        println!("emrac notes: no installed package needs '{}'.", report.name);
+        say!(
+            Voice::Notes,
+            "no installed package needs '{}'.",
+            report.name
+        );
         return;
     }
-    println!("emrac found: what needs {}\n", report.name);
+    say!(Voice::Found, "what needs {}\n", report.name);
     if !report.required_by.is_empty() {
         println!("Required by: {}", report.required_by.join("  "));
     }
@@ -682,7 +711,10 @@ pub fn print_why(report: &WhyReport, json: bool) {
 
     match report {
         WhyReport::Explicit { name, required_by } => {
-            println!("emrac found: {name} is installed because you asked for it.");
+            say!(
+                Voice::Found,
+                "{name} is installed because you asked for it."
+            );
             if !required_by.is_empty() {
                 const SHOWN: usize = 12;
                 let mut list = required_by.iter().take(SHOWN).cloned().collect::<Vec<_>>();
@@ -693,12 +725,13 @@ pub fn print_why(report: &WhyReport, json: bool) {
             }
         }
         WhyReport::Dependency { name, chain } => {
-            println!("emrac found: {name} is installed as a dependency.\n");
+            say!(Voice::Found, "{name} is installed as a dependency.\n");
             println!("  {}", chain.join(" → "));
         }
         WhyReport::Orphan { name } => {
-            println!(
-                "emrac found: {name} was installed as a dependency, but no installed package needs it any more."
+            say!(
+                Voice::Found,
+                "{name} was installed as a dependency, but no installed package needs it any more."
             );
             println!("`emrac remove {name}` would clear it.");
         }
@@ -712,7 +745,7 @@ pub fn print_orphans(orphans: &[Orphan], json: bool) {
     }
 
     if orphans.is_empty() {
-        println!("emrac notes: no orphaned dependencies.");
+        say!(Voice::Notes, "no orphaned dependencies.");
         return;
     }
     let noun = if orphans.len() == 1 {
@@ -720,8 +753,9 @@ pub fn print_orphans(orphans: &[Orphan], json: bool) {
     } else {
         "orphaned dependencies"
     };
-    println!(
-        "emrac found: {} {noun}, which no package needs\n",
+    say!(
+        Voice::Found,
+        "{} {noun}, which no package needs\n",
         orphans.len()
     );
     for o in orphans {
@@ -743,8 +777,8 @@ pub fn print_pinned(pins: &[Pin], json: bool) {
     }
     for pin in pins {
         match pin.describe() {
-            d if d.is_empty() => println!("emrac notes: pinned {}.", pin.name),
-            d => println!("emrac notes: pinned {} ({d}).", pin.name),
+            d if d.is_empty() => say!(Voice::Confirms, "pinned {}.", pin.name),
+            d => say!(Voice::Confirms, "pinned {} ({d}).", pin.name),
         }
     }
     let at = std::time::SystemTime::now()
@@ -754,7 +788,10 @@ pub fn print_pinned(pins: &[Pin], json: bool) {
     if pins.iter().any(|p| p.is_active(at)) {
         println!("`emrac upgrade` will now hold back what you pinned; `emrac unpin` releases it.");
     } else {
-        println!("emrac warns: that expiry date has already passed, so nothing is held back.");
+        say!(
+            Voice::Warns,
+            "that expiry date has already passed, so nothing is held back."
+        );
     }
 }
 
@@ -764,10 +801,13 @@ pub fn print_pins(pins: &[Pin], json: bool) {
         return;
     }
     if pins.is_empty() {
-        println!("emrac notes: nothing is pinned — `emrac pin <pkg>` holds a package back.");
+        say!(
+            Voice::Notes,
+            "nothing is pinned — `emrac pin <pkg>` holds a package back."
+        );
         return;
     }
-    println!("emrac found: {}\n", plural(pins.len(), "pin"));
+    say!(Voice::Found, "{}\n", plural(pins.len(), "pin"));
     let at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -791,16 +831,18 @@ pub fn print_pin_notes(held: &[Pin], expired: &[Pin], quiet: bool) {
                 d => format!("{} ({d})", p.name),
             })
             .collect();
-        eprintln!(
-            "emrac notes: holding back {}: {}",
+        say!(
+            Voice::Notes,
+            "holding back {}: {}",
             plural(held.len(), "pinned package"),
             list.join(", ")
         );
     }
     if !quiet {
         for pin in expired {
-            eprintln!(
-                "emrac notes: the pin on {} expired{} and is no longer holding it back — `emrac unpin {}` clears it.",
+            say!(
+                Voice::Suggests,
+                "the pin on {} expired{} and is no longer holding it back — `emrac unpin {}` clears it.",
                 pin.name,
                 pin.until_date().map(|d| format!(" on {d}")).unwrap_or_default(),
                 pin.name
@@ -843,7 +885,17 @@ pub fn print_audit(report: &AuditReport, to_stderr: bool) {
         return;
     }
     let mut buf = Vec::new();
-    let _ = writeln!(buf, "emrac audit: findings for '{}'\n", report.target);
+    let voice = match report.findings.iter().map(|f| f.severity).max() {
+        Some(Severity::Critical) => Voice::Refuses,
+        Some(Severity::High) => Voice::Warns,
+        _ => Voice::Suspects,
+    };
+    let _ = writeln!(
+        buf,
+        "{} findings for '{}'\n",
+        voice.prefix_for(to_stderr),
+        report.target
+    );
     print_findings(report, &mut buf);
     let _ = writeln!(
         buf,
@@ -863,18 +915,31 @@ pub fn print_audits(reports: &[AuditReport], json: bool) {
     }
     for report in reports {
         if report.findings.is_empty() {
-            println!("emrac found: no findings in '{}'.", report.target);
+            say!(Voice::Found, "no findings in '{}'.", report.target);
             continue;
         }
         let verdict = match report.verdict() {
             Verdict::Allow => "nothing that blocks or needs a decision",
-            Verdict::Confirm => "high-risk: emrac would stop and ask before building",
-            Verdict::Block => "critical: emrac would refuse to build this",
+            Verdict::Confirm => "high-risk: it would stop and ask before building",
+            Verdict::Block => "critical: it would refuse to build this",
         };
-        println!(
-            "emrac found: {} in '{}' — {verdict}\n",
-            plural(report.findings.len(), "finding"),
-            report.target
+        // The worst finding sets the voice: static reading can only suspect a
+        // warning, a high-risk finding is a warning, a critical one a refusal.
+        // The report itself is the command's output, so it stays on stdout.
+        let voice = match report.findings.iter().map(|f| f.severity).max() {
+            Some(Severity::Critical) => Voice::Refuses,
+            Some(Severity::High) => Voice::Warns,
+            Some(Severity::Warning) => Voice::Suspects,
+            _ => Voice::Found,
+        };
+        emrac_core::voice::emit_on(
+            voice,
+            false,
+            format_args!(
+                "{} in '{}' — {verdict}\n",
+                plural(report.findings.len(), "finding"),
+                report.target
+            ),
         );
         let mut out = std::io::stdout();
         print_findings(report, &mut out);
@@ -888,7 +953,8 @@ pub fn print_manifest(m: &Manifest, to_stderr: bool) {
     let mut buf = Vec::new();
     let _ = writeln!(
         buf,
-        "emrac manifest: {} {} — {}, {} installed\n",
+        "{} {} {} — {}, {} installed\n",
+        Voice::Found.prefix_for(to_stderr),
         m.package,
         m.version,
         plural(m.files, "file"),
@@ -952,11 +1018,17 @@ pub fn print_audit_items(items: &[AuditItem], json: bool) {
                 print_manifest(m, false);
                 let verdict = match m.report.verdict() {
                     Verdict::Allow => None,
-                    Verdict::Confirm => Some("emrac would stop and ask before installing this"),
-                    Verdict::Block => Some("emrac would refuse to install this"),
+                    Verdict::Confirm => Some((
+                        Voice::Warns,
+                        "it would stop and ask before installing this (high-risk changes)",
+                    )),
+                    Verdict::Block => Some((
+                        Voice::Refuses,
+                        "it would not install this (a critical finding)",
+                    )),
                 };
-                if let Some(v) = verdict {
-                    println!("{v}.");
+                if let Some((voice, v)) = verdict {
+                    say!(voice, "{v}.");
                 }
             }
         }
@@ -977,13 +1049,20 @@ pub fn print_official_manifests(manifests: &[&Manifest], missing: &[String]) {
         .collect();
     let mut buf = Vec::new();
     for m in &flagged {
-        let _ = writeln!(buf, "emrac manifest: {} {}\n", m.package, m.version);
+        let _ = writeln!(
+            buf,
+            "{} {} {}\n",
+            Voice::Found.prefix_for(true),
+            m.package,
+            m.version
+        );
         print_findings(&m.report, &mut buf);
         let _ = writeln!(buf);
     }
     let _ = writeln!(
         buf,
-        "emrac inspected {}: {} with something to note, {} clean.{}",
+        "{} inspected {}: {} with something to note, {} clean.{}",
+        Voice::Notes.prefix_for(true),
         plural(manifests.len(), "official package"),
         flagged.len(),
         manifests.len() - flagged.len(),
@@ -1018,7 +1097,7 @@ pub fn print_doctor(report: &DoctorReport, json: bool) {
         }
         if let Some(fix) = &c.fix {
             if c.status != DoctorStatus::Ok {
-                println!("            fix: {fix}");
+                println!("            {} {fix}", Voice::Suggests.short_for(false));
             }
         }
     }
@@ -1029,10 +1108,11 @@ pub fn print_doctor(report: &DoctorReport, json: bool) {
     );
     println!();
     if problems + warnings == 0 {
-        println!("emrac found: nothing wrong.");
+        say!(Voice::Found, "nothing wrong.");
     } else {
-        println!(
-            "emrac found: {} and {}.",
+        say!(
+            Voice::Found,
+            "{} and {}.",
             plural(problems, "problem"),
             plural(warnings, "warning")
         );

@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use std::collections::HashMap;
 
 use emrac_core::{parse_date, rolled_back_by, History, Plan, Result, RollbackPlan};
@@ -32,6 +33,6 @@ pub fn record_rollback(rollback: &RollbackPlan, outcome: &Result<()>) {
 
 fn log(plan: &Plan, outcome: &Result<()>, rollback_of: Option<&str>) {
     if let Err(err) = History::record(plan, outcome, rollback_of) {
-        eprintln!("emrac warns: couldn't record this in your history — {err}");
+        say!(Voice::Warns, "couldn't record this in your history — {err}");
     }
 }

@@ -498,7 +498,7 @@ fn audit_inspects_a_built_package_file() {
     let out = home.run(&["audit", bad.to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(1));
     let text = stdout(&out);
-    assert!(text.contains("emrac manifest: bad 1-1"), "{text}");
+    assert!(text.contains("emrac found: bad 1-1"), "{text}");
     assert!(
         text.contains("[HIGH] setuid-file usr/bin/rootish"),
         "{text}"
@@ -512,8 +512,9 @@ fn audit_inspects_a_built_package_file() {
         "{text}"
     );
     assert!(
-        text.contains("would stop and ask before installing"),
-        "{text}"
+        stderr(&out).contains("emrac warns: it would stop and ask before installing"),
+        "{}",
+        stderr(&out)
     );
     assert!(
         !text.contains("usr/bin/plain"),
@@ -530,9 +531,9 @@ fn audit_inspects_a_built_package_file() {
     let out = home.run(&["audit", preload.to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(1));
     assert!(
-        stdout(&out).contains("would refuse to install"),
+        stderr(&out).contains("emrac refuses: it would not install this"),
         "{}",
-        stdout(&out)
+        stderr(&out)
     );
 
     let good = make_package(&home, "good", &[("usr/bin/hello", "#!/bin/sh\n", 0o755)]).unwrap();

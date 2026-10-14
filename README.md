@@ -39,6 +39,24 @@ Every mutating command supports `--dry-run`, and the first thing it does is show
 | `1` | emrac reported an error (including `verify` finding damaged files) |
 | `2` | Command-line usage error (unknown command, missing argument, bad value) |
 
+emrac says what kind of statement each line is with a verb, so you can tell how sure it is and what to do about it:
+
+| Line begins | Means |
+|---|---|
+| `emrac found:` | a fact it discovered that you can act on (also the heading of a result) |
+| `emrac says:` | something failed underneath emrac, not your doing |
+| `emrac plans:` / `emrac asks:` | what it is about to do / a question that needs your answer |
+| `emrac notes:` | plain information |
+| `emrac warns:` | a real risk |
+| `emrac suspects:` | a conclusion from weak evidence; it may be wrong |
+| `emrac thinks:` | a judgment with its reasons; good evidence, not proof |
+| `emrac suggests:` | the next step, usually a command to run |
+| `emrac refuses:` | a refusal that nothing overrides (a critical finding, or no answer at all) |
+| `emrac confirms:` | something was checked or done, and holds |
+| `emrac remembers:` | something recalled from what you did before |
+
+The verb is coloured on a terminal (never when piped, with `NO_COLOR` set, or under `TERM=dumb`). Problems and doubts (`says`, `warns`, `suspects`, `refuses`) go to stderr; results and information go to stdout; `--json` is unchanged.
+
 Errors go to stderr as `emrac found: …` (something you can fix) or `emrac says: …` (something failed underneath); normal output, including `--json`, goes to stdout.
 
 > Emrac uses "Slice i/r/u\<N\>" instead of semver — see `CHANGELOG.md`.

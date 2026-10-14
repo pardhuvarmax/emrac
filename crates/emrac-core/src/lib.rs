@@ -21,6 +21,7 @@ mod sandbox;
 mod snapshot;
 mod sources;
 mod verify;
+pub mod voice;
 
 pub use audit::{
     audit, scriptlet_name, AuditReport, ExtraFile, Finding, Severity, Verdict, MAX_EXTRA_FILES,
@@ -59,3 +60,4 @@ pub use sources::{
     SearchResults, SearchScope, Sources, UpgradePlan,
 };
 pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};
+pub use voice::Voice;

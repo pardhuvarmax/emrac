@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use emrac_core::{Result, Sources};
 
 use crate::commands::history;
@@ -21,7 +22,7 @@ pub fn run(
     }
 
     if !yes && !confirm("Proceed with the purge?") {
-        println!("emrac notes: okay, nothing purged.");
+        say!(Voice::Notes, "okay, nothing purged.");
         return Ok(());
     }
 
@@ -35,8 +36,9 @@ pub fn run(
             if at_risk == 1 { "it" } else { "them" }
         );
         if !confirm(&question) {
-            println!(
-                "emrac notes: okay, nothing purged. (`emrac remove` would keep them as .pacsave.)"
+            say!(
+                Voice::Notes,
+                "okay, nothing purged. (`emrac remove` would keep them as .pacsave.)"
             );
             return Ok(());
         }

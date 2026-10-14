@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use emrac_core::{Result, Sources};
 
 use crate::commands::history;
@@ -29,7 +30,7 @@ pub fn run(
     }
 
     if !yes && !confirm("Proceed with the rollback?") {
-        println!("emrac notes: okay, nothing rolled back.");
+        say!(Voice::Notes, "okay, nothing rolled back.");
         return Ok(());
     }
 

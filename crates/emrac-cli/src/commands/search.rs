@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use emrac_core::{Result, SearchScope, Sources};
 
 use crate::output;
@@ -29,7 +30,7 @@ pub fn run(
 
     if let Some(warning) = &results.aur_warning {
         if !quiet {
-            eprintln!("emrac warns: {warning}");
+            say!(Voice::Warns, "{warning}");
         }
     }
 

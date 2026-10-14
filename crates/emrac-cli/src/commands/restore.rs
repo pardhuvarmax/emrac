@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use emrac_core::{Result, Sources};
 
 use crate::commands::history;
@@ -21,7 +22,7 @@ pub fn run(
     }
 
     if !yes && !confirm("Proceed with the restore?") {
-        println!("emrac notes: okay, nothing restored.");
+        say!(Voice::Notes, "okay, nothing restored.");
         return Ok(());
     }
 

@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use emrac_core::{Result, Sources};
 
 use crate::commands::aur_install::BuildChoice;
@@ -37,13 +38,13 @@ pub fn run(
             yes,
             choice.accept_risks,
         )? {
-            println!("emrac notes: okay, nothing installed.");
+            say!(Voice::Notes, "okay, nothing installed.");
             return Ok(());
         }
     }
 
     if !yes && !confirm("Proceed with installation?") {
-        println!("emrac notes: okay, nothing installed.");
+        say!(Voice::Notes, "okay, nothing installed.");
         return Ok(());
     }
 

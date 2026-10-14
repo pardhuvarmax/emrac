@@ -21,7 +21,7 @@ fn main() {
     let cli = Cli::parse();
 
     if let Err(err) = run(&cli) {
-        eprintln!("emrac {}: {err}", err.voice());
+        emrac_core::say_err!(err.voice(), "{err}");
         std::process::exit(1);
     }
 }

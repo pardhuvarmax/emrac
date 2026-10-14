@@ -2,6 +2,7 @@ use emrac_core::{
     has_conflict_markers, merge3_markers, unified_diff, Error, PacnewAction, PacnewClass,
     PacnewFile, PacnewMerge, Result, Sources,
 };
+use emrac_core::{say, Voice};
 
 use crate::cli::PacnewCommand;
 use crate::prompt::{choose, confirm_default_no, confirm_typed};
@@ -35,11 +36,12 @@ fn list(files: &[PacnewFile], json: bool) -> Result<()> {
         return Ok(());
     }
     if files.is_empty() {
-        println!("emrac notes: no .pacnew or .pacsave files are waiting.");
+        say!(Voice::Notes, "no .pacnew or .pacsave files are waiting.");
         return Ok(());
     }
-    println!(
-        "emrac found: {} waiting\n",
+    say!(
+        Voice::Found,
+        "{} waiting\n",
         plural(files.len(), "config file")
     );
     for f in files {
@@ -54,9 +56,12 @@ fn list(files: &[PacnewFile], json: bool) -> Result<()> {
             ""
         };
         println!("  {}  — {} ({owner}{age}){lock}", f.live, f.class.label());
-        println!("      {}", f.reason);
+        println!("      {} {}", reason_voice(f).short_for(false), f.reason);
         if let Some(merge) = &f.merge {
-            println!("      a three-way merge comes out {merge}");
+            println!(
+                "      {} a three-way merge comes out {merge}",
+                Voice::Found.short_for(false)
+            );
         }
     }
     println!(
@@ -65,20 +70,37 @@ fn list(files: &[PacnewFile], json: bool) -> Result<()> {
     Ok(())
 }
 
+/// How sure `pacnew` is of a file's class: a comparison that rests on checked
+/// facts is a judgment (`thinks`), no earlier version to compare with is just
+/// something it found, and a `.pacsave` is information.
+fn reason_voice(f: &PacnewFile) -> Voice {
+    match f.class {
+        PacnewClass::Unknown => Voice::Found,
+        PacnewClass::Pacsave => Voice::Notes,
+        _ => Voice::Thinks,
+    }
+}
+
 fn find<'a>(files: &'a [PacnewFile], name: &str) -> Option<&'a PacnewFile> {
     files.iter().find(|f| f.live == name || f.pending == name)
 }
 
 fn diff(files: &[PacnewFile], name: &str, json: bool) -> Result<()> {
     let Some(f) = find(files, name) else {
-        println!("emrac notes: '{name}' has no .pacnew or .pacsave waiting.");
+        say!(Voice::Notes, "'{name}' has no .pacnew or .pacsave waiting.");
         return Ok(());
     };
     if json {
         println!("{}", serde_json::to_string_pretty(f).unwrap());
         return Ok(());
     }
-    println!("{} — {}\n  {}\n", f.live, f.class.label(), f.reason);
+    println!(
+        "{} — {}\n  {} {}\n",
+        f.live,
+        f.class.label(),
+        reason_voice(f).short_for(false),
+        f.reason
+    );
     let (Some(ours), Some(theirs)) = (&f.texts.ours, &f.texts.theirs) else {
         println!("(the file can't be shown here)");
         return Ok(());
@@ -150,11 +172,17 @@ fn resolve(
         wanted.iter().filter_map(|w| find(all, w)).collect()
     };
     if chosen.is_empty() {
-        println!("emrac notes: nothing to resolve.");
+        say!(Voice::Notes, "nothing to resolve.");
         return Ok(());
     }
     for f in chosen {
-        println!("\n{} — {}\n  {}", f.live, f.class.label(), f.reason);
+        println!(
+            "\n{} — {}\n  {} {}",
+            f.live,
+            f.class.label(),
+            reason_voice(f).short_for(false),
+            f.reason
+        );
         if f.critical {
             println!("  This file can lock you out if it is wrong; taking or merging it needs you to type its name.");
         }
@@ -181,7 +209,7 @@ fn resolve(
         };
         println!("  Suggested: {suggestion}. Enter alone skips.");
         let Some(pick) = choose(&format!("{}?", menu.join(" / ")), &options) else {
-            println!("emrac notes: skipped {}.", f.live);
+            say!(Voice::Notes, "skipped {}.", f.live);
             continue;
         };
         let mut action = match pick {
@@ -190,7 +218,7 @@ fn resolve(
             'm' => PacnewAction::Merge,
             'e' => PacnewAction::Edit(String::new()),
             _ => {
-                println!("emrac notes: skipped {}.", f.live);
+                say!(Voice::Notes, "skipped {}.", f.live);
                 continue;
             }
         };
@@ -198,25 +226,26 @@ fn resolve(
             && action != PacnewAction::Keep
             && !confirm_typed(&format!("Type {} to go on:", f.live), &f.live)
         {
-            println!("emrac notes: skipped {}.", f.live);
+            say!(Voice::Notes, "skipped {}.", f.live);
             continue;
         }
         if let PacnewAction::Edit(_) = action {
             match edit_by_hand(f) {
                 Ok(Some(text)) => action = PacnewAction::Edit(text),
                 Ok(None) => {
-                    println!("emrac notes: skipped {}.", f.live);
+                    say!(Voice::Notes, "skipped {}.", f.live);
                     continue;
                 }
                 Err(err) => {
-                    eprintln!("emrac {}: {err}", err.voice());
+                    emrac_core::say_err!(err.voice(), "{err}");
                     continue;
                 }
             }
         }
         if dry_run {
-            println!(
-                "emrac plans: {} {} (dry run, nothing changed)",
+            say!(
+                Voice::Plans,
+                "{} {} (dry run, nothing changed)",
                 match &action {
                     PacnewAction::Keep => "keep",
                     PacnewAction::Take => "take",
@@ -231,26 +260,27 @@ fn resolve(
             Ok(applied) => applied,
             // A refused candidate leaves this file alone; the rest go on.
             Err(err @ (Error::PacnewInvalid { .. } | Error::PacnewMarkers(_))) => {
-                eprintln!("emrac {}: {err}", err.voice());
+                emrac_core::say_err!(err.voice(), "{err}");
                 continue;
             }
             Err(err) => return Err(err),
         };
         if let Some(what) = &applied.checked {
-            println!("emrac notes: checked first — {what}.");
+            say!(Voice::Confirms, "checked first — {what}.");
         }
         match &applied.backup_dir {
-            Some(dir) => println!(
-                "emrac notes: done ({}). Your previous file is saved under {}; `emrac pacnew revert {}` puts it back.",
+            Some(dir) => say!(
+                Voice::Confirms,
+                "done ({}). Your previous file is saved under {}; `emrac pacnew revert {}` puts it back.",
                 applied.id,
                 dir.display(),
                 f.live
             ),
-            None => println!("emrac notes: done ({}).", applied.id),
+            None => say!(Voice::Confirms, "done ({}).", applied.id),
         }
         if action != PacnewAction::Keep {
             if let Some(next) = follow_up(&f.live) {
-                println!("emrac notes: {next}");
+                say!(Voice::Suggests, "{next}");
             }
         }
     }
@@ -310,7 +340,10 @@ fn edit_by_hand(f: &PacnewFile) -> Result<Option<String>> {
             .status()
             .map_err(|e| Error::CommandSpawn(program.to_string(), e))?;
         if !status.success() {
-            println!("emrac notes: the editor exited with {status}; nothing changed.");
+            say!(
+                Voice::Notes,
+                "the editor exited with {status}; nothing changed."
+            );
             return Ok(None);
         }
         let edited =
@@ -320,7 +353,7 @@ fn edit_by_hand(f: &PacnewFile) -> Result<Option<String>> {
         }
         let diff = unified_diff("your live file", ours, "your edited result", &edited)?;
         if diff.is_empty() {
-            println!("emrac notes: the result is the same as your live file.");
+            say!(Voice::Notes, "the result is the same as your live file.");
             return Ok(None);
         }
         println!("\nThis would change your live file like this:\n{diff}");
@@ -350,32 +383,35 @@ fn revert(sources: &Sources, file: Option<&str>, json: bool) -> Result<()> {
             file.map(|f| format!(" for {f}")).unwrap_or_default(),
         ));
     };
-    println!(
-        "emrac plans: revert {} — {} of {} ({})",
+    say!(
+        Voice::Plans,
+        "revert {} — {} of {} ({})",
         target.id,
         target.action,
         target.file,
         target.time_utc()
     );
     if !confirm_default_no("Put the file back as it was before that change?") {
-        println!("emrac notes: okay, nothing changed.");
+        say!(Voice::Notes, "okay, nothing changed.");
         return Ok(());
     }
     let done = match sources.pacnew_revert(Some(&target.file), false) {
         Err(Error::PacnewDrift { file }) => {
-            println!(
-                "emrac found: {file} was changed after emrac's change; reverting overwrites those edits."
+            say!(
+                Voice::Warns,
+                "{file} was changed after emrac's change; reverting overwrites those edits."
             );
             if !confirm_typed(&format!("Type {file} to revert anyway:"), &file) {
-                println!("emrac notes: okay, nothing changed.");
+                say!(Voice::Notes, "okay, nothing changed.");
                 return Ok(());
             }
             sources.pacnew_revert(Some(&file), true)?
         }
         other => other?,
     };
-    println!(
-        "emrac notes: reverted {} ({}){}.",
+    say!(
+        Voice::Confirms,
+        "reverted {} ({}){}.",
         done.id,
         done.file,
         if done.restored_pending {
@@ -398,12 +434,13 @@ fn status(sources: &Sources, json: bool) -> Result<()> {
         return Ok(());
     }
     let pending = sources.pacnew_scan(false)?;
-    println!(
-        "emrac found: {} waiting (`emrac pacnew` lists them).",
+    say!(
+        Voice::Found,
+        "{} waiting (`emrac pacnew` lists them).",
         plural(pending.len(), "config file")
     );
     if log.is_empty() {
-        println!("emrac notes: emrac has not changed any config file yet.");
+        say!(Voice::Notes, "emrac has not changed any config file yet.");
         return Ok(());
     }
     println!("\nChanges (times are UTC):");

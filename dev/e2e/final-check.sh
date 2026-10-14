@@ -41,6 +41,6 @@ B=$HOME/.cache/emrac/build; mkdir -p /tmp/w $B; rm -rf /tmp/up.git $B/pfetch /tm
 printf 'pkgname=pfetch\npkgver=9.9\npkgrel=1\npkgdesc=fixture\narch=(any)\nlicense=(MIT)\npackage() {\n  install -Dm755 /dev/stdin "$pkgdir/usr/bin/pfetch" <<<"#!/bin/sh"\n}\n' > /tmp/w/PKGBUILD
 (cd /tmp/w && git init -q -b master && git add -A && git commit -q -m x) && git clone -q --bare /tmp/w /tmp/up.git && git clone -q /tmp/up.git $B/pfetch
 ck "AUR install: audit, sandbox build, manifest, pacman -U" "$e install pfetch --yes --skip-pkgbuild </dev/null && pacman -Q pfetch"
-ck "build without installing"         "$e build pfetch --skip-pkgbuild </dev/null | grep -q 'emrac built'"
+ck "build without installing"         "$e build pfetch --skip-pkgbuild </dev/null | grep -q 'emrac confirms: built'"
 ck "a closed stdin declines (no install)" "sudo pacman -Rns --noconfirm pfetch tree >/dev/null; $e install tree </dev/null >/dev/null; ! pacman -Q tree"
 echo; echo "$n checks, $bad failed"

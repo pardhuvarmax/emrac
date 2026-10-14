@@ -1,4 +1,5 @@
 use emrac_core::{parse_date, PinStore, Result, Sources};
+use emrac_core::{say, Voice};
 
 use crate::output;
 
@@ -25,7 +26,7 @@ pub fn unpin(pkgs: &[String], json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::json!({ "unpinned": pkgs }));
     } else {
-        println!("emrac notes: unpinned {}.", pkgs.join(", "));
+        say!(Voice::Confirms, "unpinned {}.", pkgs.join(", "));
     }
     Ok(())
 }

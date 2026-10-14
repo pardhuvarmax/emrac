@@ -70,6 +70,14 @@ exit codes or `--json`.
   green, asks blue, plans and found default, notes and remembers dim.
 - `--quiet` keeps hiding notes, plans and confirms; warnings and errors always show.
 
+## What was built, and what was not
+
+Built as planned: the twelve verbs, streams and colour; errors unchanged; audit findings
+by worst severity; `pacnew` reasons, doctor fixes, the retry and conflict messages;
+the refusal when no answer comes; both guard tests. Not built: voices carried by core
+messages (plan warnings stay `warns`), and a `remembers` line for a PKGBUILD reviewed
+before beyond the one for a changed PKGBUILD.
+
 ## Not covered
 
 Translating the messages; changing what the commands decide; the wording inside `--json`

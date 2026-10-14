@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use emrac_core::{Result, Sources};
 
 use crate::commands::history;
@@ -22,7 +23,7 @@ pub fn run(
     }
 
     if !yes && !confirm("Proceed with removal?") {
-        println!("emrac notes: okay, nothing removed.");
+        say!(Voice::Notes, "okay, nothing removed.");
         return Ok(());
     }
 

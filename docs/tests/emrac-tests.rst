@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 244
+     - 250
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
@@ -31,9 +31,9 @@ Totals
      - 18
    * - **Automated total**
      -
-     - **271**
+     - **277**
 
-emrac-core library (244)
+emrac-core library (250)
 ------------------------
 
 ``audit::tests`` (39)
@@ -391,6 +391,16 @@ emrac-core library (244)
 * ``no_extract_last_match_wins_and_bang_re_includes``
 * ``unreadable_is_counted_but_is_not_a_problem``
 * ``unset_and_escapes``
+
+``voice::tests`` (6)
+~~~~~~~~~~~~~~~~~~~~
+
+* ``colour_needs_a_terminal_and_respects_no_color_and_dumb_terminals``
+* ``every_voice_has_its_own_word_and_a_plain_prefix``
+* ``facts_and_confirmations_never_hedge``
+* ``nothing_builds_an_emrac_word_prefix_by_hand``
+* ``only_the_verb_is_coloured_and_only_when_asked``
+* ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
 emrac command line, unit tests (9)
 ----------------------------------

@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use emrac_core::{Result, Sources};
 
 use crate::commands::aur_install::BuildChoice;
@@ -22,7 +23,7 @@ pub fn run(
     }
 
     if !yes && !confirm("Proceed with the reinstall?") {
-        println!("emrac notes: okay, nothing reinstalled.");
+        say!(Voice::Notes, "okay, nothing reinstalled.");
         return Ok(());
     }
 

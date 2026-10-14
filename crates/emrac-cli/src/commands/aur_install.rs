@@ -1,6 +1,7 @@
 use emrac_core::{
     inspect_package, BuildConfig, BuildOptions, Error, Limits, Result, Sources, Verdict,
 };
+use emrac_core::{say, Voice};
 
 use crate::cli::AurReviewFlags;
 use crate::output;
@@ -43,8 +44,9 @@ pub fn build_options(
     choice: BuildChoice,
 ) -> Result<BuildOptions> {
     if choice.no_sandbox {
-        eprintln!(
-            "emrac warns: building '{name}' WITHOUT the sandbox (--no-sandbox): the build runs with your full access."
+        say!(
+            Voice::Warns,
+            "building '{name}' WITHOUT the sandbox (--no-sandbox): the build runs with your full access."
         );
         return Ok(BuildOptions {
             sandbox: false,
@@ -80,7 +82,7 @@ pub fn build_with_retry(
         // The replacement provides what the old package did: offer the swap
         // (default no; `--yes` does not answer it) and carry on building.
         Err(Error::DependencyConflict(conflict)) if conflict.likely_safe() => {
-            eprintln!("emrac found: {conflict}");
+            say!(Voice::Thinks, "{conflict}");
             if !confirm_default_no(&format!(
                 "Swap '{}' for '{}' now, then continue building '{name}'?",
                 conflict.removed, conflict.by
@@ -96,9 +98,13 @@ pub fn build_with_retry(
             if opts.sandbox
                 && !opts.allow_network
                 && err.may_need_network()
-                && confirm_default_no(&format!(
-                    "The build of '{name}' failed with the sandbox's network off, which may be why. Retry with network access for this build?"
-                )) =>
+                && {
+                    say!(
+                        Voice::Suspects,
+                        "the build of '{name}' failed because the sandbox has no network (its output mentions a host it could not resolve)."
+                    );
+                    confirm_default_no("Retry with network access for this build?")
+                } =>
         {
             sources.build_aur_package(
                 name,

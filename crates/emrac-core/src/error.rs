@@ -318,8 +318,10 @@ impl Error {
         matches!(self, Error::BuildFailed { phase, .. } if phase == "dependencies and sources")
     }
 
-    pub fn voice(&self) -> &'static str {
+    pub fn voice(&self) -> crate::voice::Voice {
         match self {
+            // The explanation carries a verdict ("the swap looks safe"): a judgment.
+            Error::DependencyConflict(_) => crate::voice::Voice::Thinks,
             Error::PackageNotFound(_)
             | Error::PackageNotFoundAnywhere(_)
             | Error::PackageNotFoundOffline(_)
@@ -348,7 +350,6 @@ impl Error {
             | Error::DoctorProblems(_)
             | Error::FreshSync(_)
             | Error::Simulation(_)
-            | Error::DependencyConflict(_)
             | Error::InvalidCacheValue { .. }
             | Error::CacheNeedsForce
             | Error::PacnewInvalid { .. }
@@ -374,7 +375,7 @@ impl Error {
             | Error::RestoreFilesMissing(_)
             | Error::NoTransactionToRedo
             | Error::NotRollbackable { .. }
-            | Error::RollbackFilesMissing(_) => "found",
+            | Error::RollbackFilesMissing(_) => crate::voice::Voice::Found,
             Error::PacmanConfSpawn(_)
             | Error::PacmanConfStatus(_)
             | Error::AlpmInit(_)
@@ -391,7 +392,7 @@ impl Error {
             | Error::NoDataDir
             | Error::PinWrite { .. }
             | Error::SnapshotWrite { .. }
-            | Error::HistoryWrite { .. } => "says",
+            | Error::HistoryWrite { .. } => crate::voice::Voice::Says,
         }
     }
 }

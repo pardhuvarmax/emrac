@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use emrac_core::{Result, SnapshotStore, Sources};
 
 use crate::cli::SnapshotCommand;
@@ -24,7 +25,7 @@ pub fn run_stored(command: &SnapshotCommand, json: bool) -> Result<()> {
             if json {
                 println!("{}", serde_json::json!({ "deleted": name }));
             } else {
-                println!("emrac notes: deleted snapshot '{name}'.");
+                say!(Voice::Confirms, "deleted snapshot '{name}'.");
             }
         }
         SnapshotCommand::Create { .. } => unreachable!("handled with Sources"),

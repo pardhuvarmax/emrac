@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use std::env;
 use std::process::Command;
 
@@ -19,17 +20,17 @@ pub fn run(command: &ConfigCommand) -> Result<()> {
             let mut config = Config::load()?;
             config.set(key, value)?;
             config.save()?;
-            println!("emrac notes: {key} = {value}");
+            say!(Voice::Confirms, "{key} = {value}");
         }
         ConfigCommand::Unset { key } => {
             let mut config = Config::load()?;
             config.unset(key)?;
             config.save()?;
-            println!("emrac notes: {key} reset to its default");
+            say!(Voice::Confirms, "{key} reset to its default");
         }
         ConfigCommand::Edit => edit()?,
         ConfigCommand::Validate => match Config::load() {
-            Ok(_) => println!("emrac notes: config is valid"),
+            Ok(_) => say!(Voice::Confirms, "config is valid"),
             Err(err) => return Err(err),
         },
     }
@@ -58,9 +59,9 @@ fn edit() -> Result<()> {
     }
 
     match Config::load() {
-        Ok(_) => println!("emrac notes: config is valid"),
+        Ok(_) => say!(Voice::Confirms, "config is valid"),
         Err(err) => {
-            println!("emrac says: {err} — your edit was kept as-is; fix it and re-run `emrac config edit` or `emrac config validate`.");
+            say!(Voice::Says, "{err} — your edit was kept as-is; fix it and re-run `emrac config edit` or `emrac config validate`.");
         }
     }
     Ok(())

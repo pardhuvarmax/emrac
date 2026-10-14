@@ -1,3 +1,4 @@
+use emrac_core::{say, Voice};
 use std::path::Path;
 
 use emrac_core::{audit_path, inspect_package, Error, Result, Severity, Sources, Verdict};
@@ -35,7 +36,7 @@ pub fn run(
                 yes,
                 choice.accept_risks,
             )? {
-                println!("emrac notes: okay, '{target}' not built.");
+                say!(Voice::Notes, "okay, '{target}' not built.");
                 continue;
             }
             let opts = build_options(sources, target, sources.predicts_network(target), choice)?;
@@ -46,13 +47,19 @@ pub fn run(
             if !json {
                 output::print_manifest(&manifest, false);
                 match manifest.report.verdict() {
-                    Verdict::Block => println!("emrac would refuse to install this."),
+                    Verdict::Block => say!(
+                        Voice::Refuses,
+                        "it would not install this (a critical finding)."
+                    ),
                     Verdict::Confirm => {
-                        println!("emrac would stop and ask before installing this.")
+                        say!(
+                            Voice::Warns,
+                            "it would stop and ask before installing this (high-risk changes)."
+                        )
                     }
                     Verdict::Allow => {}
                 }
-                println!("emrac built: {}\n", file.display());
+                say!(Voice::Confirms, "built {}\n", file.display());
             }
             built.push((file, manifest));
         }
