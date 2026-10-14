@@ -1,7 +1,5 @@
 # Emrac: Ideas
 
-<img align="right" width="350" src="/assets/emrac.png" alt="emrac">
-
 Running list of ideas beyond the core design in `emrac.md` (Layer 1 Shadow Tree, Layer 2 OverlayFS/namespace staging, Layer 3 Btrfs/ZFS snapshot, libalpm commit).
 
 Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress, `[dropped]`.
@@ -11,7 +9,7 @@ Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress
 ## 1. Already queued from emrac.md
 
 - `[idea]` **PKGBUILD AST parser**: verify/security-check a PKGBUILD before Phase 1 runs.
-- `[idea]` **Config presets**: structure for automated configuration presets (optimization flags, build type, etc.). SPEC uses TOML for configuration and has build profiles and recipes, so presets should extend those rather than add a new format (see section 7).
+- `[idea]` **Config presets**: structure for automated configuration presets (optimization flags, build type, etc.). SPEC uses TOML for configuration and has build profiles and recipes, so presets should extend those rather than add a new format (see section 8).
 
 ---
 
@@ -101,7 +99,13 @@ Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress
 ### Performance and supportability
 
 - `[idea]` **Shared build acceleration**: integrate ccache or sccache, and optionally distcc or a LAN artifact cache, so source builds with optimization flags are not painfully slow. Pairs with the persistent build cache.
-- `[idea]` **`emrac doctor`**: one command that checks for common problems (partial upgrades, broken links, stale snapshots, bad config permissions, expired holds) and produces a sanitized report suitable for a bug report.
+- `[built u21]` **`emrac doctor`**: one command that checks for common problems (partial upgrades, broken links, stale snapshots, bad config permissions, expired holds) and produces a sanitized report suitable for a bug report.
+
+### Cross-distro package resolution
+
+- `[idea]` **Emrac Wandrover** (`emrac wandrover search | resolve | alternatives | map | audit`): cross-distribution package discovery and resolution. Search for a package from Debian, Ubuntu, Fedora, openSUSE, or others and get the Arch package that provides the same software, a compatible replacement, or the closest alternative, with the evidence for each. Fully deterministic (no AI or LLMs), offline, explainable. Full design in `cross-distro-feat.md`.
+- `[idea]` **Migration mode**: import a package list from another distribution and generate a reviewed Arch migration plan that goes through the normal transaction planner.
+
 
 ---
 
@@ -200,7 +204,7 @@ Command style: flat `emrac <verb>` commands. Maintainer commands stay grouped un
 - `[idea]` **`emrac snapshot`**: list and prune, with a retention policy (keep last N or last N days) so snapshots don't fill the disk.
 - `[idea]` **`emrac cache`**: stats, gc, and clear for the package, source, and build caches.
 - `[idea]` **Commands for earlier ideas**: SPEC already has `why`, `news`, `audit`, `pin`/`lock`, and `explain`. Holds with reasons and expiry extend `pin`/`lock` rather than add `hold`.
-- `[idea]` **Declarative system profile** (apply or diff against the machine). Not `emrac profile`: SPEC uses `profile` for build profiles. Better fit is SPEC's collections and workspaces (see section 7).
+- `[idea]` **Declarative system profile** (apply or diff against the machine). Not `emrac profile`: SPEC uses `profile` for build profiles. Better fit is SPEC's collections and workspaces (see section 8).
 
 ### Housekeeping
 
@@ -216,7 +220,16 @@ Command style: flat `emrac <verb>` commands. Maintainer commands stay grouped un
 
 ---
 
-## 6. Design concerns to revisit in emrac.md
+## 6. My own ideas (add here)
+
+<!-- Write each idea as:
+- `[idea]` Short title: one or two lines on what it does and why. -->
+
+-
+
+---
+
+## 7. Design concerns to revisit in emrac.md
 
 Things I noticed while reading the current draft that are worth settling before building on it:
 
@@ -225,12 +238,12 @@ Things I noticed while reading the current draft that are worth settling before 
 - **Overlay lower dir `/`**: overlaying the whole root includes `/proc`, `/sys`, `/dev`, and other mounts, which need explicit handling inside the chroot.
 - **tmpfs upper layer**: the code uses `/tmp/emrac/upper`, which is only RAM-backed if `/tmp` is tmpfs. Large builds may need a disk-backed option.
 - **Snapshot location**: snapshotting `/` into `/var/lib/emrac/snapshots` nests the snapshot inside the subvolume being snapshotted; usually a separate snapshots subvolume is used. ZFS path is not implemented yet.
-- **Commit step**: Phase 4 extracts sandbox output via libalpm (but SPEC Part X says mutating operations shell out to real `pacman`/`makepkg`, see section 7); the mechanism for turning overlay output into proper packages (so pacman's database stays accurate) needs defining.
+- **Commit step**: Phase 4 extracts sandbox output via libalpm (but SPEC Part X says mutating operations shell out to real `pacman`/`makepkg`, see section 8); the mechanism for turning overlay output into proper packages (so pacman's database stays accurate) needs defining.
 - **Snapshot timing**: taking the snapshot before the sandbox test (Phase 2) means it may be stale if the system changes during a long build; consider taking it right before commit.
 
 ---
 
-## 7. Alignment with SPEC.md
+## 8. Alignment with SPEC.md
 
 `SPEC.md` is the product spec (CLI/TUI, Rust, hybrid libalpm + pacman/makepkg, TOML config, first milestone = core CLI loop). This section records how the ideas above relate to it.
 
@@ -273,6 +286,7 @@ Things I noticed while reading the current draft that are worth settling before 
 - Reproducibility: time-travel installs from the Arch Linux Archive, replayable lockfile.
 - Maintainer workflow: entire section 4 (pre-submit pipeline, upstream watcher, capability-based workflows, BYO SSH key, CI templates). SPEC has no AUR-publishing side.
 - Tooling: `self-test`, `sandbox shell`, privilege separation (unprivileged front end plus privileged helper), per-transaction structured logs.
+- Emrac Wandrover, the cross-distribution package resolver, and migration mode (SPEC has no cross-distribution package discovery). See `cross-distro-feat.md`.
 
 ### Ideas from SPEC worth borrowing into the sandbox/transaction design
 
