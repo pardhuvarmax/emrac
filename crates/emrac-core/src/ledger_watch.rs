@@ -56,6 +56,31 @@ pub struct WatchEvent {
     /// For a program that was run: its command line (`chattr -a /var/lib/…`).
     pub command: Option<String>,
     pub verdict: Verdict,
+    /// Stable id (`ev-` and 12 hex) from what the event says, so an
+    /// acknowledgement finds it again.
+    pub id: String,
+    /// The user marked it as seen (`emrac ledger events --ack`).
+    pub acknowledged: bool,
+}
+
+/// The id of an event: a hash of its time, key, action, program and paths.
+pub fn event_id(e: &WatchEvent) -> String {
+    use sha2::{Digest, Sha256};
+    let text = format!(
+        "{}|{}|{}|{}|{}|{}",
+        e.time,
+        e.key,
+        e.action,
+        e.exe,
+        e.paths.join(","),
+        e.command.as_deref().unwrap_or("")
+    );
+    let hex: String = Sha256::digest(text.as_bytes())
+        .iter()
+        .take(6)
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("ev-{hex}")
 }
 
 impl WatchEvent {
@@ -291,6 +316,12 @@ fn finish(builders: BTreeMap<String, Builder>) -> Vec<WatchEvent> {
             success: b.success,
             paths: b.paths,
             command: b.command,
+            id: String::new(),
+            acknowledged: false,
+        })
+        .map(|mut e| {
+            e.id = event_id(&e);
+            e
         })
         .collect()
 }
@@ -452,6 +483,12 @@ pub fn read(trusted: &[String]) -> Result<WatchRead> {
     }
     classify(&mut events, &witnesses, trusted);
     events.sort_by_key(|e| e.time);
+    // Acknowledgements live in the history; a history that can't be read
+    // just leaves everything unacknowledged.
+    let acked = crate::History::acknowledged(true).unwrap_or_default();
+    for e in &mut events {
+        e.acknowledged = acked.contains(&e.id);
+    }
     Ok(WatchRead {
         witnesses: witnesses.len(),
         witness_times: witnesses.iter().map(|w| w.time).collect(),
@@ -474,8 +511,10 @@ pub struct WatchFacts {
     /// Of those, the ones made after the rules were installed: only these
     /// could have been seen by the watch.
     pub witnesses_after_rules: usize,
-    /// Other programs' events, one line each.
+    /// Other programs' events, one line each (acknowledged ones left out).
     pub foreign: Vec<String>,
+    /// Events the user acknowledged.
+    pub acknowledged: usize,
     /// emrac's program with no journal line.
     pub unwitnessed: Vec<String>,
 }
@@ -497,6 +536,10 @@ pub fn facts(trusted: &[String]) -> WatchFacts {
                 .filter(|t| installed_at.is_some_and(|at| **t >= at))
                 .count();
             for e in r.events {
+                if e.acknowledged && e.verdict != Verdict::Emrac {
+                    f.acknowledged += 1;
+                    continue;
+                }
                 match e.verdict {
                     Verdict::Emrac => {}
                     Verdict::Unwitnessed => f.unwitnessed.push(e.describe()),
@@ -545,6 +588,20 @@ mod tests {
     use super::*;
 
     const EMRAC: &str = "/usr/bin/emrac";
+
+    #[test]
+    fn an_event_id_is_stable_and_tells_events_apart() {
+        let mut one = parse_audit_log(
+            "type=SYSCALL msg=audit(100.000:7): arch=c000003e syscall=257 success=yes exit=3 a0=0 items=1 ppid=1 pid=2 auid=1000 uid=0 gid=0 euid=0 tty=pts0 ses=2 comm=\"sed\" exe=\"/usr/bin/sed\" key=\"emrac-ledger\"\n",
+            0,
+        );
+        assert_eq!(one.len(), 1);
+        let id = one[0].id.clone();
+        assert!(id.starts_with("ev-") && id.len() == 15, "{id}");
+        assert_eq!(event_id(&one[0]), id);
+        one[0].time += 1;
+        assert_ne!(event_id(&one[0]), id);
+    }
 
     fn audit_line(id: u32, secs: u64, record: &str) -> String {
         let message = match record {

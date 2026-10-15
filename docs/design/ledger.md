@@ -71,6 +71,10 @@ readable only by root: use `sudo emrac ledger events`, or let your group read it
 which `emrac doctor` can check it without sudo. Until then `doctor` says the events
 "can't be read from here" instead of reporting zero.
 
+Events you know about (your own tests, a restore) can be marked with `emrac ledger events --ack`
+(or `--ack ev-…` for one). That writes an `ack` record to the history, so to the ledger too: the
+act of acknowledging is itself on record. The events stay listed, marked, and `doctor` stops counting them.
+
 `doctor` says which step is missing: no rules, events unreadable, or "not active" (emrac
 appended but the audit system saw nothing).
 

@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 290
+     - 292
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
@@ -31,9 +31,9 @@ Totals
      - 23
    * - **Automated total**
      -
-     - **322**
+     - **324**
 
-emrac-core library (290)
+emrac-core library (292)
 ------------------------
 
 ``audit::tests`` (39)
@@ -215,7 +215,7 @@ emrac-core library (290)
 
 * ``only_the_no_network_failure_suggests_a_retry_with_network``
 
-``history::tests`` (27)
+``history::tests`` (28)
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_changed_or_missing_archive_is_reported``
@@ -234,6 +234,7 @@ emrac-core library (290)
 * ``bad_dates_are_rejected``
 * ``corrupt_lines_are_skipped_and_ids_continue_past_them``
 * ``dates_convert_against_known_values``
+* ``event_acknowledgements_are_chained_and_not_repeated``
 * ``every_record_carries_a_chain_and_it_verifies``
 * ``failed_outcome_is_recorded_with_error_text``
 * ``ids_increment_and_list_is_newest_first_with_limit``
@@ -260,11 +261,12 @@ emrac-core library (290)
 * ``the_history_is_rebuilt_from_the_ledger_and_verifies``
 * ``the_ledger_notices_an_archive_file_that_changed``
 
-``ledger_watch::tests`` (11)
+``ledger_watch::tests`` (12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_denied_write_is_still_reported_as_denied``
 * ``a_log_the_user_cannot_open_is_reported_and_a_missing_one_is_not``
+* ``an_event_id_is_stable_and_tells_events_apart``
 * ``auditds_own_log_gives_the_same_events_as_the_journal_would``
 * ``both_the_raw_and_the_journald_forms_of_a_record_split``
 * ``chattr_is_foreign_except_when_emrac_just_created_the_ledger``

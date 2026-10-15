@@ -53,7 +53,7 @@ fn run(cli: &Cli) -> Result<()> {
 
     if let Commands::Ledger { command } = &cli.command {
         return match command {
-            LedgerCommand::Events => commands::ledger::events(cli.json),
+            LedgerCommand::Events { ack } => commands::ledger::events(ack.as_deref(), cli.json),
             LedgerCommand::Watch {
                 command: WatchCommand::Install,
             } => commands::ledger::watch_install(cli.dry_run),

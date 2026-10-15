@@ -196,8 +196,11 @@ pub(crate) fn trusted_exes() -> Vec<String> {
 }
 
 /// `emrac ledger events`.
-pub fn events(json: bool) -> Result<()> {
+pub fn events(ack: Option<&[String]>, json: bool) -> Result<()> {
     let read = ledger_watch::read(&trusted_exes())?;
+    if let Some(ids) = ack {
+        return ack_events(&read, ids, json);
+    }
     if json {
         println!(
             "{}",
@@ -237,7 +240,58 @@ pub fn events(json: bool) -> Result<()> {
             Verdict::Unwitnessed => "UNLOGGED  ",
             Verdict::Foreign => "FOREIGN   ",
         };
-        println!("  {mark}{}", e.describe());
+        let seen = if e.acknowledged {
+            " [acknowledged]"
+        } else {
+            ""
+        };
+        println!("  {mark}{} {}{seen}", e.id, e.describe());
+    }
+    Ok(())
+}
+
+/// `emrac ledger events --ack [ID…]`: other programs' events, marked as seen.
+fn ack_events(read: &ledger_watch::WatchRead, ids: &[String], json: bool) -> Result<()> {
+    let open: Vec<&ledger_watch::WatchEvent> = read
+        .events
+        .iter()
+        .filter(|e| e.verdict != Verdict::Emrac && !e.acknowledged)
+        .collect();
+    let chosen: Vec<String> = if ids.is_empty() {
+        open.iter().map(|e| e.id.clone()).collect()
+    } else {
+        for id in ids {
+            if !read.events.iter().any(|e| &e.id == id) {
+                return Err(Error::History(format!(
+                    "no ledger event {id} in the last 30 days (`emrac ledger events` lists them with their ids)"
+                )));
+            }
+            if read
+                .events
+                .iter()
+                .any(|e| &e.id == id && e.verdict == Verdict::Emrac)
+            {
+                return Err(Error::History(format!(
+                    "{id} is emrac's own append; there is nothing to acknowledge"
+                )));
+            }
+        }
+        ids.to_vec()
+    };
+    let done = History::acknowledge_events(&chosen)?;
+    if !done.is_empty() {
+        sync_after();
+    }
+    if json {
+        println!("{}", serde_json::json!({ "acknowledged": done }));
+    } else if done.is_empty() {
+        say!(Voice::Notes, "nothing new to acknowledge.");
+    } else {
+        say!(
+            Voice::Confirms,
+            "acknowledged {} event(s). They stay listed (marked) and in your history and ledger; `doctor` stops counting them.",
+            done.len()
+        );
     }
     Ok(())
 }

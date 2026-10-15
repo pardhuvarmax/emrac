@@ -532,7 +532,13 @@ pub enum HistoryCommand {
 #[derive(Subcommand)]
 pub enum LedgerCommand {
     /// List what the audit system saw done to the ledger, and by which program
-    Events,
+    Events {
+        /// Mark other programs' events as seen (all of them, or the ids
+        /// given, like ev-1a2b3c4d5e6f): they stay listed, and doctor
+        /// stops counting them. Recorded in the history and the ledger.
+        #[arg(long, value_name = "ID", num_args = 0..)]
+        ack: Option<Vec<String>>,
+    },
 
     /// The kernel audit rules that watch the ledger
     Watch {

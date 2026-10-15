@@ -95,6 +95,28 @@ impl History {
         Self::acknowledge_at(&Self::path()?, ids, now())
     }
 
+    /// Acknowledges ledger-watch events by id (`ev-…`): one marker, chained
+    /// like the failed-transaction one. Returns the ids newly acknowledged.
+    pub fn acknowledge_events(ids: &[String]) -> Result<Vec<String>> {
+        Self::acknowledge_events_at(&Self::path()?, ids, now())
+    }
+
+    fn acknowledge_events_at(path: &Path, ids: &[String], ts: u64) -> Result<Vec<String>> {
+        let already = log::ack_ids(&log::all_lines(path, true)?);
+        let mut fresh: Vec<String> = Vec::new();
+        for id in ids {
+            if !already.contains(id) && !fresh.contains(id) {
+                fresh.push(id.clone());
+            }
+        }
+        if fresh.is_empty() {
+            return Ok(fresh);
+        }
+        let marker = serde_json::json!({"type": "ack", "ids": fresh, "timestamp": ts});
+        log::append(path, vec![marker], ts)?;
+        Ok(fresh)
+    }
+
     /// The anchor code for the newest line: `<seq>:<first 32 hex of its hash>`.
     /// `None` while nothing is chained yet.
     pub fn anchor() -> Result<Option<String>> {
@@ -873,6 +895,21 @@ mod tests {
         )
         .unwrap();
         assert_eq!(rec.id, "tx-26");
+        assert!(verdict(&s).problem.is_none());
+    }
+
+    #[test]
+    fn event_acknowledgements_are_chained_and_not_repeated() {
+        let s = Scratch::new("ack-events");
+        record(&s.file(), &plan(PlanAction::Install, &["a"]), &Ok(()), 1).unwrap();
+        let ids = vec!["ev-aaaaaaaaaaaa".to_string(), "ev-bbbbbbbbbbbb".to_string()];
+        let done = History::acknowledge_events_at(&s.file(), &ids, 5).unwrap();
+        assert_eq!(done, ids);
+        assert!(History::acknowledge_events_at(&s.file(), &ids, 6)
+            .unwrap()
+            .is_empty());
+        let acked = log::ack_ids(&log::all_lines(&s.file(), true).unwrap());
+        assert!(acked.contains("ev-aaaaaaaaaaaa") && acked.contains("ev-bbbbbbbbbbbb"));
         assert!(verdict(&s).problem.is_none());
     }
 
