@@ -1,5 +1,31 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+/// The credit every `--help` ends with.
+pub const CREDIT: &str = concat!(
+    "Built by ",
+    env!("CARGO_PKG_AUTHORS"),
+    " — ",
+    env!("CARGO_PKG_HOMEPAGE"),
+    "\nSic Mundus Creatus Est."
+);
+
+/// The command tree with the credit on every (sub)command's help, not only the top one.
+pub fn command() -> clap::Command {
+    use clap::CommandFactory;
+    fn credit(cmd: clap::Command) -> clap::Command {
+        let names: Vec<String> = cmd
+            .get_subcommands()
+            .map(|c| c.get_name().to_string())
+            .collect();
+        let mut cmd = cmd.after_help(CREDIT);
+        for name in names {
+            cmd = cmd.mut_subcommand(name, credit);
+        }
+        cmd
+    }
+    credit(Cli::command())
+}
+
 #[derive(Parser)]
 #[command(
     name = "emrac",

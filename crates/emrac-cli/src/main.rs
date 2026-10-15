@@ -3,7 +3,6 @@ mod commands;
 mod output;
 mod prompt;
 
-use clap::Parser;
 use emrac_core::{Config, Limits, Result, Sources};
 
 use cli::{Cli, Commands, HistoryCommand, LedgerCommand, SnapshotCommand, WatchCommand};
@@ -18,7 +17,10 @@ fn main() {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
 
-    let cli = Cli::parse();
+    let cli = {
+        use clap::FromArgMatches;
+        Cli::from_arg_matches(&cli::command().get_matches()).unwrap_or_else(|e| e.exit())
+    };
 
     if let Err(err) = run(&cli) {
         emrac_core::say_err!(err.voice(), "{err}");

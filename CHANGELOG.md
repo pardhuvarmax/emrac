@@ -18,7 +18,7 @@ emrac is now licensed under the GNU General Public License, version 3 or any lat
 
 ## Small change (after u9) — 2026-10-15
 
-`emrac --version` and `emrac --help` now add the line `Sic Mundus Creatus Est.` after the credit (in `--version` between `built by pardhuvarmax` and the URL; in `--help` after the `Built by …` line).
+`emrac --version` and every `--help` screen (the top one and each subcommand's) now add the line `Sic Mundus Creatus Est.` after the credit (in `--version` between `built by pardhuvarmax` and the URL; in `--help` after the `Built by …` line).
 
 ## Slice u9 (after r2) — 2026-10-15 — the ledger watches itself
 

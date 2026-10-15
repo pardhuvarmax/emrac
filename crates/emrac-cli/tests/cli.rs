@@ -444,6 +444,25 @@ fn the_watch_install_asks_for_root_and_the_helper_stays_hidden() {
     assert!(!stdout(&home.run(&["--help"])).contains("ledger-append"));
 }
 
+#[test]
+fn every_help_screen_carries_the_credit() {
+    let home = Home::new("help-credit");
+    for args in [
+        &["--help"][..],
+        &["install", "--help"],
+        &["history", "archive", "--help"],
+        &["ledger", "watch", "install", "--help"],
+        &["help", "undo"],
+        &["cache", "clean", "-h"],
+    ] {
+        let text = stdout(&home.run(args));
+        assert!(
+            text.trim_end().ends_with("Built by pardhuvarmax — https://github.com/pardhuvarmax/emrac\nSic Mundus Creatus Est."),
+            "{args:?}: {text}"
+        );
+    }
+}
+
 fn snapshot_json(name: &str, count: usize) -> String {
     let packages: Vec<String> = (0..count)
         .map(|i| {
