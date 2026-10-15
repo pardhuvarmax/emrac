@@ -44,7 +44,7 @@ printf 'pkgname=pfetch\npkgver=9.9\npkgrel=1\npkgdesc=fixture\narch=(any)\nlicen
 (cd /tmp/w && git init -q -b master && git add -A && git commit -q -m x) && git clone -q --bare /tmp/w /tmp/up.git && git clone -q /tmp/up.git $B/pfetch
 ck "AUR install: audit, sandbox build, manifest, pacman -U" "$e install pfetch --yes --skip-pkgbuild </dev/null && pacman -Q pfetch"
 ck "build without installing"         "$e build pfetch --skip-pkgbuild </dev/null | grep -q 'emrac confirms: built'"
-ck "rebuild builds an installed AUR package again" "b1=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p'); sleep 2; $e rebuild pfetch --yes --skip-pkgbuild </dev/null && b2=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p') && [ \"\$b1\" != \"\$b2\" ] && $e history | grep -q pfetch"
+ck "rebuild builds an installed AUR package again" "b1=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p'); sleep 2; $e rebuild pfetch --yes --skip-pkgbuild </dev/null >/tmp/rb 2>&1; rc=\$?; tail -6 /tmp/rb; [ \$rc -eq 0 ] && b2=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p') && [ \"\$b1\" != \"\$b2\" ] && $e history | grep -q pfetch"
 ck "rebuild refuses an official package and a missing one" "! $e rebuild tree --dry-run 2>&1 | tee /tmp/o; grep -q 'official package' /tmp/o; ! $e rebuild nosuchthing --dry-run"
 ck "rebuild --check lists nothing broken for a healthy AUR package" "$e rebuild --check | grep -q 'no installed AUR package'"
 ck "a closed stdin declines (no install)" "sudo pacman -Rns --noconfirm pfetch tree >/dev/null; $e install tree </dev/null >/dev/null; ! pacman -Q tree"

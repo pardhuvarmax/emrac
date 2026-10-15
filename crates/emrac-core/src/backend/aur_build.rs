@@ -216,6 +216,7 @@ impl AurBuildBackend {
         // 1. Dependencies and verified sources, on the host.
         let status = Command::new("makepkg")
             .args(["-s", "--verifysource", "--needed"])
+            .args(opts.force.then_some("--force"))
             .args((!opts.interactive).then_some("--noconfirm"))
             .current_dir(dir)
             .status()
@@ -261,9 +262,9 @@ impl AurBuildBackend {
         for (phase, args) in steps {
             let mut command = vec!["makepkg".to_string()];
             command.extend(args.iter().map(|a| a.to_string()));
-            if phase == "build and package" {
-                command.extend(force_arg.iter().map(|a| a.to_string()));
-            }
+            // makepkg refuses to start while a package file for this version
+            // exists, whatever the phase, unless it is told to overwrite.
+            command.extend(force_arg.iter().map(|a| a.to_string()));
             let (outcome, output) = sandbox::run(&spec, &command, &opts.limits, use_scope)
                 .map_err(|err| Error::CommandSpawn("bwrap".to_string(), err))?;
             match &outcome {
