@@ -129,6 +129,10 @@ pub enum Error {
     #[error("{0}")]
     Rebuild(String),
 
+    /// The Arch news could not be read, or a critical item stops an upgrade.
+    #[error("{0}")]
+    News(String),
+
     #[error("'{0}' isn't a date I understand — use YYYY-MM-DD, like 2026-10-11")]
     InvalidDate(String),
 
@@ -365,6 +369,7 @@ impl Error {
             | Error::Preflight(_)
             | Error::PlanChanged(_)
             | Error::Rebuild(_)
+            | Error::News(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

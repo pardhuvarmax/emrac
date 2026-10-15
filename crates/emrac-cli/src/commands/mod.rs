@@ -12,6 +12,7 @@ pub mod history;
 pub mod info;
 pub mod install;
 pub mod ledger;
+pub mod news;
 pub mod official_inspect;
 pub mod pacnew;
 pub mod pin;

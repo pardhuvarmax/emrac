@@ -1,3 +1,4 @@
+pub mod arch_news;
 mod audit;
 pub mod aur_trust;
 mod backend;

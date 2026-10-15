@@ -40,6 +40,14 @@ pub struct SafetyConfig {
     /// packages would leave upgrades waiting (a partial upgrade).
     #[serde(default = "default_partial")]
     pub partial_upgrade: String,
+    /// The Arch news before an upgrade: `"gate"` warns about unread news and
+    /// stops for a critical item, `"warn"` never stops, `"off"` does not look.
+    #[serde(default = "default_news")]
+    pub arch_news: String,
+}
+
+fn default_news() -> String {
+    "gate".to_string()
 }
 
 fn default_preflight() -> String {
@@ -54,6 +62,7 @@ impl Default for SafetyConfig {
         Self {
             preflight: default_preflight(),
             partial_upgrade: default_partial(),
+            arch_news: default_news(),
         }
     }
 }
@@ -294,6 +303,7 @@ impl Config {
             "cache.keep_days" => self.cache.keep_days.to_string(),
             "safety.preflight" => self.safety.preflight.clone(),
             "safety.partial_upgrade" => self.safety.partial_upgrade.clone(),
+            "safety.arch_news" => self.safety.arch_news.clone(),
             "self.source" => self.self_service.source.clone(),
             "self.channel" => self.self_service.channel.clone(),
             "self.require_signature" => self.self_service.require_signature.to_string(),
@@ -370,6 +380,12 @@ impl Config {
                 }
                 self.safety.partial_upgrade = value.to_string();
             }
+            "safety.arch_news" => {
+                if !matches!(value, "gate" | "warn" | "off") {
+                    return Err(invalid());
+                }
+                self.safety.arch_news = value.to_string();
+            }
             "self.source" => {
                 if !(value.starts_with("https://") || value.starts_with("file://")) {
                     return Err(invalid());
@@ -423,6 +439,7 @@ impl Config {
             "cache.keep_days" => self.cache.keep_days = default_keep_days(),
             "safety.preflight" => self.safety.preflight = default_preflight(),
             "safety.partial_upgrade" => self.safety.partial_upgrade = default_partial(),
+            "safety.arch_news" => self.safety.arch_news = default_news(),
             "self.source" => self.self_service.source = default_self_source(),
             "self.channel" => self.self_service.channel = default_self_channel(),
             "self.require_signature" => self.self_service.require_signature = false,
@@ -517,6 +534,10 @@ mod tests {
         let mut c = Config::default();
         assert_eq!(c.get("safety.preflight").unwrap(), "block");
         assert_eq!(c.get("safety.partial_upgrade").unwrap(), "refuse");
+        assert_eq!(c.get("safety.arch_news").unwrap(), "gate");
+        c.set("safety.arch_news", "warn").unwrap();
+        assert!(c.set("safety.arch_news", "block").is_err());
+        c.unset("safety.arch_news").unwrap();
         c.set("safety.preflight", "warn").unwrap();
         c.set("safety.partial_upgrade", "off").unwrap();
         assert_eq!(c.get("safety.preflight").unwrap(), "warn");

@@ -144,6 +144,12 @@ const SECTIONS: &[Section] = &[
                 "what to do when installing or upgrading only some packages would leave other upgrades waiting, a partial upgrade that Arch does not support; --allow-partial lets one run through",
                 "\"refuse\" | \"warn\" | \"off\"",
             ),
+            key(
+                "arch_news",
+                Kind::Text,
+                "the Arch news before an upgrade: gate warns about unread news and stops for a critical item (a breaking change, manual intervention, or a change touching the kernel, bootloader, C library, systemd, pacman, drivers); warn never stops; off does not look",
+                "\"gate\" | \"warn\" | \"off\"",
+            ),
         ],
     },
     Section {
@@ -356,6 +362,7 @@ mod tests {
             ("cache.keep_days", "3"),
             ("safety.preflight", "warn"),
             ("safety.partial_upgrade", "off"),
+            ("safety.arch_news", "warn"),
             ("self.source", "file:///tmp/a \"b\"\\c/releases.json"),
             ("self.channel", "prerelease"),
             ("self.require_signature", "true"),
@@ -365,7 +372,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 24, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 25, "{text}");
     }
 
     #[test]

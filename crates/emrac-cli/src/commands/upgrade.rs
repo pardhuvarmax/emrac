@@ -23,6 +23,7 @@ pub fn run(
     snapshot_first: bool,
     allow_partial: bool,
     expect_plan: Option<&str>,
+    ack_news: bool,
 ) -> Result<()> {
     let upgrade = sources.plan_upgrade(pkgs, offline)?;
 
@@ -53,6 +54,11 @@ pub fn run(
     let shown = crate::commands::plan_check::Shown::new(&upgrade.plan);
     output::print_pin_notes(&upgrade.held, &upgrade.expired_pins, quiet);
 
+    let news_gate = if upgrade.plan.is_empty() {
+        None
+    } else {
+        crate::commands::news::gate(offline, dry_run, ack_news, json)?
+    };
     if !upgrade.plan.is_empty() {
         crate::commands::preflight::run(
             sources,
@@ -151,6 +157,9 @@ pub fn run(
         Ok(())
     })();
     history::record(&upgrade.plan, &result);
+    if let (Ok(()), Some(gate)) = (&result, &news_gate) {
+        gate.done();
+    }
     if result.is_ok() && has_official_targets && !json && !quiet {
         hint_stale_builds();
     }

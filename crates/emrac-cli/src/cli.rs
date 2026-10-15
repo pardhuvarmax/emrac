@@ -204,6 +204,11 @@ pub enum Commands {
         /// `digest` in --json); refuses if the plan is anything else
         #[arg(long, value_name = "ID")]
         expect_plan: Option<String>,
+
+        /// Go on although there is unread critical Arch news (read it first:
+        /// `emrac news`)
+        #[arg(long)]
+        ack_news: bool,
     },
 
     /// View or change persisted defaults (~/.config/emrac/config.toml)
@@ -353,6 +358,18 @@ pub enum Commands {
 
     /// Find installed packages that require each other in a ring
     Cycles,
+
+    /// The Arch Linux news: which items you haven't seen, and which are
+    /// critical (a breaking change, manual intervention, or a change that
+    /// touches the kernel, bootloader, C library, systemd, pacman or drivers)
+    News {
+        #[command(subcommand)]
+        command: Option<NewsCommand>,
+
+        /// Every cached item, not only the newest 10 and the unread ones
+        #[arg(long)]
+        all: bool,
+    },
 
     /// Save, list, show or delete named restore points of the installed
     /// package set (no subcommand: save a new one)
@@ -665,6 +682,12 @@ pub enum GraphFormat {
     Text,
     Dot,
     Json,
+}
+
+#[derive(Subcommand)]
+pub enum NewsCommand {
+    /// Mark all the news so far as seen
+    Ack,
 }
 
 #[derive(Subcommand)]

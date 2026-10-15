@@ -4,7 +4,7 @@
 # emrac refuses a partial upgrade, lets --allow-partial and a pin through, and
 # refuses to remove the only kernel (a fake one).
 #
-# last full run: u18, 14 of 14 passed
+# last full run: u20, 17 of 17 passed
 set -u
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; tail -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -78,4 +78,18 @@ sleep 8
 newer fixnew 3.0
 wait
 ck "a plan that changed while it waited is refused at the commit, with the difference" "cat /tmp/drift; grep -q 'changed while you were deciding' /tmp/drift && grep -q 'changed: fixnew 2.0-1 → 3.0-1' /tmp/drift && ! pacman -Q fixnew"
+
+# the Arch news gate (u20): critical news stops an upgrade, other news is only shown
+feed() { # title text: a one-item feed published now
+  cat > /tmp/feed.xml <<XML
+<?xml version="1.0"?><rss><channel><item><title>$1</title><link>https://archlinux.org/news/test/</link><pubDate>$(date -R -u)</pubDate><description>$2</description></item></channel></rss>
+XML
+}
+newer fixnew2 2.0
+feed "Kernel and initramfs changes need manual intervention" "Regenerate the initramfs before rebooting."
+ck "an upgrade is stopped by unread critical news and nothing changes" "! as_tester env EMRAC_NEWS_FEED=file:///tmp/feed.xml $e upgrade --yes >/tmp/o 2>&1; grep -q 'critical' /tmp/o && grep -q 'emrac news ack' /tmp/o && pacman -Q fixnew2 | grep -q '1.0'"
+ck "--ack-news goes ahead" "as_tester env EMRAC_NEWS_FEED=file:///tmp/feed.xml $e upgrade --yes --ack-news >/tmp/o 2>&1; pacman -Q fixnew2 | grep -q '2.0'"
+newer fixnew2 3.0
+feed "A new mirror in Iceland" "A new mirror is available."
+ck "news that is not critical is shown and does not stop the upgrade" "as_tester env EMRAC_NEWS_FEED=file:///tmp/feed.xml $e upgrade --yes >/tmp/o 2>&1; grep -q \"haven't seen\" /tmp/o && pacman -Q fixnew2 | grep -q '3.0'"
 echo; echo "$n checks, $bad failed"

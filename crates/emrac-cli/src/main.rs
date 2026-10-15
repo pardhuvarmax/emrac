@@ -6,7 +6,8 @@ mod prompt;
 use emrac_core::{Config, Limits, Result, Sources};
 
 use cli::{
-    Cli, Commands, HistoryCommand, LedgerCommand, SelfCommand, SnapshotCommand, WatchCommand,
+    Cli, Commands, HistoryCommand, LedgerCommand, NewsCommand, SelfCommand, SnapshotCommand,
+    WatchCommand,
 };
 use commands::aur_install::BuildChoice;
 use commands::rollback::Which;
@@ -151,6 +152,15 @@ fn run(cli: &Cli) -> Result<()> {
         };
     }
 
+    // The Arch news needs neither pacman nor libalpm.
+    if let Commands::News { command, all } = &cli.command {
+        let flags = Config::load().map(|c| c.flags).unwrap_or_default();
+        return match command {
+            Some(NewsCommand::Ack) => commands::news::ack(cli.offline || flags.offline, cli.json),
+            None => commands::news::show(*all, cli.offline || flags.offline, cli.json),
+        };
+    }
+
     // Auditing files on disk needs no pacman or libalpm.
     if let Commands::Audit { targets } = &cli.command {
         if targets.iter().all(|t| commands::audit::is_path(t)) {
@@ -188,7 +198,9 @@ fn run(cli: &Cli) -> Result<()> {
     sources.set_interactive(!yes);
 
     match &cli.command {
-        Commands::SelfCmd { .. } => unreachable!("handled before Sources::init"),
+        Commands::SelfCmd { .. } | Commands::News { .. } => {
+            unreachable!("handled before Sources::init")
+        }
         Commands::Search {
             query,
             limit,
@@ -259,6 +271,7 @@ fn run(cli: &Cli) -> Result<()> {
             review,
             allow_partial,
             expect_plan,
+            ack_news,
         } => commands::upgrade::run(
             &sources,
             pkgs,
@@ -274,6 +287,7 @@ fn run(cli: &Cli) -> Result<()> {
             config.snapshot.before_upgrade,
             *allow_partial,
             expect_plan.as_deref(),
+            *ack_news,
         ),
         Commands::Cache { command } => {
             commands::cache::run(&sources, command.as_ref(), cache_settings())
