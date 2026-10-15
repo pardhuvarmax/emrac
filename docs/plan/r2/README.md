@@ -21,3 +21,4 @@ again from `u1`. They go into the next release (`r3`). `u1` to `u5` had no plan 
 - [`u12-self-service.md`](./u12-self-service.md) — u12–u15: the release index, `self sync`/`news` (u12), `self diagnose` (u13), `self upgrade` (u14), `self downgrade` (u15).
 - [`u16-dependency-views.md`](./u16-dependency-views.md) — `tree`, `graph` (text, dot, json), `impact` (remove, install, upgrade) and `cycles`.
 - [`u17-preflight.md`](./u17-preflight.md) — checks before a transaction changes anything (space, `/boot`, power, network, the kernel safety net) and the partial-upgrade gate.
+- [`u18-plan-integrity.md`](./u18-plan-integrity.md) — plan ids, `--expect-plan`, and a re-check of the plan before the commit.

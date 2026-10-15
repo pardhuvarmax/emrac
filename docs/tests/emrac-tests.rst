@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 356
+     - 358
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 9
+     - 11
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 28
    * - **Automated total**
      -
-     - **393**
+     - **397**
 
-emrac-core library (356)
+emrac-core library (358)
 ------------------------
 
 ``audit::tests`` (39)
@@ -355,6 +355,12 @@ emrac-core library (356)
 * ``pin_list_unpin_round_trip_and_replace``
 * ``unpinning_an_unpinned_name_changes_nothing``
 
+``plan::digest_tests`` (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``the_changes_between_two_plans_are_listed``
+* ``the_digest_ignores_order_sizes_and_warnings_and_sees_everything_else``
+
 ``preflight::tests`` (9)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -544,13 +550,19 @@ emrac-core library (356)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (9)
-----------------------------------
+emrac command line, unit tests (11)
+-----------------------------------
 
 ``commands::completion::tests`` (1)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``every_shell_script_mentions_every_subcommand``
+
+``commands::plan_check::tests`` (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_plan_that_was_just_shown_is_not_made_again_and_an_old_one_is``
+* ``an_expected_plan_id_must_match_by_prefix_and_look_like_one``
 
 ``output::tests`` (3)
 ~~~~~~~~~~~~~~~~~~~~~
@@ -608,7 +620,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: after u17, 44 of 44 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u18, 44 of 44 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2).
 
 * version names the builder
 * usage error exits 2

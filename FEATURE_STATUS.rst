@@ -93,6 +93,9 @@ what was seen for each.
    * - ``deps`` / ``rdeps`` / ``why`` / ``orphans``
      - u12
      - Read-only dependency inspection
+   * - plan ids / ``--expect-plan``
+     - u18
+     - A digest of what a plan does, shown under every plan (``digest`` in ``--json``); ``--expect-plan`` runs only that plan; a plan that was on screen for 30 seconds is made again before the commit and must be the same; history records carry the digest
    * - pre-flight checks
      - u17
      - Before a transaction changes anything: space on ``/``, the cache, ``/boot`` and the EFI partition, battery, mirrors, the kernel safety net (another kernel, fallback initramfs, boot entry, never removing the last kernel), and a gate against partial upgrades (``--allow-partial``); ``[safety]`` settings
