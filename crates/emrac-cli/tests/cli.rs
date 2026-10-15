@@ -1465,3 +1465,45 @@ fn self_diagnose_extends_check_hides_the_home_directory_and_refuses_online_offli
     let out = home.run(&["self", "diagnose", "--online"]);
     assert!(stdout(&out).contains("answered"), "{}", stdout(&out));
 }
+
+#[test]
+fn self_upgrade_plans_from_the_synced_index_and_refuses_a_copy_no_package_owns() {
+    let home = Home::new("selfup");
+    let sha = "a20701e9d20b4a677c1dc1c6333682d09f7f5c65a3c0afad26396630bf1a6c40";
+    let src = home.0.join("releases.json");
+    write(
+        &src,
+        &format!(
+            r#"{{"schema":1,"releases":[{{"tag":"r9","version":"9.0.0","date":"2026-10-15","channel":"stable","tarball":"https://github.com/pardhuvarmax/emrac/archive/refs/tags/r9.tar.gz","sha256":"{sha}"}}],"news":[]}}"#
+        ),
+    );
+    let source = format!("file://{}", src.display());
+
+    // No release information yet.
+    let out = home.run(&["self", "upgrade", "--dry-run"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stdout(&out).contains("self sync"), "{}", stdout(&out));
+
+    home.run(&["config", "set", "self.source", &source]);
+    assert_eq!(home.run(&["self", "sync"]).status.code(), Some(0));
+    // The test binary is a development build: no package owns it, so it is
+    // never replaced, and the plan says why.
+    let out = home.run(&["self", "up", "--dry-run"]);
+    assert_eq!(out.status.code(), Some(1));
+    let text = stdout(&out);
+    assert!(
+        text.contains("cannot be done") && text.contains("development build"),
+        "{text}"
+    );
+    let json: serde_json::Value = serde_json::from_str(&stdout(&home.run(&[
+        "self",
+        "upgrade",
+        "--dry-run",
+        "--json",
+    ])))
+    .unwrap();
+    assert_eq!(json["outcome"]["status"], "refused");
+    assert_eq!(json["op"], "upgrade");
+    // Nothing was started.
+    assert!(!home.0.join(".local/share/emrac/self/journal.json").exists());
+}

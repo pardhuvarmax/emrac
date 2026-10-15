@@ -144,8 +144,15 @@ fn text_ok(s: &str, max: usize) -> bool {
     s.len() <= max && !s.chars().any(char::is_control)
 }
 
-/// The host of an `https://` or `file://` address.
+/// What `host_of` gives for a `file://` address: an index read from a file
+/// may then list `file://` tarballs too (a local mirror, or a test).
+pub const FILE_SOURCE: &str = "file://";
+
+/// The host of an `https://` address; `FILE_SOURCE` for a `file://` one.
 fn host_of(url: &str) -> Option<&str> {
+    if url.starts_with("file:///") {
+        return Some(FILE_SOURCE);
+    }
     let rest = url.strip_prefix("https://")?;
     let host = rest.split(['/', '?', '#']).next()?;
     (!host.is_empty() && !host.contains('@')).then_some(host)
@@ -733,6 +740,17 @@ mod tests {
         );
         assert!(parse_index(&text, None).is_err());
         assert!(parse_index(&text, Some("mirror.example")).is_ok());
+    }
+
+    #[test]
+    fn a_file_index_may_list_file_tarballs_and_a_web_index_may_not() {
+        let text = good().replace(
+            "https://github.com/pardhuvarmax/emrac/archive/refs/tags/r1.tar.gz",
+            "file:///srv/emrac/r1.tar.gz",
+        );
+        assert!(parse_index(&text, Some(FILE_SOURCE)).is_ok());
+        assert!(parse_index(&text, Some("github.com")).is_err());
+        assert!(parse_index(&text, None).is_err());
     }
 
     #[test]

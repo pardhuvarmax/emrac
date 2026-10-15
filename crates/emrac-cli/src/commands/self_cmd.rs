@@ -1,5 +1,6 @@
 use emrac_core::self_check;
 use emrac_core::self_meta;
+use emrac_core::self_upgrade::{self, ExecOptions, Outcome, Plan};
 use emrac_core::{say, Config, Voice};
 use emrac_core::{DoctorStatus, Error, Result};
 
@@ -201,5 +202,175 @@ pub fn news(all: bool, json: bool) -> Result<()> {
         println!();
     }
     println!("No installation changes were performed.");
+    Ok(())
+}
+
+/// Prints a plan for `upgrade` or `downgrade`.
+pub fn print_plan(plan: &Plan, dry_run: bool, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(plan).unwrap());
+        return;
+    }
+    println!("Emrac {} plan", plan.op.word());
+    println!("  Installed:  {}", plan.installed);
+    match &plan.outcome {
+        Outcome::Nothing { reason } => println!("  Result:     {reason}"),
+        Outcome::Refused { reasons } => {
+            println!("  Result:     cannot be done");
+            for r in reasons {
+                println!("    - {r}");
+            }
+        }
+        Outcome::Ready {
+            target,
+            steps,
+            warnings,
+        } => {
+            println!(
+                "  Target:     {} ({}, {}, channel {})",
+                target.version, target.tag, target.date, target.channel
+            );
+            println!("  Source:     {}", target.tarball);
+            println!(
+                "  Verified:   SHA-256 from the release index ({})",
+                &target.sha256[..16]
+            );
+            if !warnings.is_empty() {
+                println!("  Worth knowing:");
+                for w in warnings {
+                    println!("    - {w}");
+                }
+            }
+            println!("  Steps:");
+            for (i, s) in steps.iter().enumerate() {
+                println!("    {}. {s}", i + 1);
+            }
+            if dry_run {
+                println!("  Changes applied: none (dry run).");
+            }
+        }
+    }
+}
+
+/// Fetches a fresh index first when the stored one is more than a day old.
+fn refresh_if_old(cfg: &emrac_core::SelfConfig, offline: bool) {
+    let stored = match self_meta::load() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let old = stored
+        .state
+        .as_ref()
+        .and_then(|s| s.last_ok)
+        .is_none_or(|t| now().saturating_sub(t) > 86_400);
+    if !old {
+        return;
+    }
+    if offline && !cfg.source.starts_with("file://") {
+        say!(
+            Voice::Warns,
+            "--offline is set: using the release index as it is."
+        );
+        return;
+    }
+    say!(
+        Voice::Notes,
+        "the release index is more than a day old: fetching a fresh one."
+    );
+    if let Err(e) = self_meta::sync(cfg, now()) {
+        say!(
+            Voice::Warns,
+            "couldn't refresh the release index ({e}); using the one stored."
+        );
+    }
+}
+
+/// `emrac self upgrade`.
+pub fn upgrade(
+    dry_run: bool,
+    yes: bool,
+    offline: bool,
+    skip_tests: bool,
+    json: bool,
+) -> Result<()> {
+    let cfg = Config::load()?.self_service;
+    if !dry_run {
+        refresh_if_old(&cfg, offline);
+    }
+    let ctx = self_upgrade::gather_context();
+    let plan = self_upgrade::plan_upgrade(&ctx);
+    print_plan(&plan, dry_run, json);
+    run_plan(&plan, dry_run, yes, skip_tests, json)
+}
+
+/// `emrac self downgrade`.
+pub fn downgrade(
+    version: Option<&str>,
+    tag: Option<&str>,
+    dry_run: bool,
+    yes: bool,
+    offline: bool,
+    skip_tests: bool,
+    json: bool,
+) -> Result<()> {
+    let cfg = Config::load()?.self_service;
+    if !dry_run {
+        refresh_if_old(&cfg, offline);
+    }
+    let ctx = self_upgrade::gather_context();
+    let plan = self_upgrade::plan_downgrade(&ctx, version, tag);
+    print_plan(&plan, dry_run, json);
+    run_plan(&plan, dry_run, yes, skip_tests, json)
+}
+
+/// What both `upgrade` and `downgrade` do with a plan.
+pub fn run_plan(plan: &Plan, dry_run: bool, yes: bool, skip_tests: bool, json: bool) -> Result<()> {
+    let Outcome::Ready { target, .. } = &plan.outcome else {
+        return match &plan.outcome {
+            Outcome::Refused { reasons } => Err(Error::SelfService(format!(
+                "not done: {}",
+                reasons.first().cloned().unwrap_or_default()
+            ))),
+            _ => Ok(()),
+        };
+    };
+    if dry_run {
+        return Ok(());
+    }
+    if !yes && !crate::prompt::confirm(&format!("Proceed with the {}?", plan.op.word())) {
+        say!(Voice::Notes, "okay, nothing changed.");
+        return Ok(());
+    }
+    let mut say_phase = |s: &str| {
+        if !json {
+            say!(Voice::Notes, "{s}");
+        }
+    };
+    let report = self_upgrade::execute(
+        plan.op,
+        target,
+        &plan.installed,
+        &ExecOptions { yes, skip_tests },
+        &mut say_phase,
+    )?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report).unwrap());
+    } else if report.version_ok && report.check_ok {
+        say!(
+            Voice::Confirms,
+            "emrac is now {} ({}). The new version reports itself correctly and `emrac self check` passes. A copy of your configuration and data is in {}.",
+            report.to,
+            report.tag,
+            report.backup
+        );
+    } else {
+        say!(
+            Voice::Warns,
+            "emrac {} was installed, but it did not pass the checks: {}. `emrac self diagnose` says more; `emrac self downgrade` goes back. Your backup is in {}.",
+            report.to,
+            report.notes.join("; "),
+            report.backup
+        );
+    }
     Ok(())
 }

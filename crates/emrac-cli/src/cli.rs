@@ -556,6 +556,34 @@ pub enum SelfCommand {
         online: bool,
     },
 
+    /// Upgrade emrac to the newest release of your channel: downloads it,
+    /// checks it against the release index, builds a package and installs it
+    /// with pacman. Only for a copy a pacman package owns. --dry-run shows the plan
+    #[command(visible_alias = "up")]
+    Upgrade {
+        /// Don't run the package's test suite while building
+        #[arg(long)]
+        skip_tests: bool,
+    },
+
+    /// Go back to an older release (same way as upgrade). Refuses if the
+    /// older release could not read your files; nothing is converted back
+    #[command(visible_alias = "dn")]
+    Downgrade {
+        /// The version to go back to, like 0.2.0 (needed when several older
+        /// releases exist)
+        #[arg(long, conflicts_with = "tag")]
+        version: Option<String>,
+
+        /// Or the release tag, like r2
+        #[arg(long)]
+        tag: Option<String>,
+
+        /// Don't run the package's test suite while building
+        #[arg(long)]
+        skip_tests: bool,
+    },
+
     /// Fetch emrac's release index and news from the configured source
     /// (`self.source`); never upgrades anything. --dry-run shows the plan
     Sync,

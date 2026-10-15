@@ -25,6 +25,7 @@ mod sandbox;
 pub mod self_check;
 pub mod self_meta;
 pub mod self_ops;
+pub mod self_upgrade;
 mod snapshot;
 mod sources;
 mod verify;
@@ -39,7 +40,7 @@ pub use cache::{
     parse_duration, parse_size, Decision as CacheDecision, Op as CacheOp, Outcome as CacheOutcome,
     Scope as CacheScope,
 };
-pub use config::{BuildConfig, Config};
+pub use config::{BuildConfig, Config, SelfConfig};
 pub use deps::{DepEntry, DepsReport, Orphan, RdepsReport, WhyReport};
 pub use doctor::{DoctorReport, Status as DoctorStatus};
 pub use downgrade::{DowngradePlan, ListedVersion, VersionList};

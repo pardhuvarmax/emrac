@@ -122,6 +122,26 @@ fn run(cli: &Cli) -> Result<()> {
             SelfCommand::Diagnose { online } => {
                 commands::self_cmd::diagnose(*online, cli.offline || cfg_flags.offline, cli.json)
             }
+            SelfCommand::Upgrade { skip_tests } => commands::self_cmd::upgrade(
+                cli.dry_run || cfg_flags.dry_run,
+                cli.yes || cfg_flags.yes,
+                cli.offline || cfg_flags.offline,
+                *skip_tests,
+                cli.json,
+            ),
+            SelfCommand::Downgrade {
+                version,
+                tag,
+                skip_tests,
+            } => commands::self_cmd::downgrade(
+                version.as_deref(),
+                tag.as_deref(),
+                cli.dry_run || cfg_flags.dry_run,
+                cli.yes || cfg_flags.yes,
+                cli.offline || cfg_flags.offline,
+                *skip_tests,
+                cli.json,
+            ),
             SelfCommand::Sync => commands::self_cmd::sync(
                 cli.dry_run || cfg_flags.dry_run,
                 cli.offline || cfg_flags.offline,
