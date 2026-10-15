@@ -4,7 +4,7 @@
 # emrac refuses a partial upgrade, lets --allow-partial and a pin through, and
 # refuses to remove the only kernel (a fake one).
 #
-# last full run: u20, 17 of 17 passed
+# last full run: u20, 20 of 20 passed
 set -u
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; tail -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -92,4 +92,14 @@ ck "--ack-news goes ahead" "as_tester env EMRAC_NEWS_FEED=file:///tmp/feed.xml $
 newer fixnew2 3.0
 feed "A new mirror in Iceland" "A new mirror is available."
 ck "news that is not critical is shown and does not stop the upgrade" "as_tester env EMRAC_NEWS_FEED=file:///tmp/feed.xml $e upgrade --yes >/tmp/o 2>&1; grep -q \"haven't seen\" /tmp/o && pacman -Q fixnew2 | grep -q '3.0'"
+
+# protecting pacman's database (u20): a leftover lock, a database that is already broken
+touch /var/lib/pacman/db.lck
+ck "a leftover pacman lock is a pre-flight warning with the command" "as_tester $e install fixnew --dry-run >/tmp/o 2>&1; grep -q 'db.lck' /tmp/o && grep -q 'sudo rm' /tmp/o"
+rm -f /var/lib/pacman/db.lck
+mkdir -p /var/lib/pacman/local/zzbroken-1.0-1 && echo '%NAME%
+zzbroken' > /var/lib/pacman/local/zzbroken-1.0-1/desc
+ck "a database that already has problems is reported before a transaction, and a backup is made" "pacman -Dk >/dev/null 2>&1; as_tester $e install fixnew --yes >/tmp/o 2>&1; grep -q 'already reports problems' /tmp/o && ls /home/tester/.local/share/emrac/pacman-db/local-*.tar.gz >/dev/null"
+rm -rf /var/lib/pacman/local/zzbroken-1.0-1
+ck "the backup is a real archive of the database without the mtree files" "f=\$(ls -t /home/tester/.local/share/emrac/pacman-db/local-*.tar.gz | head -1); tar -tzf \$f | grep -q 'local/fixa-.*/desc' && ! tar -tzf \$f | grep -q mtree"
 echo; echo "$n checks, $bad failed"

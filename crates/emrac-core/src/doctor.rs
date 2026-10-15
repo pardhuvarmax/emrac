@@ -150,6 +150,8 @@ pub struct DoctorInputs {
     /// Binary (`-bin`) packages with a missing library: a rebuild won't help.
     pub stale_binary: Vec<String>,
     pub stale_maybe: Vec<String>,
+    /// `None`: backups are off. Otherwise how many, and the newest.
+    pub db_backups: Option<(usize, Option<(u64, u64)>)>,
     /// `None`: there is no history yet.
     pub history: Option<HistoryFacts>,
     /// `None`: there is no ledger file.
@@ -576,6 +578,28 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             .detail(listed(&i.expired_pins))
             .fix("emrac pin <pkg> --until … to renew, or emrac unpin <pkg>"),
         );
+    }
+
+    // The backup of pacman's own database.
+    if let Some((count, newest)) = i.db_backups {
+        checks.push(match newest {
+            None => check(
+                "db-backup",
+                "pacman database backup",
+                Status::Note,
+                "none yet: one is made before each transaction",
+            ),
+            Some((time, bytes)) => check(
+                "db-backup",
+                "pacman database backup",
+                Status::Ok,
+                format!(
+                    "{count} kept, the newest from {} ({} MiB)",
+                    crate::history::format_utc(time),
+                    bytes / 1_048_576
+                ),
+            ),
+        });
     }
 
     // AUR packages that need building again.

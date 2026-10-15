@@ -44,6 +44,14 @@ pub struct SafetyConfig {
     /// stops for a critical item, `"warn"` never stops, `"off"` does not look.
     #[serde(default = "default_news")]
     pub arch_news: String,
+    /// `"on"` backs up pacman's local database before each transaction and
+    /// checks it before and after (`pacman -Dk`); `"off"` does neither.
+    #[serde(default = "default_db_backup")]
+    pub db_backup: String,
+}
+
+fn default_db_backup() -> String {
+    "on".to_string()
 }
 
 fn default_news() -> String {
@@ -63,6 +71,7 @@ impl Default for SafetyConfig {
             preflight: default_preflight(),
             partial_upgrade: default_partial(),
             arch_news: default_news(),
+            db_backup: default_db_backup(),
         }
     }
 }
@@ -304,6 +313,7 @@ impl Config {
             "safety.preflight" => self.safety.preflight.clone(),
             "safety.partial_upgrade" => self.safety.partial_upgrade.clone(),
             "safety.arch_news" => self.safety.arch_news.clone(),
+            "safety.db_backup" => self.safety.db_backup.clone(),
             "self.source" => self.self_service.source.clone(),
             "self.channel" => self.self_service.channel.clone(),
             "self.require_signature" => self.self_service.require_signature.to_string(),
@@ -380,6 +390,12 @@ impl Config {
                 }
                 self.safety.partial_upgrade = value.to_string();
             }
+            "safety.db_backup" => {
+                if !matches!(value, "on" | "off") {
+                    return Err(invalid());
+                }
+                self.safety.db_backup = value.to_string();
+            }
             "safety.arch_news" => {
                 if !matches!(value, "gate" | "warn" | "off") {
                     return Err(invalid());
@@ -440,6 +456,7 @@ impl Config {
             "safety.preflight" => self.safety.preflight = default_preflight(),
             "safety.partial_upgrade" => self.safety.partial_upgrade = default_partial(),
             "safety.arch_news" => self.safety.arch_news = default_news(),
+            "safety.db_backup" => self.safety.db_backup = default_db_backup(),
             "self.source" => self.self_service.source = default_self_source(),
             "self.channel" => self.self_service.channel = default_self_channel(),
             "self.require_signature" => self.self_service.require_signature = false,
@@ -535,6 +552,10 @@ mod tests {
         assert_eq!(c.get("safety.preflight").unwrap(), "block");
         assert_eq!(c.get("safety.partial_upgrade").unwrap(), "refuse");
         assert_eq!(c.get("safety.arch_news").unwrap(), "gate");
+        assert_eq!(c.get("safety.db_backup").unwrap(), "on");
+        c.set("safety.db_backup", "off").unwrap();
+        assert!(c.set("safety.db_backup", "maybe").is_err());
+        c.unset("safety.db_backup").unwrap();
         c.set("safety.arch_news", "warn").unwrap();
         assert!(c.set("safety.arch_news", "block").is_err());
         c.unset("safety.arch_news").unwrap();

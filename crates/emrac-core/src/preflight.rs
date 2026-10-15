@@ -69,6 +69,8 @@ pub struct Facts {
     /// Bootloader configuration files that could be read: path and text.
     pub boot_configs: Vec<(String, String)>,
     pub partial: Option<Partial>,
+    /// pacman's lock file and whether a pacman runs.
+    pub lock: crate::pacman_db::Lock,
 }
 
 impl Facts {
@@ -94,6 +96,7 @@ impl Facts {
             boot_readable: false,
             boot_configs: Vec::new(),
             partial: None,
+            lock: crate::pacman_db::Lock::Absent,
         }
     }
 
@@ -154,6 +157,33 @@ pub fn evaluate(f: &Facts) -> Vec<Check> {
         PlanAction::Install | PlanAction::Upgrade | PlanAction::Downgrade | PlanAction::Reinstall
     );
     let kernels = f.touched_kernels();
+
+    // pacman's lock.
+    match f.lock {
+        crate::pacman_db::Lock::Absent => {}
+        crate::pacman_db::Lock::Held => {
+            let mut c = check(
+                "pacman-lock",
+                "pacman",
+                Status::Problem,
+                "pacman is running: two package managers must not change the system at once",
+            );
+            c.fix = Some("wait for it to finish, then run this again".into());
+            out.push(c);
+        }
+        crate::pacman_db::Lock::Stale => {
+            let mut c = check(
+                "pacman-lock",
+                "pacman",
+                Status::Warning,
+                "/var/lib/pacman/db.lck is left over and no pacman runs: pacman will refuse to start",
+            );
+            c.fix = Some(
+                "sudo rm /var/lib/pacman/db.lck   (once you are sure no pacman is running)".into(),
+            );
+            out.push(c);
+        }
+    }
 
     // Space on / and where the cache lives.
     if installing {
@@ -620,6 +650,7 @@ pub fn gather(
             .then(|| df(m).map(|fs| (m.to_string(), fs)))
             .flatten()
     });
+    f.lock = crate::pacman_db::lock();
     (f.battery, f.on_ac) = power_facts();
     if !offline && (plan.total_download_size > 0 || aur_builds) {
         f.net = mirror_facts();
@@ -1011,6 +1042,22 @@ mod tests {
             "vmlinuz-linux"
         ));
         assert!(!names_image("", "vmlinuz-linux"));
+    }
+
+    #[test]
+    fn a_running_pacman_blocks_and_a_stale_lock_warns() {
+        let mut f = facts(PlanAction::Install, &["a"]);
+        assert!(evaluate(&f).iter().all(|c| c.id != "pacman-lock"));
+        f.lock = crate::pacman_db::Lock::Held;
+        assert_eq!(by(&evaluate(&f), "pacman-lock").status, Status::Problem);
+        f.lock = crate::pacman_db::Lock::Stale;
+        let c = evaluate(&f);
+        assert_eq!(by(&c, "pacman-lock").status, Status::Warning);
+        assert!(by(&c, "pacman-lock")
+            .fix
+            .as_deref()
+            .unwrap()
+            .contains("db.lck"));
     }
 
     #[test]

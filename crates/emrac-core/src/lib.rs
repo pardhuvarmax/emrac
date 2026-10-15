@@ -16,6 +16,7 @@ pub mod ledger;
 pub mod ledger_watch;
 mod manifest;
 mod package;
+pub mod pacman_db;
 mod pacnew;
 mod pacnew_log;
 mod pacnew_ops;

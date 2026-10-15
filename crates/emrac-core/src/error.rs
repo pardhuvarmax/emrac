@@ -133,6 +133,10 @@ pub enum Error {
     #[error("{0}")]
     News(String),
 
+    /// The backup or check of pacman's own database failed.
+    #[error("{0}")]
+    PacmanDb(String),
+
     #[error("'{0}' isn't a date I understand — use YYYY-MM-DD, like 2026-10-11")]
     InvalidDate(String),
 
@@ -370,6 +374,7 @@ impl Error {
             | Error::PlanChanged(_)
             | Error::Rebuild(_)
             | Error::News(_)
+            | Error::PacmanDb(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

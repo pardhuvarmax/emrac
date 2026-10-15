@@ -150,6 +150,12 @@ const SECTIONS: &[Section] = &[
                 "the Arch news before an upgrade: gate warns about unread news and stops for a critical item (a breaking change, manual intervention, or a change touching the kernel, bootloader, C library, systemd, pacman, drivers); warn never stops; off does not look",
                 "\"gate\" | \"warn\" | \"off\"",
             ),
+            key(
+                "db_backup",
+                Kind::Text,
+                "on keeps a small backup of pacman's local package database before each transaction (the newest 3, in ~/.local/share/emrac/pacman-db) and checks it before and after with pacman -Dk; off does neither",
+                "\"on\" | \"off\"",
+            ),
         ],
     },
     Section {
@@ -363,6 +369,7 @@ mod tests {
             ("safety.preflight", "warn"),
             ("safety.partial_upgrade", "off"),
             ("safety.arch_news", "warn"),
+            ("safety.db_backup", "off"),
             ("self.source", "file:///tmp/a \"b\"\\c/releases.json"),
             ("self.channel", "prerelease"),
             ("self.require_signature", "true"),
@@ -372,7 +379,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 25, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 26, "{text}");
     }
 
     #[test]

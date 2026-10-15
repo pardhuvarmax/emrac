@@ -2,8 +2,8 @@ use emrac_core::{say, Voice};
 use std::collections::HashMap;
 
 use emrac_core::{
-    journal, ledger, ledger_watch, parse_date, parse_duration, parse_tx_id, rolled_back_by, Config,
-    Error, History, Plan, Result, RollbackPlan, RECENT_KEPT,
+    journal, ledger, ledger_watch, pacman_db, parse_date, parse_duration, parse_tx_id,
+    rolled_back_by, Config, Error, History, Plan, Result, RollbackPlan, RECENT_KEPT,
 };
 
 use crate::{output, prompt};
@@ -425,6 +425,63 @@ pub fn record_step(plan: &Plan, outcome: &Result<()>) {
 fn log(plan: &Plan, outcome: &Result<()>, rollback_of: Option<&str>) {
     log_step(plan, outcome, rollback_of);
     journal::finish();
+    verify_database();
+}
+
+/// The backup made for the transaction under way, and whether the database
+/// was consistent before it.
+static DB_PROTECTION: std::sync::Mutex<Option<(Option<std::path::PathBuf>, bool)>> =
+    std::sync::Mutex::new(None);
+
+/// Before a transaction: a backup of pacman's database and a consistency
+/// check (`safety.db_backup`). Neither stops the transaction; both say what
+/// they find.
+fn protect_database() {
+    if !Config::load().is_ok_and(|c| c.safety.db_backup == "on") {
+        return;
+    }
+    let was_ok = pacman_db::check();
+    if !was_ok.ok {
+        say!(
+            Voice::Warns,
+            "pacman's database already reports problems before this transaction: {}",
+            was_ok.problems.first().cloned().unwrap_or_default()
+        );
+    }
+    let backup = match pacman_db::backup(journal::unix_now()) {
+        Ok(b) => Some(b.path),
+        Err(err) => {
+            say!(
+                Voice::Warns,
+                "couldn't back up pacman's database ({err}); the transaction goes on without that safety net."
+            );
+            None
+        }
+    };
+    *DB_PROTECTION.lock().unwrap() = Some((backup, was_ok.ok));
+}
+
+/// After a transaction: the database must not be worse than before.
+fn verify_database() {
+    let Some((backup, was_ok)) = DB_PROTECTION.lock().unwrap().take() else {
+        return;
+    };
+    let now = pacman_db::check();
+    if now.ok || !was_ok {
+        return;
+    }
+    say!(
+        Voice::Warns,
+        "this transaction left pacman's database inconsistent: {}",
+        now.problems.first().cloned().unwrap_or_default()
+    );
+    if let Some(b) = backup {
+        say!(
+            Voice::Suggests,
+            "the database as it was before is saved; to put it back: {}",
+            pacman_db::restore_recipe(&b)
+        );
+    }
 }
 
 fn log_step(plan: &Plan, outcome: &Result<()>, rollback_of: Option<&str>) {
@@ -449,6 +506,7 @@ pub fn begin(plan: &Plan) -> Result<()> {
             recover_found(*found, false, false)?;
         }
     }
+    protect_database();
     if let Err(err) = journal::begin(plan, journal::unix_now()) {
         // The journal protects against a crash; failing to write it must not
         // block the transaction, but the user is told.

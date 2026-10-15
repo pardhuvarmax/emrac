@@ -1827,6 +1827,12 @@ impl Sources {
             }
             crate::ledger_watch::facts(&trusted)
         });
+        let db_backups = Config::load()
+            .is_ok_and(|c| c.safety.db_backup == "on")
+            .then(|| {
+                let all = crate::pacman_db::backups();
+                (all.len(), all.first().map(|b| (b.time, b.bytes)))
+            });
         let stale = self.stale_builds();
         let stale_broken = stale
             .iter()
@@ -1896,6 +1902,7 @@ impl Sources {
             stale_broken,
             stale_binary,
             stale_maybe,
+            db_backups,
             history,
             ledger,
             history_has_records,
