@@ -20,6 +20,10 @@ emrac is now licensed under the GNU General Public License, version 3 or any lat
 
 `emrac --version` and every `--help` screen (the top one and each subcommand's) now add the line `Sic Mundus Creatus Est.` after the credit (in `--version` between `built by pardhuvarmax` and the URL; in `--help` after the `Built by …` line).
 
+## Fix (after u9), second — 2026-10-15
+
+`doctor` said the ledger watch was "not active" because emrac had appended once and the audit system saw nothing, but that append happened before the audit rules were installed, so nothing could have seen it. The check now only counts appends made after the rules file was written. Its suggestion no longer tells you to run `augenrules --load` again (which fails with "Rule exists" when the rules are already loaded); it points to `systemctl status auditd audit-rules` and `sudo auditctl -l`. (Found on a real machine, where the real `chattr +a` worked: the ledger showed as root-owned and append-only.)
+
 ## Fix (after u9) — 2026-10-15
 
 `sudo emrac ledger watch install` run a second time failed with `augenrules --load failed`: the kernel answers "Rule exists" to rules that are already loaded, and `augenrules` reports that as an error. The command now checks first (`auditctl -l` and the rules file): if the watch is already installed and loaded it says so and changes nothing; if loading fails but the rules are in, it counts as installed. (Found by running it on a real machine; `auditctl` itself says "Old style watch rules are slower", which is a note about `-w` rules and harmless for a single folder.)

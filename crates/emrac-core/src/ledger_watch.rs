@@ -101,6 +101,8 @@ pub struct Witness {
 pub struct WatchRead {
     pub events: Vec<WatchEvent>,
     pub witnesses: usize,
+    /// When emrac logged each of its appends (unix seconds).
+    pub witness_times: Vec<u64>,
 }
 
 fn name_of(uid: u32) -> String {
@@ -354,6 +356,7 @@ pub fn read(trusted: &[String]) -> Result<WatchRead> {
     classify(&mut events, &witnesses, trusted);
     Ok(WatchRead {
         witnesses: witnesses.len(),
+        witness_times: witnesses.iter().map(|w| w.time).collect(),
         events,
     })
 }
@@ -367,6 +370,9 @@ pub struct WatchFacts {
     pub events: usize,
     /// Appends emrac logged in the journal.
     pub witnesses: usize,
+    /// Of those, the ones made after the rules were installed: only these
+    /// could have been seen by the watch.
+    pub witnesses_after_rules: usize,
     /// Other programs' events, one line each.
     pub foreign: Vec<String>,
     /// emrac's program with no journal line.
@@ -382,6 +388,12 @@ pub fn facts(trusted: &[String]) -> WatchFacts {
         Ok(r) => {
             f.events = r.events.len();
             f.witnesses = r.witnesses;
+            let installed_at = rules_installed_at();
+            f.witnesses_after_rules = r
+                .witness_times
+                .iter()
+                .filter(|t| installed_at.is_some_and(|at| **t >= at))
+                .count();
             for e in r.events {
                 match e.verdict {
                     Verdict::Emrac => {}
@@ -393,6 +405,16 @@ pub fn facts(trusted: &[String]) -> WatchFacts {
         Err(e) => f.unreadable = Some(e.to_string()),
     }
     f
+}
+
+/// When the rules file was written (unix seconds); the watch cannot have
+/// seen anything before that.
+pub fn rules_installed_at() -> Option<u64> {
+    std::fs::metadata(std::path::Path::new("/etc/audit/rules.d").join(RULES_NAME))
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
 }
 
 /// Whether the rules file is in place for `auditd` to load at boot.

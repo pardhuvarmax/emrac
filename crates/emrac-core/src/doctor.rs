@@ -741,20 +741,20 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             )
             .detail(vec![why.clone()])
             .fix("sudo emrac ledger events")
-        } else if w.events == 0 && w.witnesses > 0 {
+        } else if w.events == 0 && w.witnesses_after_rules > 0 {
             check(
                 "ledger-watch",
                 "Ledger watch",
                 Status::Warning,
                 format!(
                     "not active: emrac appended to the ledger {} but the audit system saw nothing",
-                    plural(w.witnesses, "time", "times")
+                    plural(w.witnesses_after_rules, "time", "times")
                 ),
             )
             .detail(vec![
                 "auditd may be stopped, the rules not loaded, or the kernel started without audit=1".to_string(),
             ])
-            .fix("sudo systemctl enable --now auditd && sudo augenrules --load")
+            .fix("systemctl status auditd audit-rules; sudo auditctl -l (should list emrac-ledger)")
         } else {
             check(
                 "ledger-watch",
@@ -1475,8 +1475,15 @@ mod tests {
         });
         assert_eq!(c.status, Status::Note);
         assert!(c.detail[0].contains("systemd-journal"));
+        // Appends from before the rules existed could not have been seen.
         let c = watch(WatchFacts {
             witnesses: 3,
+            ..installed.clone()
+        });
+        assert_eq!(c.status, Status::Ok, "{}", c.summary);
+        let c = watch(WatchFacts {
+            witnesses: 3,
+            witnesses_after_rules: 2,
             ..installed.clone()
         });
         assert_eq!(c.status, Status::Warning);
