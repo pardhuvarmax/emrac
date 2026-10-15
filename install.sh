@@ -23,9 +23,9 @@
 
 set -eu
 
-TAG="r2-aur"
-VERSION="0.2.0"
-SHA256="a20701e9d20b4a677c1dc1c6333682d09f7f5c65a3c0afad26396630bf1a6c40"
+TAG="r3"
+VERSION="0.3.0"
+SHA256="ccc0d9027a0eb5f3a96ecbcc1f0be33dea50f3200a19aa7517dc779111324eb8"
 URL="https://github.com/pardhuvarmax/emrac/archive/refs/tags/${TAG}.tar.gz"
 
 ASSUME_YES=0

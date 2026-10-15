@@ -33,6 +33,17 @@
       "url": "https://github.com/pardhuvarmax/emrac/releases/tag/r2-aur",
       "tarball": "https://github.com/pardhuvarmax/emrac/archive/refs/tags/r2-aur.tar.gz",
       "sha256": "a20701e9d20b4a677c1dc1c6333682d09f7f5c65a3c0afad26396630bf1a6c40"
+    },
+    {
+      "tag": "r3",
+      "version": "0.3.0",
+      "date": "2026-10-15",
+      "channel": "stable",
+      "state_schema": 1,
+      "summary": "r2 plus the updates u1 to u20: a checkable history and ledger, a journal for cut-off transactions, pre-flight checks and plan ids, AUR trust signals and the Arch news gate, rebuild, and emrac updating itself through pacman.",
+      "url": "https://github.com/pardhuvarmax/emrac/releases/tag/r3",
+      "tarball": "https://github.com/pardhuvarmax/emrac/archive/refs/tags/r3.tar.gz",
+      "sha256": "ccc0d9027a0eb5f3a96ecbcc1f0be33dea50f3200a19aa7517dc779111324eb8"
     }
   ],
   "news": [
@@ -56,7 +67,14 @@
       "title": "Emrac r2",
       "summary": "Audit, sandboxed AUR builds, doctor, rollback, snapshots, pacnew and the cache.",
       "version": "0.2.0"
+    },
+    {
+      "date": "2026-10-15",
+      "category": "release",
+      "title": "Emrac r3",
+      "summary": "Third release: a history you can check, a ledger only root can change, plan ids, pre-flight checks, AUR trust signals, the Arch news gate, rebuild, and emrac updating itself through pacman.",
+      "version": "0.3.0"
     }
   ],
-  "generated": "2026-10-14"
+  "generated": "2026-10-15"
 }
