@@ -17,12 +17,12 @@ fn main() {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
 
+    warn_if_root();
+
     let cli = {
         use clap::FromArgMatches;
         Cli::from_arg_matches(&cli::command().get_matches()).unwrap_or_else(|e| e.exit())
     };
-
-    warn_if_root(&cli);
 
     if let Err(err) = run(&cli) {
         emrac_core::say_err!(err.voice(), "{err}");
@@ -31,12 +31,14 @@ fn main() {
 }
 
 /// emrac asks for sudo itself when a step needs it, so running the whole
-/// program as root is almost never what you want. The few commands that are
-/// meant for root (the ledger helper and the audit watch) stay quiet.
-fn warn_if_root(cli: &Cli) {
+/// program as root is almost never what you want. Said before the arguments
+/// are parsed, so `sudo emrac --help` hears it too. The commands that are
+/// meant for root (the audit watch, the ledger helper) and `completion` stay quiet.
+fn warn_if_root() {
+    let first = std::env::args().skip(1).find(|a| !a.starts_with('-'));
     let meant_for_root = matches!(
-        &cli.command,
-        Commands::LedgerAppend | Commands::Ledger { .. } | Commands::Completion { .. }
+        first.as_deref(),
+        Some("ledger" | "ledger-append" | "completion")
     );
     if !meant_for_root && emrac_core::ledger::running_as_root() {
         emrac_core::say_err!(emrac_core::Voice::Warns, "{}", cli::ROOT_WARNING);

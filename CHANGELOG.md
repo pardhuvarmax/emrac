@@ -22,7 +22,7 @@ emrac is now licensed under the GNU General Public License, version 3 or any lat
 
 ## Small change (after u9), second — 2026-10-15
 
-Every `--help` screen now carries `emrac warns: DON'T RUN AS ROOT UNLESS NECESSARY (emrac asks for sudo itself when a step needs it)` above the credit, and emrac prints the same warning on stderr when it is started as root. The commands that are meant for root stay quiet: `ledger …` (the audit watch install, events and the hidden helper) and `completion`.
+When emrac is started as root where that is not what it is for (`sudo emrac install …`, say), it prints `emrac warns: DON'T RUN AS ROOT UNLESS NECESSARY (emrac asks for sudo itself when a step needs it)` on stderr. Run normally, nothing changes and the help screens do not mention it (an earlier version of this change put it in every `--help`; removed). The commands that are meant for root stay quiet: `ledger …` (the audit watch install, events and the hidden helper) and `completion`.
 
 ## Fix (after u9), fourth — 2026-10-15 — the watch, tried on a real machine
 
