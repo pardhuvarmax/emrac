@@ -2,9 +2,10 @@ Feature Status
 ================
 
 Every category in ``SPEC.md`` Parts III, IV and V, checked against
-what is actually shipped as of **Slice u20 after r2** (release ``r2`` plus
-the twenty updates ``u1`` to ``u20`` built on it, not yet released as
-``r3``; ``r2`` itself included ``u1`` to ``u30`` of the cycle before). The
+what is actually shipped as of **Slice r3** (release ``r3``, which
+includes the updates ``u1`` to ``u20`` built on ``r2``; ``r2`` itself
+included ``u1`` to ``u30`` of the cycle before, since the update numbers
+start again after every release). The
 core CLI loop -- ``search`` / ``info`` / ``install`` / ``remove`` /
 ``upgrade``, official repos + AUR -- has been complete since ``r1``. Since
 then the work has gone into making a real upgrade safe and recoverable:
@@ -56,6 +57,12 @@ Everything a user can run, with the slice that introduced it. All of
 these were exercised against a real pacman (in a container for anything
 that changes the system) as well as unit-tested; ``CHANGELOG.md`` says
 what was seen for each.
+
+The ``Since`` column counts update slices per cycle: ``u1`` to ``u30`` on
+the older rows (config, history, rollback, audit, sandbox, doctor, pacnew,
+cache, ...) are the cycle that ended with ``r2``; the rows from ``history``'s
+ledger, ``self``, ``rebuild``, ``news`` and ``report`` onward carry the numbers of the
+cycle that ended with ``r3``.
 
 .. list-table::
    :header-rows: 1
@@ -438,4 +445,4 @@ are tracked separately since they are not product features: 3 partial
 (shell integration, system, pin/unpin), 3 not started.
 
 Source: ``SPEC.md`` Parts III, IV, V and X, checked against
-``crates/`` and ``CHANGELOG.md`` as of Slice r2.
+``crates/`` and ``CHANGELOG.md`` as of Slice r3.

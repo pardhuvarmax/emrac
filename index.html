@@ -316,7 +316,7 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
     <li><b>Plan first.</b> Every change is previewed with sizes, time estimates, conflicts, and the reasons behind each decision.</li>
     <li><b>Reversible.</b> Builds run in a sandbox, transactions are logged, and rollback is built in.</li>
   </ul>
-  <p><b>Where it stands.</b> The core commands and everything under <a href="#built">Available now</a> work today, including the twenty updates built since release r2 (not yet released as r3). The source-or-binary scoring, build profiles, queue and terminal interface under <a href="#features">Planned features</a> are design goals, not shipped.</p>
+  <p><b>Where it stands.</b> The core commands and everything under <a href="#built">Available now</a> work today, including the twenty updates that make up release r3. The source-or-binary scoring, build profiles, queue and terminal interface under <a href="#features">Planned features</a> are design goals, not shipped.</p>
   <p><a class="btn" href="#built">What works today</a> &nbsp; <a class="btn alt" href="#changes">What changed</a></p>
 
   <h3>Try the planner</h3>
@@ -331,7 +331,7 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
   </div>
 
   <h2 id="built">Available now</h2>
-  <p>Release <b>r2</b> is out; the sections marked <em>since r2</em> are built and tested but not yet in a release. Everything below runs today. Each command that changes the system was also tried against a real pacman in a container, and <a href="#changes">the change list</a> says what was seen for each slice.</p>
+  <p>Release <b>r3</b> is tagged; the sections marked <em>since r2</em> arrived with it. Everything below runs today. Each command that changes the system was also tried against a real pacman in a container, and <a href="#changes">the change list</a> says what was seen for each slice.</p>
   <h3>Everyday commands</h3>
   <table class="box resp">
     <tbody>
@@ -511,6 +511,7 @@ use_agent = true</pre>
   <table class="box resp">
     <thead><tr><th>Slice</th><th>Date</th><th>Change</th></tr></thead>
     <tbody>
+      <tr><td><b>r3</b></td><td>2026-10-15</td><td>Third release: r2 plus the updates u1&ndash;u20. A history you can check and a ledger only root can change, a journal for cut-off transactions, pre-flight checks and plan ids, AUR trust signals and the Arch news gate, <code>rebuild</code>, and emrac updating itself through pacman; checked with 440 tests and three container suites.</td></tr>
       <tr><td><b>u20</b> <small>since r2</small></td><td>2026-10-15</td><td>Trust and the safety net: AUR trust signals, the Arch news gate (critical news stops an upgrade), a backup and check of pacman&rsquo;s database, repository trust, update risk and <code>emrac report</code>.</td></tr>
       <tr><td><b>u19</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac rebuild</code> and <code>--check</code> / <code>--stale</code>: AUR packages a library, Python or Qt update broke, built again through the audited path; binary packages named and left alone.</td></tr>
       <tr><td><b>u18</b> <small>since r2</small></td><td>2026-10-15</td><td>Plan ids and <code>--expect-plan</code>; a plan that waited is made again before it commits and must be the same.</td></tr>
