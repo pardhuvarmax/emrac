@@ -234,8 +234,9 @@ impl Config {
         })
     }
 
+    /// The file as it is written: framed and documented (see `config_style`).
     pub fn to_pretty_string(&self) -> String {
-        toml::to_string_pretty(self).expect("Config is always serializable")
+        crate::config_style::render(self)
     }
 
     pub fn get(&self, key: &str) -> Result<String> {

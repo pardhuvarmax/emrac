@@ -2,6 +2,7 @@ mod audit;
 mod backend;
 mod cache;
 mod config;
+mod config_style;
 mod deps;
 mod doctor;
 mod downgrade;

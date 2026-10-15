@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 340
+     - 345
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
@@ -31,9 +31,9 @@ Totals
      - 27
    * - **Automated total**
      -
-     - **376**
+     - **381**
 
-emrac-core library (340)
+emrac-core library (345)
 ------------------------
 
 ``audit::tests`` (39)
@@ -164,6 +164,15 @@ emrac-core library (340)
 * ``toml_roundtrip_preserves_values``
 * ``unknown_keys_error_on_get_set_and_unset``
 * ``unset_then_save_resets_only_that_key_on_disk``
+
+``config_style::tests`` (5)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``an_unset_limit_is_shown_commented_and_a_set_one_is_a_value``
+* ``every_key_survives_a_change_including_awkward_text``
+* ``rewriting_a_rendered_file_changes_nothing``
+* ``the_default_file_reads_back_to_the_same_settings``
+* ``the_file_is_framed_documented_and_not_wider_than_it_should_be``
 
 ``deps::tests`` (10)
 ~~~~~~~~~~~~~~~~~~~~
