@@ -257,6 +257,30 @@ pub fn watch_install(dry_run: bool) -> Result<()> {
         ));
     }
     let target = dir.join(ledger_watch::RULES_NAME);
+    let loaded = || {
+        Command::new(
+            ["/usr/bin/auditctl", "/usr/sbin/auditctl"]
+                .into_iter()
+                .find(|p| Path::new(p).exists())
+                .unwrap_or("auditctl"),
+        )
+        .arg("-l")
+        .output()
+        .map(|o| {
+            let text = String::from_utf8_lossy(&o.stdout);
+            text.contains(ledger_watch::KEY) && text.contains(ledger_watch::KEY_ATTR)
+        })
+        .unwrap_or(false)
+    };
+    let in_place = fs::read_to_string(&target).is_ok_and(|t| t == ledger_watch::RULES);
+    if in_place && loaded() {
+        say!(
+            Voice::Notes,
+            "the audit watch on the ledger is already installed and loaded ({}).",
+            target.display()
+        );
+        return Ok(());
+    }
     say!(
         Voice::Plans,
         "write {} and load it with augenrules. It watches every write, rename, delete or permission change of /var/lib/emrac/ and every run of chattr, and logs them; it blocks nothing.",
@@ -271,13 +295,17 @@ pub fn watch_install(dry_run: bool) -> Result<()> {
         say!(Voice::Notes, "nothing was changed.");
         return Ok(());
     }
-    fs::write(&target, ledger_watch::RULES)
-        .map_err(|e| Error::History(format!("couldn't write {}: {e}", target.display())))?;
+    if !in_place {
+        fs::write(&target, ledger_watch::RULES)
+            .map_err(|e| Error::History(format!("couldn't write {}: {e}", target.display())))?;
+    }
     let status = Command::new(augenrules.expect("checked above"))
         .arg("--load")
         .status()
         .map_err(|e| Error::History(format!("couldn't run augenrules: {e}")))?;
-    if !status.success() {
+    // Loading twice makes the kernel say "Rule exists" and augenrules fail;
+    // what matters is that the rules are in.
+    if !status.success() && !loaded() {
         return Err(Error::History(
             "augenrules --load failed; the rules file is in place and loads at the next start of auditd".into(),
         ));

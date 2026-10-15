@@ -20,6 +20,10 @@ emrac is now licensed under the GNU General Public License, version 3 or any lat
 
 `emrac --version` and every `--help` screen (the top one and each subcommand's) now add the line `Sic Mundus Creatus Est.` after the credit (in `--version` between `built by pardhuvarmax` and the URL; in `--help` after the `Built by …` line).
 
+## Fix (after u9) — 2026-10-15
+
+`sudo emrac ledger watch install` run a second time failed with `augenrules --load failed`: the kernel answers "Rule exists" to rules that are already loaded, and `augenrules` reports that as an error. The command now checks first (`auditctl -l` and the rules file): if the watch is already installed and loaded it says so and changes nothing; if loading fails but the rules are in, it counts as installed. (Found by running it on a real machine; `auditctl` itself says "Old style watch rules are slower", which is a note about `-w` rules and harmless for a single folder.)
+
 ## Slice u9 (after r2) — 2026-10-15 — the ledger watches itself
 
 Root can still change the ledger, and the usual way leaves no trace; the kernel can log it. `sudo emrac ledger watch install` writes two audit rules (shown first, asks first, `--dry-run` previews): one logs any write, rename, delete or permission change of `/var/lib/emrac/` and one logs every run of `chattr`, since clearing the append-only flag is an ioctl a path rule does not see. The helper that appends to the ledger now leaves one line in the journal (`emrac-ledger`) per call. `emrac ledger events` lists what the audit system saw in the last 30 days and sorts each event: emrac's own (its program and a journal line close in time), `UNLOGGED` (emrac's program, no journal line) or `FOREIGN` (anything else, with the program, the user and the login user). `doctor` has a "Ledger watch" check (not set up, events unreadable, not active because emrac appended and nothing was seen, foreign or unlogged events, ok), and `history verify` warns about foreign events.
