@@ -1,12 +1,13 @@
+use std::collections::HashSet;
 use std::env;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
+use crate::history_log::{self as log, ArchivePlan};
+pub use crate::history_log::{ArchiveInfo, Break, VerifyReport, RECENT_KEPT};
 use crate::plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -65,9 +66,92 @@ impl History {
         Self::record_to(&Self::path()?, plan, outcome, rollback_of, now())
     }
 
-    /// Every record, oldest first.
+    /// Every record in the live log, oldest first.
     pub fn all() -> Result<Vec<TransactionRecord>> {
         read_from(&Self::path()?)
+    }
+
+    /// Records that were archived, then the live ones; oldest first.
+    pub fn all_with_archive() -> Result<Vec<TransactionRecord>> {
+        Self::all_with_archive_from(&Self::path()?)
+    }
+
+    /// The archive files the live log lists.
+    pub fn archives() -> Result<Vec<ArchiveInfo>> {
+        Ok(log::head_of(&log::read_lines(&Self::path()?)?)
+            .map(|h| h.archives)
+            .unwrap_or_default())
+    }
+
+    /// Ids of failed transactions the user has acknowledged.
+    pub fn acknowledged(with_archive: bool) -> Result<HashSet<String>> {
+        Ok(log::ack_ids(&log::all_lines(&Self::path()?, with_archive)?))
+    }
+
+    /// Acknowledges failed transactions: appends one marker, and the records
+    /// stay. Returns the ids newly acknowledged. `ids` empty means every
+    /// failed transaction not yet acknowledged.
+    pub fn acknowledge(ids: &[String]) -> Result<Vec<String>> {
+        Self::acknowledge_at(&Self::path()?, ids, now())
+    }
+
+    /// Checks the hash chain over the live log and its archives.
+    pub fn verify() -> Result<VerifyReport> {
+        log::verify(&Self::path()?)
+    }
+
+    /// What `archive` would move: records older than `older_than` seconds.
+    pub fn archive_plan(older_than: u64) -> Result<Option<ArchivePlan>> {
+        log::plan_archive(&Self::path()?, now().saturating_sub(older_than))
+    }
+
+    /// Moves them into `history-archive/` and leaves a marker behind.
+    pub fn archive(older_than: u64) -> Result<Option<ArchivePlan>> {
+        let now = now();
+        log::archive(&Self::path()?, now.saturating_sub(older_than), now)
+    }
+
+    fn all_with_archive_from(path: &Path) -> Result<Vec<TransactionRecord>> {
+        Ok(log::all_lines(path, true)?
+            .iter()
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .collect())
+    }
+
+    fn acknowledge_at(path: &Path, ids: &[String], timestamp: u64) -> Result<Vec<String>> {
+        let records = read_from(path)?;
+        let already = log::ack_ids(&log::all_lines(path, false)?);
+        let wanted: Vec<String> = if ids.is_empty() {
+            records
+                .iter()
+                .filter(|r| r.status == TxStatus::Failed)
+                .map(|r| r.id.clone())
+                .collect()
+        } else {
+            for id in ids {
+                let record = records
+                    .iter()
+                    .find(|r| &r.id == id)
+                    .ok_or_else(|| Error::UnknownTransaction(id.clone()))?;
+                if record.status != TxStatus::Failed {
+                    return Err(Error::History(format!(
+                        "{id} did not fail, so there is nothing to acknowledge"
+                    )));
+                }
+            }
+            ids.to_vec()
+        };
+        let mut fresh: Vec<String> = wanted
+            .into_iter()
+            .filter(|id| !already.contains(id))
+            .collect();
+        fresh.dedup();
+        if fresh.is_empty() {
+            return Ok(fresh);
+        }
+        let marker = serde_json::json!({"type": "ack", "ids": fresh, "timestamp": timestamp});
+        log::append(path, vec![marker], timestamp)?;
+        Ok(fresh)
     }
 
     /// Newest first. `since` is a unix timestamp lower bound (inclusive).
@@ -82,16 +166,14 @@ impl History {
         rollback_of: Option<&str>,
         timestamp: u64,
     ) -> Result<TransactionRecord> {
-        let write_err = |source| Error::HistoryWrite {
-            path: path.display().to_string(),
-            source,
-        };
-
+        let live = log::read_lines(path)?;
+        let archived_max = log::head_of(&live).map_or(0, |h| h.max_id);
         let next = read_from(path)?
             .iter()
             .filter_map(|r| r.id.strip_prefix("tx-")?.parse::<u64>().ok())
             .max()
             .unwrap_or(0)
+            .max(archived_max)
             + 1;
         let record = TransactionRecord {
             id: format!("tx-{next}"),
@@ -107,21 +189,17 @@ impl History {
             error: outcome.as_ref().err().map(|e| e.to_string()),
             rollback_of: rollback_of.map(str::to_string),
         };
-
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(write_err)?;
-        }
-        let mut line = serde_json::to_string(&record).expect("TransactionRecord is serializable");
-        line.push('\n');
-        // One write_all in append mode: a crash can lose this line but
-        // can't damage earlier ones.
-        OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .and_then(|mut f| f.write_all(line.as_bytes()))
-            .map_err(write_err)?;
+        let value = serde_json::to_value(&record).expect("TransactionRecord is serializable");
+        log::append(path, vec![value], timestamp)?;
         Ok(record)
+    }
+
+    /// Like `list`, reading the archive files too.
+    pub fn list_with_archive(
+        limit: Option<usize>,
+        since: Option<u64>,
+    ) -> Result<Vec<TransactionRecord>> {
+        Self::filter(Self::all_with_archive()?, limit, since)
     }
 
     fn list_from(
@@ -129,7 +207,14 @@ impl History {
         limit: Option<usize>,
         since: Option<u64>,
     ) -> Result<Vec<TransactionRecord>> {
-        let mut records = read_from(path)?;
+        Self::filter(read_from(path)?, limit, since)
+    }
+
+    fn filter(
+        mut records: Vec<TransactionRecord>,
+        limit: Option<usize>,
+        since: Option<u64>,
+    ) -> Result<Vec<TransactionRecord>> {
         if let Some(since) = since {
             records.retain(|r| r.timestamp >= since);
         }
@@ -144,18 +229,8 @@ impl History {
 /// Oldest first. A missing file is an empty history; lines that don't parse
 /// are skipped so one bad line can't make the whole history unreadable.
 fn read_from(path: &Path) -> Result<Vec<TransactionRecord>> {
-    let raw = match fs::read_to_string(path) {
-        Ok(raw) => raw,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(err) => {
-            return Err(Error::Io {
-                context: format!("couldn't read your history at {}", path.display()),
-                source: err,
-            });
-        }
-    };
-    Ok(raw
-        .lines()
+    Ok(log::read_lines(path)?
+        .iter()
         .filter_map(|line| serde_json::from_str(line).ok())
         .collect())
 }
@@ -190,6 +265,11 @@ pub fn parse_date(input: &str) -> Result<u64> {
         return Err(invalid());
     }
     u64::try_from(days * 86_400).map_err(|_| invalid())
+}
+
+/// `YYYY-MM-DD` in UTC.
+pub fn format_utc_date(timestamp: u64) -> String {
+    format_utc(timestamp)[..10].to_string()
 }
 
 pub(crate) fn format_utc(timestamp: u64) -> String {
@@ -228,6 +308,8 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::{self, OpenOptions};
+    use std::io::Write;
 
     struct Scratch(PathBuf);
 
@@ -459,5 +541,356 @@ mod tests {
         assert_eq!(got.len(), 1);
         assert!(got[0].rollback_of.is_none());
         assert!(got[0].packages[0].previous_version.is_none());
+    }
+
+    // ---- the chain, the archive and acknowledgements (u7) ----------------
+
+    fn fill(s: &Scratch, n: u64) {
+        for t in 1..=n {
+            record(
+                &s.file(),
+                &plan(PlanAction::Install, &["a"]),
+                &Ok(()),
+                t * 1000,
+            )
+            .unwrap();
+        }
+    }
+
+    fn lines(s: &Scratch) -> Vec<String> {
+        fs::read_to_string(s.file())
+            .unwrap()
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    fn put(s: &Scratch, lines: &[String]) {
+        fs::write(s.file(), lines.join("\n") + "\n").unwrap();
+    }
+
+    fn verdict(s: &Scratch) -> VerifyReport {
+        log::verify(&s.file()).unwrap()
+    }
+
+    #[test]
+    fn every_record_carries_a_chain_and_it_verifies() {
+        let s = Scratch::new("chain-ok");
+        fill(&s, 4);
+        let r = verdict(&s);
+        assert!(r.problem.is_none(), "{:?}", r.problem);
+        assert_eq!((r.chained, r.legacy), (4, 0));
+        assert_eq!(r.head_seq, Some(4));
+        let first: serde_json::Value = serde_json::from_str(&lines(&s)[0]).unwrap();
+        assert_eq!(first["seq"], 1);
+        assert_eq!(first["prev"].as_str().unwrap().len(), 64);
+    }
+
+    #[test]
+    fn an_edited_line_breaks_the_chain_at_the_next_one() {
+        let s = Scratch::new("chain-edit");
+        fill(&s, 4);
+        let mut l = lines(&s);
+        l[1] = l[1].replace("\"install\"", "\"remove\"");
+        assert_ne!(l[1], lines(&s)[1]);
+        put(&s, &l);
+        let b = verdict(&s).problem.expect("an edit is caught");
+        assert_eq!(b.line, 3);
+        assert_eq!(b.before.as_deref(), Some("tx-2"));
+        assert_eq!(b.after.as_deref(), Some("tx-3"));
+        assert!(b.reason.contains("edited"), "{}", b.reason);
+    }
+
+    #[test]
+    fn a_deleted_inserted_or_reordered_line_breaks_the_chain() {
+        let s = Scratch::new("chain-shape");
+        fill(&s, 5);
+        let original = lines(&s);
+
+        let mut l = original.clone();
+        l.remove(2);
+        put(&s, &l);
+        let b = verdict(&s).problem.expect("a deletion is caught");
+        assert_eq!((b.line, b.before.as_deref()), (3, Some("tx-2")));
+
+        let mut l = original.clone();
+        l.insert(2, original[1].clone());
+        put(&s, &l);
+        assert!(verdict(&s).problem.is_some(), "a duplicated line is caught");
+
+        let mut l = original.clone();
+        l.swap(2, 3);
+        put(&s, &l);
+        assert!(verdict(&s).problem.is_some(), "a reorder is caught");
+
+        let mut l = original.clone();
+        l.insert(3, "{\"id\":\"tx-99\"}".to_string());
+        put(&s, &l);
+        let b = verdict(&s).problem.expect("a forged line is caught");
+        assert!(b.reason.contains("no chain fields"), "{}", b.reason);
+    }
+
+    #[test]
+    fn a_cut_off_tail_cannot_be_seen_locally_but_the_head_shows_it() {
+        let s = Scratch::new("chain-tail");
+        fill(&s, 4);
+        let before = verdict(&s);
+        let mut l = lines(&s);
+        l.truncate(2);
+        put(&s, &l);
+        let after = verdict(&s);
+        assert!(after.problem.is_none(), "nothing local can know");
+        assert_ne!(after.head_hash, before.head_hash);
+        assert_eq!(after.head_seq, Some(2));
+    }
+
+    #[test]
+    fn a_log_from_before_the_chain_is_joined_by_a_chain_start() {
+        let s = Scratch::new("chain-legacy");
+        fill(&s, 3);
+        // What an older emrac wrote: no seq, no prev.
+        let legacy: Vec<String> = lines(&s)
+            .iter()
+            .map(|l| {
+                let mut v: serde_json::Value = serde_json::from_str(l).unwrap();
+                v.as_object_mut().unwrap().remove("seq");
+                v.as_object_mut().unwrap().remove("prev");
+                serde_json::to_string(&v).unwrap()
+            })
+            .collect();
+        put(&s, &legacy);
+        assert!(verdict(&s).problem.is_none());
+        assert_eq!(verdict(&s).legacy, 3);
+
+        let rec = record(&s.file(), &plan(PlanAction::Remove, &["b"]), &Ok(()), 9).unwrap();
+        assert_eq!(rec.id, "tx-4");
+        let l = lines(&s);
+        assert_eq!(l.len(), 5);
+        let start: serde_json::Value = serde_json::from_str(&l[3]).unwrap();
+        assert_eq!(start["type"], "chain-start");
+        assert_eq!(start["earlier"], 3);
+        let r = verdict(&s);
+        assert!(r.problem.is_none(), "{:?}", r.problem);
+        assert_eq!((r.legacy, r.chained), (3, 2));
+        // Old emrac versions and the history commands still read it.
+        assert_eq!(History::list_from(&s.file(), None, None).unwrap().len(), 4);
+
+        // The last line from before the chain is covered by it.
+        let mut l = lines(&s);
+        l[2] = l[2].replace("\"install\"", "\"remove\"");
+        put(&s, &l);
+        assert!(verdict(&s).problem.is_some());
+    }
+
+    #[test]
+    fn the_archive_moves_only_old_records_and_never_the_newest_twenty() {
+        let s = Scratch::new("archive-window");
+        fill(&s, 30);
+        // Everything is "old" (cutoff far in the future) but 20 stay.
+        let plan = log::plan_archive(&s.file(), u64::MAX).unwrap().unwrap();
+        assert_eq!((plan.records, plan.kept_records), (10, 20));
+        assert_eq!(
+            (plan.first_id.as_str(), plan.last_id.as_str()),
+            ("tx-1", "tx-10")
+        );
+
+        // A window that only covers 4 records moves 4.
+        let plan = log::plan_archive(&s.file(), 4001).unwrap().unwrap();
+        assert_eq!(plan.records, 4);
+        // Fewer than 21 records: nothing moves, however old.
+        let few = Scratch::new("archive-few");
+        fill(&few, 20);
+        assert!(log::plan_archive(&few.file(), u64::MAX).unwrap().is_none());
+    }
+
+    #[test]
+    fn archiving_keeps_the_chain_ids_and_the_live_records() {
+        let s = Scratch::new("archive-run");
+        fill(&s, 30);
+        let moved = log::archive(&s.file(), u64::MAX, 99_999).unwrap().unwrap();
+        assert_eq!(moved.records, 10);
+
+        let live = History::list_from(&s.file(), None, None).unwrap();
+        assert_eq!(live.len(), 20);
+        assert_eq!(live.last().unwrap().id, "tx-11");
+        assert_eq!(
+            log::head_of(&log::read_lines(&s.file()).unwrap())
+                .unwrap()
+                .max_id,
+            10
+        );
+        let archived = fs::read_to_string(
+            s.file()
+                .parent()
+                .unwrap()
+                .join("history-archive/tx-1-to-tx-10.jsonl"),
+        )
+        .unwrap();
+        assert_eq!(archived.lines().count(), 10);
+
+        let r = verdict(&s);
+        assert!(r.problem.is_none(), "{:?}", r.problem);
+        assert_eq!((r.archives, r.chained), (1, 30));
+
+        // Ids keep counting, and appending after the marker keeps the chain.
+        let rec = record(&s.file(), &plan(PlanAction::Install, &["z"]), &Ok(()), 5).unwrap();
+        assert_eq!(rec.id, "tx-31");
+        assert!(verdict(&s).problem.is_none());
+
+        // The new record pushed one more out of the newest twenty.
+        let more = log::archive(&s.file(), u64::MAX, 100_000).unwrap().unwrap();
+        assert_eq!(more.last_id, "tx-11");
+        assert!(verdict(&s).problem.is_none());
+        // Now nothing is left to move: another run is a no-op.
+        assert!(log::archive(&s.file(), u64::MAX, 100_001)
+            .unwrap()
+            .is_none());
+        // Everything is still readable.
+        assert_eq!(History::all_with_archive_from(&s.file()).unwrap().len(), 31);
+    }
+
+    #[test]
+    fn a_second_archive_extends_the_first_and_both_verify() {
+        let s = Scratch::new("archive-twice");
+        fill(&s, 30);
+        log::archive(&s.file(), u64::MAX, 1).unwrap();
+        fill_more(&s, 30, 10);
+        let moved = log::archive(&s.file(), u64::MAX, 2).unwrap().unwrap();
+        assert_eq!(
+            (moved.first_id.as_str(), moved.last_id.as_str()),
+            ("tx-11", "tx-20")
+        );
+        let r = verdict(&s);
+        assert!(r.problem.is_none(), "{:?}", r.problem);
+        assert_eq!(r.archives, 2);
+        assert_eq!(History::all_with_archive_from(&s.file()).unwrap().len(), 40);
+    }
+
+    fn fill_more(s: &Scratch, after: u64, n: u64) {
+        for t in 1..=n {
+            record(
+                &s.file(),
+                &plan(PlanAction::Install, &["a"]),
+                &Ok(()),
+                (after + t) * 1000,
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn a_changed_or_missing_archive_is_reported() {
+        let s = Scratch::new("archive-tamper");
+        fill(&s, 30);
+        log::archive(&s.file(), u64::MAX, 1).unwrap();
+        let file = s
+            .file()
+            .parent()
+            .unwrap()
+            .join("history-archive/tx-1-to-tx-10.jsonl");
+
+        let original = fs::read_to_string(&file).unwrap();
+        fs::write(&file, original.replacen("install", "remove", 1)).unwrap();
+        let b = verdict(&s).problem.expect("an edited archive is caught");
+        assert!(b.reason.contains("changed"), "{}", b.reason);
+
+        fs::remove_file(&file).unwrap();
+        let b = verdict(&s).problem.expect("a missing archive is caught");
+        assert!(b.reason.contains("missing"), "{}", b.reason);
+    }
+
+    #[test]
+    fn a_record_a_kept_rollback_names_stays_in_the_live_log() {
+        let s = Scratch::new("archive-rollback");
+        fill(&s, 25);
+        // tx-26 reverses tx-2, which would otherwise be archived.
+        History::record_to(
+            &s.file(),
+            &plan(PlanAction::Remove, &["a"]),
+            &Ok(()),
+            Some("tx-2"),
+            26_000,
+        )
+        .unwrap();
+        let plan = log::plan_archive(&s.file(), u64::MAX).unwrap();
+        // tx-1 alone may move; tx-2 and everything after it stays.
+        let plan = plan.expect("tx-1 can still move");
+        assert_eq!((plan.records, plan.last_id.as_str()), (1, "tx-1"));
+    }
+
+    #[test]
+    fn archiving_a_log_from_before_the_chain_starts_the_chain_first() {
+        let s = Scratch::new("archive-legacy");
+        let legacy: Vec<String> = (1..=25)
+            .map(|n| {
+                format!(
+                    "{{\"id\":\"tx-{n}\",\"timestamp\":{},\"action\":\"install\",\"packages\":[],\"status\":\"committed\"}}",
+                    n * 1000
+                )
+            })
+            .collect();
+        fs::create_dir_all(s.file().parent().unwrap()).unwrap();
+        put(&s, &legacy);
+        let moved = log::archive(&s.file(), u64::MAX, 50_000).unwrap().unwrap();
+        assert_eq!(moved.records, 5);
+        let r = verdict(&s);
+        assert!(r.problem.is_none(), "{:?}", r.problem);
+        assert_eq!(r.legacy, 25);
+        let rec = record(
+            &s.file(),
+            &plan(PlanAction::Install, &["q"]),
+            &Ok(()),
+            60_000,
+        )
+        .unwrap();
+        assert_eq!(rec.id, "tx-26");
+        assert!(verdict(&s).problem.is_none());
+    }
+
+    #[test]
+    fn acknowledging_hides_a_failure_from_the_count_and_not_from_history() {
+        let s = Scratch::new("ack");
+        record(&s.file(), &plan(PlanAction::Install, &["a"]), &Ok(()), 1).unwrap();
+        record(&s.file(), &plan(PlanAction::Upgrade, &["a"]), &failure(), 2).unwrap();
+        record(&s.file(), &plan(PlanAction::Upgrade, &["a"]), &failure(), 3).unwrap();
+
+        let got = History::acknowledge_at(&s.file(), &["tx-2".into()], 10).unwrap();
+        assert_eq!(got, ["tx-2"]);
+        let acked = log::ack_ids(&log::all_lines(&s.file(), false).unwrap());
+        assert!(acked.contains("tx-2") && !acked.contains("tx-3"));
+        // The record is still there, still failed.
+        let all = History::list_from(&s.file(), None, None).unwrap();
+        assert_eq!(all.len(), 3);
+        assert_eq!(all[1].status, TxStatus::Failed);
+
+        // Again: nothing new. Then all the rest.
+        assert!(History::acknowledge_at(&s.file(), &["tx-2".into()], 11)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            History::acknowledge_at(&s.file(), &[], 12).unwrap(),
+            ["tx-3"]
+        );
+        // It is a chained record like any other.
+        assert!(verdict(&s).problem.is_none());
+        assert_eq!(verdict(&s).chained, 5);
+        // The next id is still right after markers.
+        let rec = record(&s.file(), &plan(PlanAction::Install, &["b"]), &Ok(()), 13).unwrap();
+        assert_eq!(rec.id, "tx-4");
+    }
+
+    #[test]
+    fn only_a_failed_transaction_that_exists_can_be_acknowledged() {
+        let s = Scratch::new("ack-refuse");
+        record(&s.file(), &plan(PlanAction::Install, &["a"]), &Ok(()), 1).unwrap();
+        assert!(matches!(
+            History::acknowledge_at(&s.file(), &["tx-1".into()], 2),
+            Err(Error::History(_))
+        ));
+        assert!(matches!(
+            History::acknowledge_at(&s.file(), &["tx-8".into()], 2),
+            Err(Error::UnknownTransaction(_))
+        ));
+        assert_eq!(lines(&s).len(), 1, "a refusal writes nothing");
     }
 }

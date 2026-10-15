@@ -58,6 +58,27 @@ records stay; `doctor`'s "N transactions failed in the last 7 days" stops counti
 and `history` shows `FAILED (acknowledged)`. An acknowledgement is a chained record
 like any other, so hiding a failure leaves a trace.
 
+## What was built, and where it differs
+
+Built as written, with these differences:
+
+- **Archive scope.** Only a prefix of the log moves, so the chain stays one run of lines.
+  The cut stops at the first line that is newer than the window, inside the newest 20
+  records (`RECENT_KEPT`, what the cache policy and `undo` read), or not a valid record;
+  and it moves back to keep any record that a kept rollback names, so `redo` still finds it.
+  `--older-than` below `cache.keep_days` is refused.
+- **The marker is not chained.** The archive marker sits at the top of the live log and
+  lists every archive (file, SHA-256, counts, first/last id); it records the `seq` and
+  hash of the last archived line, which the first live line's `prev` must equal. `verify`
+  walks the archives and the live log as one chain.
+- **A truncated tail is not detected locally**, as the chain only looks backwards.
+  `history verify` prints the newest line's number and hash instead, to keep elsewhere.
+- **Archiving a log from before the chain** first writes the `chain-start` line, then moves
+  the legacy lines. Edits to legacy lines are not covered, except to the last one.
+- Archive files are named `<first id>-to-<last id>.jsonl`.
+- `history ack` takes ids or `--failed`; it works on the live log (an archived record can't
+  be acknowledged; it is no longer counted by `doctor` anyway).
+
 ## Not covered
 
 A second copy that the user cannot edit (u8); signing records with a key; editing the

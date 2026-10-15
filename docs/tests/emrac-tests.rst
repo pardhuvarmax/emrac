@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 250
+     - 264
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 18
+     - 19
    * - **Automated total**
      -
-     - **277**
+     - **292**
 
-emrac-core library (250)
+emrac-core library (264)
 ------------------------
 
 ``audit::tests`` (39)
@@ -173,7 +173,7 @@ emrac-core library (250)
 * ``why_prefers_the_shortest_chain``
 * ``why_survives_cycles``
 
-``doctor::tests`` (21)
+``doctor::tests`` (22)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_failed_online_check_says_so_instead_of_guessing``
@@ -185,6 +185,7 @@ emrac-core library (250)
 * ``config_problems``
 * ``databases_older_than_a_week_warn``
 * ``disk_space_thresholds``
+* ``history_integrity_is_ok_warns_on_a_break_and_is_absent_without_history``
 * ``leftover_pacnew_files_and_failed_units_warn``
 * ``missing_tools_are_a_problem_only_when_one_is_required``
 * ``no_report_claims_up_to_date_from_an_old_database``
@@ -212,18 +213,31 @@ emrac-core library (250)
 
 * ``only_the_no_network_failure_suggests_a_retry_with_network``
 
-``history::tests`` (11)
+``history::tests`` (24)
 ~~~~~~~~~~~~~~~~~~~~~~~
 
+* ``a_changed_or_missing_archive_is_reported``
+* ``a_cut_off_tail_cannot_be_seen_locally_but_the_head_shows_it``
+* ``a_deleted_inserted_or_reordered_line_breaks_the_chain``
+* ``a_log_from_before_the_chain_is_joined_by_a_chain_start``
+* ``a_record_a_kept_rollback_names_stays_in_the_live_log``
+* ``a_second_archive_extends_the_first_and_both_verify``
+* ``acknowledging_hides_a_failure_from_the_count_and_not_from_history``
+* ``an_edited_line_breaks_the_chain_at_the_next_one``
+* ``archiving_a_log_from_before_the_chain_starts_the_chain_first``
+* ``archiving_keeps_the_chain_ids_and_the_live_records``
 * ``bad_dates_are_rejected``
 * ``corrupt_lines_are_skipped_and_ids_continue_past_them``
 * ``dates_convert_against_known_values``
+* ``every_record_carries_a_chain_and_it_verifies``
 * ``failed_outcome_is_recorded_with_error_text``
 * ``ids_increment_and_list_is_newest_first_with_limit``
 * ``missing_file_is_empty_history_and_is_not_created``
+* ``only_a_failed_transaction_that_exists_can_be_acknowledged``
 * ``record_creates_dirs_and_roundtrips``
 * ``rollback_of_is_persisted_and_old_lines_still_parse``
 * ``since_is_an_inclusive_lower_bound_applied_before_limit``
+* ``the_archive_moves_only_old_records_and_never_the_newest_twenty``
 * ``unreadable_history_is_an_io_error_not_empty``
 * ``write_failure_is_reported``
 
@@ -426,10 +440,10 @@ emrac command line, unit tests (9)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (18)
+emrac command line, integration tests (19)
 ------------------------------------------
 
-``(top level)`` (18)
+``(top level)`` (19)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -443,6 +457,7 @@ emrac command line, integration tests (18)
 * ``config_round_trip_and_errors``
 * ``doctor_report_is_markdown_without_the_users_identity``
 * ``doctor_reports_checks_as_json_and_exits_with_the_problem_count``
+* ``history_archive_verify_and_ack``
 * ``history_is_empty_without_a_log_and_reads_one``
 * ``pins_list_and_unpin``
 * ``snapshots_list_show_delete``
@@ -456,7 +471,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed.
+them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed (u7 adds 4).
 
 * version names the builder
 * usage error exits 2
@@ -484,5 +499,9 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed.
 * AUR install: audit, sandbox build, manifest, pacman -U
 * build without installing
 * a closed stdin declines (no install)
+* history: 22 real transactions chain and verify
+* history archive keeps what undo and the cache policy answer
+* history --archive still lists archived records
+* an edited history line is caught by verify and doctor
 
-(26 checks.)
+(30 checks.)

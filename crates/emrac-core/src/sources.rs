@@ -494,7 +494,7 @@ impl Sources {
             }
         }
         // Versions the last transactions name are what `undo` and `redo` need.
-        for record in History::list(Some(20), None).unwrap_or_default() {
+        for record in History::list(Some(crate::history::RECENT_KEPT), None).unwrap_or_default() {
             for p in &record.packages {
                 facts.recorded.insert((p.name.clone(), p.version.clone()));
                 if let Some(v) = &p.previous_version {
@@ -1661,10 +1661,24 @@ impl Sources {
             .pins()
             .map(|(_, expired)| expired.into_iter().map(|p| p.name).collect())
             .unwrap_or_default();
+        let acknowledged = History::acknowledged(false).unwrap_or_default();
+        let history = History::verify()
+            .ok()
+            .filter(|v| v.chained + v.legacy > 0)
+            .map(|v| crate::doctor::HistoryFacts {
+                problem: v.problem.as_ref().map(|b| b.describe()),
+                predate: v.legacy,
+                chained: v.chained,
+                archives: v.archives,
+            });
         let recent_failed_transactions = History::all()
             .unwrap_or_default()
             .into_iter()
-            .filter(|r| r.status == TxStatus::Failed && r.timestamp + 7 * 86_400 >= now_secs)
+            .filter(|r| {
+                r.status == TxStatus::Failed
+                    && r.timestamp + 7 * 86_400 >= now_secs
+                    && !acknowledged.contains(&r.id)
+            })
             .map(|r| format!("{} ({} {})", r.id, r.timestamp_utc(), action_word(r.action)))
             .collect();
 
@@ -1707,6 +1721,7 @@ impl Sources {
             orphan_bytes: orphans.iter().map(|o| o.installed_size).sum(),
             expired_pins,
             recent_failed_transactions,
+            history,
             config: doctor::ConfigFacts {
                 parse_error: config_error,
                 world_writable: config_world_writable,

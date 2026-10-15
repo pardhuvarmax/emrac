@@ -177,7 +177,7 @@ Complete Feature Catalog
    * - 14
      - History & Recovery
      - Partial
-     - ``history`` (append-only log with failures and conflict removals), ``rollback [tx]``/``undo``/``redo`` (post-state checked, files from the pacman cache, the AUR build folder or the Arch Linux Archive), ``downgrade``, ``reinstall``, ``snapshot``/``restore`` (package sets, no files), ``pin``/``unpin``, and ``pacnew`` config backups with ``pacnew revert``. No filesystem snapshots, no resume of an interrupted transaction
+     - ``history`` (append-only log with failures and conflict removals; each record is chained by SHA-256 to the one before, ``history verify`` finds an edit, ``history archive --older-than`` moves old records to archive files, ``history ack`` marks failures as seen; a copy cut off the end of the log is not detected locally), ``rollback [tx]``/``undo``/``redo`` (post-state checked, files from the pacman cache, the AUR build folder or the Arch Linux Archive), ``downgrade``, ``reinstall``, ``snapshot``/``restore`` (package sets, no files), ``pin``/``unpin``, and ``pacnew`` config backups with ``pacnew revert``. No filesystem snapshots, no resume of an interrupted transaction
    * - 15
      - Security & Integrity
      - Partial

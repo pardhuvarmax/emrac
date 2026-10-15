@@ -401,6 +401,8 @@ pub fn print_rollback(rollback: &RollbackPlan, json: bool) {
 pub fn print_history(
     records: &[TransactionRecord],
     rolled_back: &HashMap<String, String>,
+    acknowledged: &std::collections::HashSet<String>,
+    archives: &[emrac_core::ArchiveInfo],
     json: bool,
 ) {
     if json {
@@ -418,6 +420,15 @@ pub fn print_history(
         "{} (times are UTC)\n",
         plural(records.len(), "transaction")
     );
+    if !archives.is_empty() {
+        let n: usize = archives.iter().map(|a| a.records).sum();
+        println!(
+            "{} archived ({} to {}); `emrac history --archive` lists them.\n",
+            plural(n, "older transaction"),
+            archives[0].first_id,
+            archives[archives.len() - 1].last_id
+        );
+    }
 
     for record in records {
         let action = match record.action {
@@ -430,6 +441,7 @@ pub fn print_history(
         };
         let status = match record.status {
             TxStatus::Committed => "committed",
+            TxStatus::Failed if acknowledged.contains(&record.id) => "FAILED (acknowledged)",
             TxStatus::Failed => "FAILED",
         };
         println!(

@@ -312,6 +312,13 @@ pub enum Commands {
         /// Only transactions on or after this date (YYYY-MM-DD, UTC)
         #[arg(long, value_name = "DATE")]
         since: Option<String>,
+
+        /// Include transactions that were archived
+        #[arg(long)]
+        archive: bool,
+
+        #[command(subcommand)]
+        command: Option<HistoryCommand>,
     },
 
     /// Reverse a recorded transaction (default: the most recent one)
@@ -437,6 +444,31 @@ pub enum PacnewCommand {
 
     /// Pending files and what emrac has changed so far
     Status,
+}
+
+#[derive(Subcommand)]
+pub enum HistoryCommand {
+    /// Move old transactions out of the live history into archive files
+    /// (asks every time; --yes does not answer)
+    Archive {
+        /// Archive what is older than this: 90d, 12w, … (not less than cache.keep_days)
+        #[arg(long, value_name = "AGE")]
+        older_than: String,
+    },
+
+    /// Check that nothing in the history was edited, removed or added
+    Verify,
+
+    /// Mark failed transactions as seen: they stay, and doctor stops counting them
+    Ack {
+        /// Transaction ids, like tx-3
+        #[arg(required_unless_present = "failed", conflicts_with = "failed")]
+        ids: Vec<String>,
+
+        /// Every failed transaction not yet acknowledged
+        #[arg(long)]
+        failed: bool,
+    },
 }
 
 #[derive(Subcommand)]

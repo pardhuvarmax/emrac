@@ -166,6 +166,128 @@ fn history_is_empty_without_a_log_and_reads_one() {
     assert!(stderr(&out).contains("YYYY-MM-DD"));
 }
 
+fn run_answering(home: &Home, args: &[&str], answer: &str) -> Output {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut child = home
+        .command(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(answer.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
+
+#[test]
+fn history_archive_verify_and_ack() {
+    let home = Home::new("history-integrity");
+    let log = home.data().join("history.jsonl");
+    // 30 transactions from long ago, written the way an older emrac did (no chain).
+    let lines: Vec<String> = (1..=30)
+        .map(|n| {
+            let status = if n == 5 || n == 25 { "failed" } else { "committed" };
+            format!(
+                r#"{{"id":"tx-{n}","timestamp":{},"action":"install","packages":[{{"name":"tree","version":"2.3.2-1","repo":"extra","explicit":true}}],"status":"{status}"}}"#,
+                1_000_000_000 + n * 100
+            )
+        })
+        .collect();
+    write(&log, &(lines.join("\n") + "\n"));
+
+    let out = home.run(&["history", "verify"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(
+        stdout(&out).contains("30 earlier lines predate"),
+        "{}",
+        stdout(&out)
+    );
+
+    // Shorter than the cache window: refused with the reason.
+    let out = home.run(&["history", "archive", "--older-than", "3d"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("cache.keep_days"), "{}", stderr(&out));
+
+    // A dry run and a closed stdin move nothing.
+    let before = fs::read_to_string(&log).unwrap();
+    let out = home.run(&["history", "archive", "--older-than", "30d", "--dry-run"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(
+        stdout(&out).contains("10 transactions would move"),
+        "{}",
+        stdout(&out)
+    );
+    let out = home.run(&["history", "archive", "--older-than", "30d", "--yes"]);
+    assert!(
+        stderr(&out).contains("emrac refuses: no answer came"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(
+        fs::read_to_string(&log).unwrap(),
+        before,
+        "--yes does not answer"
+    );
+
+    let out = run_answering(&home, &["history", "archive", "--older-than", "30d"], "y\n");
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(
+        stdout(&out).contains("archived 10 transactions"),
+        "{}",
+        stdout(&out)
+    );
+    assert!(home
+        .data()
+        .join("history-archive/tx-1-to-tx-10.jsonl")
+        .exists());
+
+    let out = home.run(&["history", "verify"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(stdout(&out).contains("1 archive file"), "{}", stdout(&out));
+    let live: serde_json::Value =
+        serde_json::from_str(&stdout(&home.run(&["history", "--json"]))).unwrap();
+    assert_eq!(live.as_array().unwrap().len(), 20);
+    let all: serde_json::Value =
+        serde_json::from_str(&stdout(&home.run(&["history", "--archive", "--json"]))).unwrap();
+    assert_eq!(all.as_array().unwrap().len(), 30);
+    assert!(stdout(&home.run(&["history"])).contains("10 older transactions archived"));
+
+    // Acknowledge a failure: it stays, and says so.
+    let out = home.run(&["history", "ack", "tx-25"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let text = stdout(&home.run(&["history"]));
+    assert!(text.contains("FAILED (acknowledged)"), "{text}");
+    let out = home.run(&["history", "ack", "tx-1"]);
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "an archived record is not in the live log"
+    );
+    let out = home.run(&["history", "ack", "tx-24"]);
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "a committed one has nothing to acknowledge"
+    );
+    assert_eq!(home.run(&["history", "ack"]).status.code(), Some(2));
+
+    // Editing a line outside emrac is caught.
+    let edited = fs::read_to_string(&log)
+        .unwrap()
+        .replacen("tx-30", "tx-X", 1);
+    write(&log, &edited);
+    let out = home.run(&["history", "verify"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("does not verify"), "{}", stderr(&out));
+}
+
 fn snapshot_json(name: &str, count: usize) -> String {
     let packages: Vec<String> = (0..count)
         .map(|i| {

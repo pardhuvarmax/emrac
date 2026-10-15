@@ -7,6 +7,7 @@ mod doctor;
 mod downgrade;
 mod error;
 mod history;
+mod history_log;
 mod manifest;
 mod package;
 mod pacnew;
@@ -37,7 +38,11 @@ pub use deps::{DepEntry, DepsReport, Orphan, RdepsReport, WhyReport};
 pub use doctor::{DoctorReport, Status as DoctorStatus};
 pub use downgrade::{DowngradePlan, ListedVersion, VersionList};
 pub use error::{Error, Result};
-pub use history::{parse_date, History, TransactionRecord, TxStatus};
+pub use history::{
+    format_utc_date, parse_date, ArchiveInfo, Break as HistoryBreak, History, TransactionRecord,
+    TxStatus, VerifyReport as HistoryVerify, RECENT_KEPT,
+};
+pub use history_log::ArchivePlan;
 pub use manifest::Manifest;
 pub use package::{PackageDetails, PackageSummary};
 pub use pacnew::unified_diff;
@@ -49,7 +54,7 @@ pub use pins::{Pin, PinStore};
 pub use plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval, ProviderChoice};
 pub use purge::{ConfigFile, ConfigState, PurgePlan};
 pub use reinstall::{ReinstallItem, ReinstallPlan, ReinstallSource};
-pub use rollback::{rolled_back_by, Download, RollbackPlan, SkippedPackage};
+pub use rollback::{parse_tx_id, rolled_back_by, Download, RollbackPlan, SkippedPackage};
 pub use sandbox::Limits;
 pub use snapshot::{
     RestoreDiff, RestoreEntry, RestoreItem, RestorePlan, RestoreSource, Snapshot, SnapshotPackage,

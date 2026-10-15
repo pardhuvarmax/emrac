@@ -105,6 +105,10 @@ pub enum Error {
         source: io::Error,
     },
 
+    /// A refusal or finding about the history log, already worded for the user.
+    #[error("{0}")]
+    History(String),
+
     #[error("'{0}' isn't a date I understand — use YYYY-MM-DD, like 2026-10-11")]
     InvalidDate(String),
 
@@ -335,6 +339,7 @@ impl Error {
             | Error::InvalidDate(_)
             | Error::InvalidTransactionId(_)
             | Error::UnknownTransaction(_)
+            | Error::History(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

@@ -6,7 +6,7 @@ mod prompt;
 use clap::Parser;
 use emrac_core::{Config, Limits, Result, Sources};
 
-use cli::{Cli, Commands, SnapshotCommand};
+use cli::{Cli, Commands, HistoryCommand, SnapshotCommand};
 use commands::aur_install::BuildChoice;
 use commands::rollback::Which;
 
@@ -32,8 +32,23 @@ fn run(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
-    if let Commands::History { limit, since } = &cli.command {
-        return commands::history::run(*limit, since.as_deref(), cli.json);
+    if let Commands::History {
+        limit,
+        since,
+        archive,
+        command,
+    } = &cli.command
+    {
+        return match command {
+            None => commands::history::run(*limit, since.as_deref(), *archive, cli.json),
+            Some(HistoryCommand::Archive { older_than }) => {
+                commands::history::archive(older_than, cli.dry_run, cli.json)
+            }
+            Some(HistoryCommand::Verify) => commands::history::verify(cli.json),
+            Some(HistoryCommand::Ack { ids, failed }) => {
+                commands::history::ack(ids, *failed, cli.json)
+            }
+        };
     }
 
     // Listing, showing and deleting snapshots only touch emrac's own files.

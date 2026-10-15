@@ -5,7 +5,7 @@
 #
 # Each `ck "title" "command"` line is one check; the titles are listed in
 # docs/tests/emrac-tests.rst. Update the next line when you run them all.
-# last full run: r2, 26 of 26 passed
+# last full run: r2, 26 of 26 passed (u7 adds 4)
 e=/usr/local/bin/emrac
 export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 n=0; bad=0
@@ -43,4 +43,10 @@ printf 'pkgname=pfetch\npkgver=9.9\npkgrel=1\npkgdesc=fixture\narch=(any)\nlicen
 ck "AUR install: audit, sandbox build, manifest, pacman -U" "$e install pfetch --yes --skip-pkgbuild </dev/null && pacman -Q pfetch"
 ck "build without installing"         "$e build pfetch --skip-pkgbuild </dev/null | grep -q 'emrac confirms: built'"
 ck "a closed stdin declines (no install)" "sudo pacman -Rns --noconfirm pfetch tree >/dev/null; $e install tree </dev/null >/dev/null; ! pacman -Q tree"
+# history integrity (u7): real transactions, a chain, an archive, a tampered line
+H=$HOME/.local/share/emrac/history.jsonl
+ck "history: 22 real transactions chain and verify" "for i in \$(seq 1 11); do $e install tree --yes >/dev/null && $e remove tree --yes >/dev/null || exit 1; done; $e history verify | grep -q 'the history verifies'"
+ck "history archive keeps what undo and the cache policy answer" "$e config set cache.keep_days 0 >/dev/null; sleep 2; $e undo --dry-run > /tmp/u1 2>&1; $e cache clean --lean --dry-run > /tmp/c1 2>&1; printf y | $e history archive --older-than 1s >/dev/null && $e undo --dry-run > /tmp/u2 2>&1 && $e cache clean --lean --dry-run > /tmp/c2 2>&1 && cmp /tmp/u1 /tmp/u2 && cmp /tmp/c1 /tmp/c2 && ls \$HOME/.local/share/emrac/history-archive | grep -q jsonl && $e history verify | grep -q '1 archive file'"
+ck "history --archive still lists archived records" "[ \$($e history --archive --json | grep -c '\"id\"') -ge 22 ]"
+ck "an edited history line is caught by verify and doctor" "cp $H /tmp/h.bak; sed -i '0,/\"remove\"/s//\"install\"/' $H; ! $e history verify; $e doctor 2>&1 | grep -q 'History integrity'; cp /tmp/h.bak $H; $e history verify | grep -q verifies"
 echo; echo "$n checks, $bad failed"

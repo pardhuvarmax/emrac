@@ -65,6 +65,18 @@ pub struct ConfigFacts {
     pub world_writable: bool,
 }
 
+/// What `emrac history verify` found, for the doctor.
+#[derive(Debug, Clone, Default)]
+pub struct HistoryFacts {
+    /// Where the chain breaks, worded for the user.
+    pub problem: Option<String>,
+    /// Lines from before the chain existed.
+    pub predate: usize,
+    /// Lines the chain covers.
+    pub chained: usize,
+    pub archives: usize,
+}
+
 /// A tool emrac shells out to.
 #[derive(Debug, Clone)]
 pub struct ToolFact {
@@ -114,6 +126,8 @@ pub struct DoctorInputs {
     pub orphan_bytes: u64,
     pub expired_pins: Vec<String>,
     pub recent_failed_transactions: Vec<String>,
+    /// `None`: there is no history yet.
+    pub history: Option<HistoryFacts>,
     pub config: ConfigFacts,
     pub tools: Vec<ToolFact>,
     /// `Err` carries bubblewrap's reason.
@@ -551,6 +565,48 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             .detail(listed(&i.recent_failed_transactions))
             .fix("emrac history"),
         );
+    }
+
+    // The history's hash chain.
+    if let Some(h) = &i.history {
+        let mut c = match &h.problem {
+            Some(problem) => check(
+                "history-integrity",
+                "History integrity",
+                Status::Warning,
+                "the transaction history does not verify — something in it changed outside emrac"
+                    .to_string(),
+            )
+            .detail(vec![problem.clone()])
+            .fix("emrac history verify"),
+            None => check(
+                "history-integrity",
+                "History integrity",
+                Status::Ok,
+                if h.chained == 0 {
+                    "nothing is chained yet; the next transaction starts the chain".to_string()
+                } else {
+                    format!(
+                        "{} chained, nothing out of place",
+                        plural(h.chained, "record", "records")
+                    )
+                },
+            ),
+        };
+        let mut notes = Vec::new();
+        if h.predate > 0 {
+            notes.push(format!(
+                "{} earlier records predate the chain and are not covered by it",
+                h.predate
+            ));
+        }
+        if h.archives > 0 {
+            notes.push(format!("{} archive file(s) checked", h.archives));
+        }
+        if !notes.is_empty() && h.problem.is_none() {
+            c = c.detail(notes);
+        }
+        checks.push(c);
     }
 
     // emrac's own config.
@@ -1148,5 +1204,35 @@ mod tests {
         assert!(md.contains("**warning** — .pacnew / .pacsave files:"));
         assert!(md.contains("  - /etc/a.pacnew"));
         assert_eq!(md.matches("\n- **").count(), report.checks.len());
+    }
+
+    #[test]
+    fn history_integrity_is_ok_warns_on_a_break_and_is_absent_without_history() {
+        assert!(find(&evaluate(&healthy()), "history-integrity").is_empty());
+
+        let mut i = healthy();
+        i.history = Some(HistoryFacts {
+            chained: 12,
+            predate: 3,
+            ..HistoryFacts::default()
+        });
+        let r = evaluate(&i);
+        let c = one(&r, "history-integrity");
+        assert_eq!(c.status, Status::Ok);
+        assert!(c.summary.contains("12 records"), "{}", c.summary);
+        assert!(c
+            .detail
+            .iter()
+            .any(|d| d.contains("3 earlier records predate")));
+
+        i.history = Some(HistoryFacts {
+            problem: Some("history.jsonl line 4: edited".into()),
+            chained: 2,
+            ..HistoryFacts::default()
+        });
+        let c = one(&evaluate(&i), "history-integrity").clone();
+        assert_eq!(c.status, Status::Warning);
+        assert_eq!(c.fix.as_deref(), Some("emrac history verify"));
+        assert!(c.detail[0].contains("line 4"));
     }
 }
