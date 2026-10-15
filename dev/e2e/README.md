@@ -11,4 +11,6 @@ dev/e2e/run.sh
 
 `dev/e2e/run.sh install` runs [`install-script.sh`](./install-script.sh) instead: the root `install.sh` in the container — its options, its refusals (not Arch, no terminal, wrong checksum), a real install piped through `sh` the way `curl | sh` runs it, a second run and the removal.
 
+`dev/e2e/run.sh self` runs [`self-upgrade.sh`](./self-upgrade.sh): it builds a 0.8.0 and a 0.9.0 release from the committed source, installs 0.8.0 as a real package, then checks `self sync`, a tampered tarball refused, an upgrade killed half way, a real `self upgrade` to 0.9.0 and a real `self downgrade` back (it compiles emrac three times, so it takes several minutes).
+
 Needs podman and network access, so CI does not run these. The check titles are listed in [`docs/tests/emrac-tests.rst`](../../docs/tests/emrac-tests.rst), which `dev/gen-tests-doc.sh` regenerates.

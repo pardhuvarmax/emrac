@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 324
+     - 335
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 26
+     - 27
    * - **Automated total**
      -
-     - **359**
+     - **371**
 
-emrac-core library (324)
+emrac-core library (335)
 ------------------------
 
 ``audit::tests`` (39)
@@ -419,12 +419,14 @@ emrac-core library (324)
 * ``version_strings_are_validated``
 * ``where_the_binary_lives_decides_the_owner_and_unknown_stays_unknown``
 
-``self_meta::tests`` (10)
+``self_meta::tests`` (12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_bad_or_missing_index_leaves_the_active_one_alone_and_records_why``
+* ``a_file_index_may_list_file_tarballs_and_a_web_index_may_not``
 * ``a_good_index_parses_and_normalises``
 * ``a_real_gpg_signature_is_checked_against_the_trusted_fingerprint``
+* ``an_index_synced_from_a_file_with_file_tarballs_reads_back``
 * ``each_bad_field_rejects_the_whole_index``
 * ``news_is_newest_first_limited_and_marked_when_about_a_newer_release``
 * ``syncing_stages_commits_and_reports_what_changed``
@@ -438,6 +440,19 @@ emrac-core library (324)
 
 * ``a_running_operation_is_locked_and_a_cut_off_one_is_found_with_its_phase``
 * ``finishing_removes_the_journal_and_each_phase_has_a_consequence``
+
+``self_upgrade::tests`` (9)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_copy_no_package_owns_is_never_replaced``
+* ``a_downgrade_needs_a_target_when_there_is_a_choice_and_never_goes_up``
+* ``a_downgrade_to_a_release_that_cannot_read_your_files_is_refused_and_ties_are_said``
+* ``a_download_is_accepted_only_if_it_matches_the_index``
+* ``an_upgrade_is_ready_when_a_newer_release_exists_and_the_package_owns_emrac``
+* ``every_blocker_is_listed_and_a_stale_index_or_new_schema_is_a_warning``
+* ``nothing_is_done_when_already_on_the_newest_or_no_index``
+* ``the_cargo_version_is_read_and_the_backup_copies_config_and_data_but_not_self``
+* ``the_embedded_recipe_is_the_one_install_sh_uses``
 
 ``snapshot::tests`` (8)
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -524,10 +539,10 @@ emrac command line, unit tests (9)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (26)
+emrac command line, integration tests (27)
 ------------------------------------------
 
-``(top level)`` (26)
+``(top level)`` (27)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -549,6 +564,7 @@ emrac command line, integration tests (26)
 * ``self_check_works_without_pacman_and_fails_on_a_broken_config``
 * ``self_diagnose_extends_check_hides_the_home_directory_and_refuses_online_offline``
 * ``self_sync_and_news_use_the_configured_source_and_keep_the_last_good_index``
+* ``self_upgrade_plans_from_the_synced_index_and_refuses_a_copy_no_package_owns``
 * ``snapshots_list_show_delete``
 * ``the_ledger_holds_a_second_copy_and_repairs_the_history``
 * ``the_sandbox_hides_the_network_secrets_and_home_from_a_build``
