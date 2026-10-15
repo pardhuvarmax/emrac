@@ -39,6 +39,7 @@ open(lock, "w").write(l)
 PY
         tar -czf "$fx/emrac-r$rel.tar.gz" -C "$fx/src$rel" "emrac-r$rel"
     done
+    chmod -R a+rX "$fx"
     echo "==> Running the self-upgrade checks (builds emrac three times; it takes a while)"
     podman run --rm \
         -v "$fx:/fx:ro" \

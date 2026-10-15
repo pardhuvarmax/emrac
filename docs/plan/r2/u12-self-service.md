@@ -128,3 +128,21 @@ installation method, the state-schema rule. CLI tests with a `file://` source in
 home (sync, news, offline, dry-run, a bad index leaves the active one). Container: a full
 `self upgrade` and `self downgrade` against a local index whose tarball is this repository's
 `git archive`, ending with the pacman database showing the new version.
+
+## What was built, and where it differs
+
+- u12: `self_meta.rs` (index, validation, ordering, fetch, optional gpg check, staged sync, news
+  and cache age), `self.*` settings, `releases.json` with r1, r2 and r2-aur, `dev/release-index.sh`.
+  An index read from a `file://` path may list `file://` tarballs (a local mirror, and the container
+  test); a web index may not.
+- u13: `self diagnose` shares `evaluate` with `check` (`evaluate_deep` adds to it); `self_ops.rs`
+  is the lock-file journal for upgrade and downgrade; the home directory is redacted from the
+  output.
+- u14/u15: one engine (`self_upgrade.rs`): `plan_upgrade` / `plan_downgrade` are pure, `execute`
+  does the work. The recipe is `crates/emrac-core/data/PKGBUILD.in`, a copy of `install.sh`'s that a
+  test keeps equal. A fresh index is fetched first when the stored one is over a day old.
+- Differs from the plan: `self diagnose` does not run `gpg` checks of its own beyond reporting
+  whether the stored index was verified; the signature is checked at sync time.
+- Container run (`dev/e2e/run.sh self`): builds a 0.8.0 package, installs it, then `self sync`,
+  a tampered tarball refused, a killed upgrade found, `self upgrade` to 0.9.0 and `self downgrade`
+  back, ending each time with the pacman database showing the version.

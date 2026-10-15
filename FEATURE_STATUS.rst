@@ -105,6 +105,9 @@ what was seen for each.
    * - ``self check``
      - u11
      - Read-only check of emrac's own installation (binary, how it was installed, config, history, journal, ledger helper); needs no pacman, network or root. The other ``self`` commands are not built
+   * - ``self upgrade`` / ``self downgrade``
+     - u14, u15
+     - Download and check a release against the index, build the package, install it with ``sudo pacman -U``, check the result; only for a copy a pacman package owns; refuses a downgrade whose file format is older than yours; journal, backup, ``--dry-run``
    * - ``self diagnose``
      - u13
      - The checks of ``self check`` plus what an upgrade needs (tools, space, permissions), the release index in detail, ``--online`` reachability; repairs nothing; hides the home directory
