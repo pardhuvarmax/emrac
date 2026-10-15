@@ -29,6 +29,12 @@ impl Home {
             .env("EMRAC_LEDGER", self.0.join("ledger.jsonl"))
             .env_remove("XDG_CONFIG_HOME")
             .env_remove("XDG_DATA_HOME");
+        // These tests run inside `makepkg`'s `check()` too, where `emrac self
+        // upgrade` (and many AUR helpers) set where packages and sources go.
+        // A package one test builds must not be found by another.
+        for var in ["PKGDEST", "SRCDEST", "SRCPKGDEST", "LOGDEST", "BUILDDIR"] {
+            cmd.env_remove(var);
+        }
         cmd
     }
 
