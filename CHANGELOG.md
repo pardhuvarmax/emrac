@@ -20,6 +20,10 @@ emrac is now licensed under the GNU General Public License, version 3 or any lat
 
 `emrac --version` and every `--help` screen (the top one and each subcommand's) now add the line `Sic Mundus Creatus Est.` after the credit (in `--version` between `built by pardhuvarmax` and the URL; in `--help` after the `Built by …` line).
 
+## Verified on a real machine (after u9) — 2026-10-15
+
+`sudo emrac ledger events` read the real audit log and listed all seven events from the ledger restore and the earlier test: the root shell\'s append (`bash`, openat), both `chattr` runs, and the `sed` rewrite (create, chown, chmod, rename), each with program, user and login user, all `FOREIGN` as they should be. Tidied from that output: the `chattr` events now show the command line that was run (`chattr +a /var/lib/emrac/ledger.jsonl`) instead of the binary and its loader, `(null)` and repeated paths are dropped, `fchown` is named, and the list says its times are UTC. Not yet seen on a real machine: emrac\'s own append classified as `emrac` (needs one transaction after the rules were installed).
+
 ## Small change (after u9), second — 2026-10-15
 
 When emrac is started as root where that is not what it is for (`sudo emrac install …`, say), it prints `emrac warns: DON'T RUN AS ROOT UNLESS NECESSARY (emrac asks for sudo itself when a step needs it)` on stderr. Run normally, nothing changes and the help screens do not mention it (an earlier version of this change put it in every `--help`; removed). The commands that are meant for root stay quiet: `ledger …` (the audit watch install, events and the hidden helper) and `completion`.

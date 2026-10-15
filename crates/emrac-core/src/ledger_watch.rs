@@ -53,6 +53,8 @@ pub struct WatchEvent {
     pub auid: Option<u32>,
     pub success: bool,
     pub paths: Vec<String>,
+    /// For a program that was run: its command line (`chattr -a /var/lib/…`).
+    pub command: Option<String>,
     pub verdict: Verdict,
 }
 
@@ -66,10 +68,12 @@ impl WatchEvent {
             (Some(u), _) => format!("user {}", name_of(u)),
             _ => "an unknown user".into(),
         };
-        let on = if self.paths.is_empty() {
-            String::new()
-        } else {
-            format!(" on {}", self.paths.join(", "))
+        // A program that was run is told by its command line; the paths of
+        // such an event are only the binary and its loader.
+        let on = match (&self.command, self.paths.is_empty()) {
+            (Some(cmd), _) => format!(": `{cmd}`"),
+            (None, true) => String::new(),
+            (None, false) => format!(" on {}", self.paths.join(", ")),
         };
         let program = if self.exe.is_empty() {
             &self.comm
@@ -196,6 +200,8 @@ fn syscall_name(n: &str) -> String {
         "90" => "chmod",
         "91" => "fchmod",
         "92" => "chown",
+        "93" => "fchown",
+        "94" => "lchown",
         "257" => "openat",
         "260" => "fchownat",
         "263" => "unlinkat",
@@ -219,6 +225,7 @@ struct Builder {
     auid: Option<u32>,
     success: bool,
     paths: Vec<String>,
+    command: Option<String>,
 }
 
 fn id_field(f: &BTreeMap<String, String>, k: &str) -> Option<u32> {
@@ -250,7 +257,18 @@ fn absorb(
         }
         "PATH" => {
             if let Some(n) = f.get("name") {
-                b.paths.push(n.clone());
+                if n != "(null)" && !b.paths.contains(n) {
+                    b.paths.push(n.clone());
+                }
+            }
+        }
+        "EXECVE" => {
+            let argc: usize = f.get("argc").and_then(|n| n.parse().ok()).unwrap_or(0);
+            let args: Vec<&str> = (0..argc)
+                .filter_map(|i| f.get(&format!("a{i}")).map(String::as_str))
+                .collect();
+            if !args.is_empty() {
+                b.command = Some(args.join(" "));
             }
         }
         _ => {}
@@ -272,6 +290,7 @@ fn finish(builders: BTreeMap<String, Builder>) -> Vec<WatchEvent> {
             auid: b.auid,
             success: b.success,
             paths: b.paths,
+            command: b.command,
         })
         .collect()
 }
@@ -702,6 +721,23 @@ mod tests {
         assert_eq!(
             (chattr.action.as_str(), chattr.exe.as_str()),
             ("execve", "/usr/bin/chattr")
+        );
+        assert_eq!(
+            chattr.command.as_deref(),
+            Some("chattr +a /var/lib/emrac/ledger.jsonl")
+        );
+        assert!(
+            chattr
+                .describe()
+                .contains("`chattr +a /var/lib/emrac/ledger.jsonl`"),
+            "{}",
+            chattr.describe()
+        );
+        assert!(!rename.describe().contains("(null)"));
+        let fchown = parse_audit_log("type=SYSCALL msg=audit(5.0:9): syscall=93 key=\"emrac-ledger\"\ntype=PATH msg=audit(5.0:9): item=0 name=(null)\n", 0);
+        assert_eq!(
+            (fchown[0].action.as_str(), fchown[0].paths.len()),
+            ("fchown", 0)
         );
         // Older records are left out.
         assert_eq!(parse_audit_log(AUDIT_LOG_FIXTURE, 1_792_059_868).len(), 0);

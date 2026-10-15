@@ -228,7 +228,7 @@ pub fn events(json: bool) -> Result<()> {
     }
     say!(
         Voice::Found,
-        "{} audit event(s) about the ledger in the last 30 days:\n",
+        "{} audit event(s) about the ledger in the last 30 days (times are UTC):\n",
         read.events.len()
     );
     for e in &read.events {
