@@ -20,6 +20,10 @@ emrac is now licensed under the GNU General Public License, version 3 or any lat
 
 `emrac --version` and every `--help` screen (the top one and each subcommand's) now add the line `Sic Mundus Creatus Est.` after the credit (in `--version` between `built by pardhuvarmax` and the URL; in `--help` after the `Built by …` line).
 
+## Small change (after u9), second — 2026-10-15
+
+Every `--help` screen now carries `emrac warns: DON'T RUN AS ROOT UNLESS NECESSARY (emrac asks for sudo itself when a step needs it)` above the credit, and emrac prints the same warning on stderr when it is started as root. The commands that are meant for root stay quiet: `ledger …` (the audit watch install, events and the hidden helper) and `completion`.
+
 ## Fix (after u9), fourth — 2026-10-15 — the watch, tried on a real machine
 
 With `auditd` running, the audit system logged every step of the ledger restore (the `sed` rewrite of `ledger.jsonl` as a create, delete and rename, and the `chattr +a`, each with key, program, user and login user), but the journal got none of it, so `emrac ledger events` and `doctor` said "0 events, all emrac's own": a wrong all-clear. emrac now also reads auditd's own log (`/var/log/audit/audit.log`, parsed in its raw format, tested on a fixture shaped like what that machine wrote). The log is readable only by root, so as a normal user `doctor` and `ledger events` now say the events can't be read from here and point to `sudo emrac ledger events` (or to `log_group` in `/etc/audit/auditd.conf`), rather than reporting none. The earlier fixtures, written from the documentation, did match the real field names.

@@ -1,5 +1,9 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+/// Said in every `--help` and whenever emrac starts as root.
+pub const ROOT_WARNING: &str =
+    "DON'T RUN AS ROOT UNLESS NECESSARY (emrac asks for sudo itself when a step needs it)";
+
 /// The credit every `--help` ends with.
 pub const CREDIT: &str = concat!(
     "Built by ",
@@ -12,18 +16,22 @@ pub const CREDIT: &str = concat!(
 /// The command tree with the credit on every (sub)command's help, not only the top one.
 pub fn command() -> clap::Command {
     use clap::CommandFactory;
-    fn credit(cmd: clap::Command) -> clap::Command {
+    let tail = format!(
+        "{} {ROOT_WARNING}\n\n{CREDIT}",
+        emrac_core::Voice::Warns.prefix(false)
+    );
+    fn credit(cmd: clap::Command, tail: &str) -> clap::Command {
         let names: Vec<String> = cmd
             .get_subcommands()
             .map(|c| c.get_name().to_string())
             .collect();
-        let mut cmd = cmd.after_help(CREDIT);
+        let mut cmd = cmd.after_help(tail.to_string());
         for name in names {
-            cmd = cmd.mut_subcommand(name, credit);
+            cmd = cmd.mut_subcommand(name, |c| credit(c, tail));
         }
         cmd
     }
-    credit(Cli::command())
+    credit(Cli::command(), &tail)
 }
 
 #[derive(Parser)]

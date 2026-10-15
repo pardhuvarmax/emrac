@@ -22,9 +22,24 @@ fn main() {
         Cli::from_arg_matches(&cli::command().get_matches()).unwrap_or_else(|e| e.exit())
     };
 
+    warn_if_root(&cli);
+
     if let Err(err) = run(&cli) {
         emrac_core::say_err!(err.voice(), "{err}");
         std::process::exit(1);
+    }
+}
+
+/// emrac asks for sudo itself when a step needs it, so running the whole
+/// program as root is almost never what you want. The few commands that are
+/// meant for root (the ledger helper and the audit watch) stay quiet.
+fn warn_if_root(cli: &Cli) {
+    let meant_for_root = matches!(
+        &cli.command,
+        Commands::LedgerAppend | Commands::Ledger { .. } | Commands::Completion { .. }
+    );
+    if !meant_for_root && emrac_core::ledger::running_as_root() {
+        emrac_core::say_err!(emrac_core::Voice::Warns, "{}", cli::ROOT_WARNING);
     }
 }
 

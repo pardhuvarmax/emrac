@@ -457,6 +457,10 @@ fn every_help_screen_carries_the_credit() {
     ] {
         let text = stdout(&home.run(args));
         assert!(
+            text.contains("emrac warns: DON'T RUN AS ROOT UNLESS NECESSARY"),
+            "{args:?}: {text}"
+        );
+        assert!(
             text.trim_end().ends_with("Built by pardhuvarmax — https://github.com/pardhuvarmax/emrac\nSic Mundus Creatus Est."),
             "{args:?}: {text}"
         );
