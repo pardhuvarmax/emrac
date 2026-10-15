@@ -62,7 +62,9 @@ fn version_and_help_succeed() {
     assert_eq!(out.status.code(), Some(0));
     assert!(stdout(&out).starts_with("emrac "), "{}", stdout(&out));
     assert!(
-        stdout(&out).contains("built by pardhuvarmax"),
+        stdout(&out).contains(
+            "built by pardhuvarmax\nSic Mundus Creatus Est.\nhttps://github.com/pardhuvarmax/emrac"
+        ),
         "{}",
         stdout(&out)
     );
@@ -70,7 +72,7 @@ fn version_and_help_succeed() {
     let out = home.run(&["--help"]);
     assert_eq!(out.status.code(), Some(0));
     assert!(
-        stdout(&out).contains("Built by pardhuvarmax"),
+        stdout(&out).contains("Built by pardhuvarmax — https://github.com/pardhuvarmax/emrac\nSic Mundus Creatus Est."),
         "help lacks the credit"
     );
     for cmd in [

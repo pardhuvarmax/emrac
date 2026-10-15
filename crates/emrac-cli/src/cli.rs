@@ -7,11 +7,11 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
         env!("CARGO_PKG_VERSION"),
         "\nbuilt by ",
         env!("CARGO_PKG_AUTHORS"),
-        "\n",
+        "\nSic Mundus Creatus Est.\n",
         env!("CARGO_PKG_HOMEPAGE")
     ),
     about = "A hybrid package management platform for Arch Linux",
-    after_help = concat!("Built by ", env!("CARGO_PKG_AUTHORS"), " — ", env!("CARGO_PKG_HOMEPAGE"))
+    after_help = concat!("Built by ", env!("CARGO_PKG_AUTHORS"), " — ", env!("CARGO_PKG_HOMEPAGE"), "\nSic Mundus Creatus Est.")
 )]
 pub struct Cli {
     #[command(subcommand)]
