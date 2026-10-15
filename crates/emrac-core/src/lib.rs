@@ -24,6 +24,7 @@ mod rollback;
 mod sandbox;
 pub mod self_check;
 pub mod self_meta;
+pub mod self_ops;
 mod snapshot;
 mod sources;
 mod verify;

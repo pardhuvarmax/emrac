@@ -20,6 +20,28 @@ pub fn check(json: bool) -> Result<()> {
     Ok(())
 }
 
+/// `emrac self diagnose`. The same exit rule as `check`.
+pub fn diagnose(online: bool, offline: bool, json: bool) -> Result<()> {
+    if online && offline {
+        return Err(Error::SelfService(
+            "--online asks the network and --offline forbids it: pick one".into(),
+        ));
+    }
+    let mut report =
+        self_check::evaluate_deep(&self_check::gather(), &self_check::gather_deep(online));
+    self_check::redact_home(&mut report, &std::env::var("HOME").unwrap_or_default());
+    output::print_doctor(&report, json);
+    let problems = report.count(DoctorStatus::Problem);
+    if problems > 0 {
+        return Err(Error::DoctorProblems(if problems == 1 {
+            "1 problem".to_string()
+        } else {
+            format!("{problems} problems")
+        }));
+    }
+    Ok(())
+}
+
 fn now() -> u64 {
     emrac_core::journal::unix_now()
 }

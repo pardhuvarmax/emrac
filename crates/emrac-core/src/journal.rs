@@ -527,7 +527,17 @@ mod tests {
         assert!(begin_at(&s.file(), &p, 43, 7).is_err());
         // The holder goes away without finishing (as in a crash).
         drop(held);
-        match state_at(&s.file()).unwrap() {
+        // A child forked by another test in this process can hold the
+        // descriptor for a moment before it execs: ask again briefly.
+        let mut found = state_at(&s.file()).unwrap();
+        for _ in 0..100 {
+            if !matches!(found, State::Running) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            found = state_at(&s.file()).unwrap();
+        }
+        match found {
             State::Interrupted(i) => {
                 let e = i.entry.as_ref().expect("the entry is readable");
                 assert_eq!((e.started, e.pacman_log_offset), (42, 7));

@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 318
+     - 324
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 25
+     - 26
    * - **Automated total**
      -
-     - **352**
+     - **359**
 
-emrac-core library (318)
+emrac-core library (324)
 ------------------------
 
 ``audit::tests`` (39)
@@ -404,13 +404,17 @@ emrac-core library (318)
 * ``the_timeout_kills_a_run_on_time_and_a_normal_exit_is_reported``
 * ``tmpfs_mounts_get_a_size_cap_when_one_is_set``
 
-``self_check::tests`` (7)
-~~~~~~~~~~~~~~~~~~~~~~~~~
+``self_check::tests`` (11)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+* ``a_cut_off_self_operation_is_a_warning_that_says_what_it_means``
 * ``a_healthy_install_has_nothing_above_a_note``
 * ``a_missing_helper_is_a_note_and_an_unreadable_history_a_problem``
 * ``a_package_whose_version_differs_from_the_binary_is_noted``
+* ``diagnose_explains_what_is_missing_and_what_is_unsafe``
+* ``diagnose_runs_the_check_rows_first_and_adds_the_deep_ones``
 * ``each_failure_is_reported_with_its_own_status_and_fix``
+* ``the_home_directory_is_removed_from_a_shared_report``
 * ``the_release_metadata_row_tells_never_stale_failed_and_newer_apart``
 * ``version_strings_are_validated``
 * ``where_the_binary_lives_decides_the_owner_and_unknown_stays_unknown``
@@ -428,6 +432,12 @@ emrac-core library (318)
 * ``the_gpg_status_must_name_the_trusted_key``
 * ``the_index_host_may_serve_tarballs_too``
 * ``versions_order_and_channels_filter``
+
+``self_ops::tests`` (2)
+~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_running_operation_is_locked_and_a_cut_off_one_is_found_with_its_phase``
+* ``finishing_removes_the_journal_and_each_phase_has_a_consequence``
 
 ``snapshot::tests`` (8)
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -514,10 +524,10 @@ emrac command line, unit tests (9)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (25)
+emrac command line, integration tests (26)
 ------------------------------------------
 
-``(top level)`` (25)
+``(top level)`` (26)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -537,6 +547,7 @@ emrac command line, integration tests (25)
 * ``history_is_empty_without_a_log_and_reads_one``
 * ``pins_list_and_unpin``
 * ``self_check_works_without_pacman_and_fails_on_a_broken_config``
+* ``self_diagnose_extends_check_hides_the_home_directory_and_refuses_online_offline``
 * ``self_sync_and_news_use_the_configured_source_and_keep_the_last_good_index``
 * ``snapshots_list_show_delete``
 * ``the_ledger_holds_a_second_copy_and_repairs_the_history``

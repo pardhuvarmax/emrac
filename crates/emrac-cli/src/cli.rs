@@ -547,6 +547,15 @@ pub enum SelfCommand {
     /// configuration, its history, the journal and the ledger helper
     Check,
 
+    /// A deeper look than `check`: what an upgrade needs (tools, space,
+    /// permissions), the release index in detail, and with --online whether
+    /// the source answers. Repairs nothing; home directory paths are hidden
+    Diagnose {
+        /// Also ask the release source whether it answers
+        #[arg(long)]
+        online: bool,
+    },
+
     /// Fetch emrac's release index and news from the configured source
     /// (`self.source`); never upgrades anything. --dry-run shows the plan
     Sync,

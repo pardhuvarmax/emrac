@@ -1431,3 +1431,37 @@ fn self_sync_and_news_use_the_configured_source_and_keep_the_last_good_index() {
     assert_eq!(out.status.code(), Some(1));
     assert!(stderr(&out).contains("--offline"), "{}", stderr(&out));
 }
+
+#[test]
+fn self_diagnose_extends_check_hides_the_home_directory_and_refuses_online_offline() {
+    let home = Home::new("selfdiag");
+    let out = home.run(&["self", "diagnose"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let text = stdout(&out);
+    for want in [
+        "Installation",
+        "Upgrade tools",
+        "Space to build",
+        "Platform",
+    ] {
+        assert!(text.contains(want), "{want} in {text}");
+    }
+    assert!(
+        !text.contains(home.0.to_str().unwrap()),
+        "the home directory is hidden: {text}"
+    );
+    let out = home.run(&["--offline", "self", "diagnose", "--online"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("pick one"), "{}", stderr(&out));
+    // --online with a file source answers without a network.
+    let src = home.0.join("releases.json");
+    write(&src, r#"{"schema":1,"releases":[],"news":[]}"#);
+    home.run(&[
+        "config",
+        "set",
+        "self.source",
+        &format!("file://{}", src.display()),
+    ]);
+    let out = home.run(&["self", "diagnose", "--online"]);
+    assert!(stdout(&out).contains("answered"), "{}", stdout(&out));
+}

@@ -86,6 +86,17 @@ pub struct SelfFacts {
     pub data_dir_problem: Option<String>,
     pub helper: HelperFacts,
     pub release: ReleaseFacts,
+    pub self_op: SelfOp,
+}
+
+/// An earlier `self upgrade` / `self downgrade`.
+#[derive(Debug, Clone, Default)]
+pub enum SelfOp {
+    #[default]
+    Clean,
+    Running,
+    /// Cut off: what it was, and what that means for the system.
+    Interrupted(String, String),
 }
 
 /// What the release index looks like on disk and in the settings.
@@ -455,6 +466,33 @@ pub fn evaluate(f: &SelfFacts) -> DoctorReport {
         }
     });
 
+    // An upgrade or downgrade of emrac itself.
+    checks.push(match &f.self_op {
+        SelfOp::Clean => check(
+            "self-op",
+            "Self operation",
+            Status::Ok,
+            "no unfinished upgrade or downgrade",
+        ),
+        SelfOp::Running => check(
+            "self-op",
+            "Self operation",
+            Status::Note,
+            "emrac is upgrading or downgrading itself right now",
+        ),
+        SelfOp::Interrupted(what, consequence) => {
+            let mut c = check(
+                "self-op",
+                "Self operation",
+                Status::Warning,
+                format!("an earlier operation was cut off: {what}"),
+            );
+            c.detail.push(consequence.clone());
+            c.fix = Some("emrac self diagnose".into());
+            c
+        }
+    });
+
     // The binary that runs as root for the ledger.
     let h = &f.helper;
     checks.push(if !h.exists {
@@ -531,6 +569,17 @@ pub fn gather() -> SelfFacts {
         _ => Journal::Clean,
     };
     let release = release_facts();
+    let self_op = match crate::self_ops::state() {
+        Ok(crate::self_ops::State::Interrupted(found)) => match &found.entry {
+            Some(e) => SelfOp::Interrupted(e.describe(), e.consequence().to_string()),
+            None => SelfOp::Interrupted(
+                "its journal is incomplete".into(),
+                "nothing is known about how far it got: check `pacman -Q emrac` and `emrac --version`".into(),
+            ),
+        },
+        Ok(crate::self_ops::State::Running) => SelfOp::Running,
+        _ => SelfOp::Clean,
+    };
     SelfFacts {
         exe,
         version: env!("CARGO_PKG_VERSION").to_string(),
@@ -542,6 +591,7 @@ pub fn gather() -> SelfFacts {
         data_dir_problem: data_dir_problem(&home),
         helper: helper_facts(),
         release,
+        self_op,
     }
 }
 
@@ -630,6 +680,387 @@ fn helper_facts() -> HelperFacts {
     }
 }
 
+// ------------------------------------------------------------------ diagnose
+
+/// A program an upgrade needs.
+#[derive(Debug, Clone)]
+pub struct NeedFact {
+    pub name: &'static str,
+    pub package: &'static str,
+    pub present: bool,
+    pub needed_for: &'static str,
+}
+
+/// What `diagnose` looks at beyond `check`: the things an upgrade depends on.
+#[derive(Debug, Clone, Default)]
+pub struct DeepFacts {
+    pub needs: Vec<NeedFact>,
+    /// Free bytes where an upgrade would be built (`None`: could not tell).
+    pub build_free: Option<u64>,
+    pub build_dir: String,
+    /// Mode of `~/.local/share/emrac/self`, `None` if it does not exist yet.
+    pub self_dir_mode: Option<u32>,
+    pub self_dir_mine: bool,
+    /// Half-written files an interrupted sync or download left.
+    pub leftovers: Vec<String>,
+    pub index_entries: usize,
+    pub index_news: usize,
+    pub index_signature: String,
+    pub signature_file: bool,
+    pub eligible: usize,
+    /// `tag (version)` of the newest eligible release.
+    pub latest: Option<String>,
+    pub architecture: String,
+    /// `Some(Ok(text))` / `Some(Err(why))` when `--online` asked.
+    pub online: Option<std::result::Result<String, String>>,
+}
+
+/// Space an upgrade wants to build in: the sources, the cargo build and the package.
+pub const BUILD_SPACE: u64 = 2 * 1024 * 1024 * 1024;
+
+/// `check`, plus the deeper findings. The same checks run first so the two
+/// can't disagree.
+pub fn evaluate_deep(f: &SelfFacts, d: &DeepFacts) -> DoctorReport {
+    let mut checks = evaluate(f).checks;
+
+    let missing: Vec<&NeedFact> = d.needs.iter().filter(|n| !n.present).collect();
+    checks.push(if missing.is_empty() {
+        check(
+            "tools",
+            "Upgrade tools",
+            Status::Ok,
+            format!("{} needed programs found", d.needs.len()),
+        )
+    } else {
+        let mut c = check(
+            "tools",
+            "Upgrade tools",
+            Status::Warning,
+            format!(
+                "{} missing: `emrac self upgrade` could not build the new version",
+                missing
+                    .iter()
+                    .map(|n| n.name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        );
+        c.detail = missing
+            .iter()
+            .map(|n| {
+                format!(
+                    "{} (package {}) is needed for {}",
+                    n.name, n.package, n.needed_for
+                )
+            })
+            .collect();
+        let mut pkgs: Vec<&str> = missing.iter().map(|n| n.package).collect();
+        pkgs.sort();
+        pkgs.dedup();
+        c.fix = Some(format!("sudo pacman -S --needed {}", pkgs.join(" ")));
+        c
+    });
+
+    checks.push(match d.build_free {
+        None => check(
+            "space",
+            "Space to build",
+            Status::Note,
+            format!("couldn't tell how much is free in {}", d.build_dir),
+        ),
+        Some(free) if free < BUILD_SPACE => {
+            let mut c = check(
+                "space",
+                "Space to build",
+                Status::Warning,
+                format!(
+                    "only {} MiB free in {}; an upgrade wants about {} MiB",
+                    free / 1_048_576,
+                    d.build_dir,
+                    BUILD_SPACE / 1_048_576
+                ),
+            );
+            c.fix = Some("emrac cache clean   (or free space where the build runs)".into());
+            c
+        }
+        Some(free) => check(
+            "space",
+            "Space to build",
+            Status::Ok,
+            format!("{} MiB free in {}", free / 1_048_576, d.build_dir),
+        ),
+    });
+
+    checks.push(match (d.self_dir_mode, d.self_dir_mine) {
+        (None, _) => check(
+            "self-dir",
+            "Self folder",
+            Status::Ok,
+            "not created yet (the first sync makes it)",
+        ),
+        (Some(mode), mine) if mode & 0o022 != 0 || !mine => {
+            let mut c = check(
+                "self-dir",
+                "Self folder",
+                Status::Problem,
+                "the folder holding the release index is not private to you",
+            );
+            c.detail.push(format!(
+                "mode {:o}{}",
+                mode & 0o777,
+                if mine { "" } else { ", owned by someone else" }
+            ));
+            c.fix = Some(
+                "chmod 755 ~/.local/share/emrac/self && chown $USER ~/.local/share/emrac/self"
+                    .into(),
+            );
+            c
+        }
+        (Some(_), _) => check("self-dir", "Self folder", Status::Ok, "private to you"),
+    });
+
+    if !d.leftovers.is_empty() {
+        let mut c = check(
+            "leftovers",
+            "Half-written files",
+            Status::Note,
+            format!("{} left by an interrupted sync", d.leftovers.join(", ")),
+        );
+        c.detail
+            .push("they are ignored; the next sync replaces them".into());
+        checks.push(c);
+    }
+
+    checks.push(if d.index_entries == 0 && f.release.last_ok.is_none() {
+        check(
+            "index",
+            "Release index",
+            Status::Note,
+            "none stored: run a sync first",
+        )
+    } else {
+        let mut c = check(
+            "index",
+            "Release index",
+            Status::Ok,
+            format!(
+                "{} releases ({} eligible on channel {}), {} news items; newest eligible: {}",
+                d.index_entries,
+                d.eligible,
+                f.release.channel,
+                d.index_news,
+                d.latest.as_deref().unwrap_or("none")
+            ),
+        );
+        c.detail
+            .push(format!("authenticity: {}", d.index_signature));
+        c
+    });
+
+    if f.release.require_signature {
+        checks.push(
+            if d.signature_file && d.index_signature.starts_with("signed by") {
+                check(
+                    "signature",
+                    "Signature",
+                    Status::Ok,
+                    d.index_signature.clone(),
+                )
+            } else {
+                let mut c = check(
+                    "signature",
+                    "Signature",
+                    Status::Warning,
+                    "a signature is required but the stored index has no verified one",
+                );
+                c.fix = Some("emrac self sync".into());
+                c
+            },
+        );
+    }
+
+    if let Some(online) = &d.online {
+        checks.push(match online {
+            Ok(text) => check(
+                "online",
+                "Release source reachable",
+                Status::Ok,
+                text.clone(),
+            ),
+            Err(why) => {
+                let mut c = check(
+                    "online",
+                    "Release source reachable",
+                    Status::Warning,
+                    "the source did not answer",
+                );
+                c.detail.push(why.clone());
+                c
+            }
+        });
+    }
+
+    checks.push(check(
+        "platform",
+        "Platform",
+        if d.architecture == "x86_64" { Status::Ok } else { Status::Note },
+        format!("{} (an upgrade builds from source here, so any architecture works if the tools are there)", d.architecture),
+    ));
+
+    checks.sort_by_key(|c| std::cmp::Reverse(c.status));
+    DoctorReport { checks }
+}
+
+/// Collects the deeper facts. `online` also fetches the index and asks for
+/// the newest tarball's size.
+pub fn gather_deep(online: bool) -> DeepFacts {
+    use std::os::unix::fs::MetadataExt;
+    let home = std::env::var("HOME").unwrap_or_default();
+    let cfg = crate::Config::load()
+        .map(|c| c.self_service)
+        .unwrap_or_default();
+    let on_path = |name: &str| {
+        std::env::var_os("PATH")
+            .is_some_and(|paths| std::env::split_paths(&paths).any(|d| d.join(name).is_file()))
+    };
+    let mut needs = vec![
+        NeedFact {
+            name: "makepkg",
+            package: "pacman",
+            present: on_path("makepkg"),
+            needed_for: "building the package",
+        },
+        NeedFact {
+            name: "pacman",
+            package: "pacman",
+            present: on_path("pacman"),
+            needed_for: "installing the package",
+        },
+        NeedFact {
+            name: "sudo",
+            package: "sudo",
+            present: on_path("sudo"),
+            needed_for: "installing as root",
+        },
+        NeedFact {
+            name: "cargo",
+            package: "rust",
+            present: on_path("cargo"),
+            needed_for: "compiling emrac",
+        },
+        NeedFact {
+            name: "cc",
+            package: "gcc",
+            present: on_path("cc") || on_path("gcc") || on_path("clang"),
+            needed_for: "linking the build",
+        },
+        NeedFact {
+            name: "fakeroot",
+            package: "fakeroot",
+            present: on_path("fakeroot"),
+            needed_for: "makepkg",
+        },
+        NeedFact {
+            name: "tar",
+            package: "tar",
+            present: on_path("tar"),
+            needed_for: "unpacking the release",
+        },
+    ];
+    if cfg.require_signature {
+        needs.push(NeedFact {
+            name: "gpg",
+            package: "gnupg",
+            present: on_path("gpg"),
+            needed_for: "checking the signature",
+        });
+    }
+    let build_dir = std::path::Path::new(&home).join(".cache");
+    let probe = if build_dir.exists() {
+        build_dir.clone()
+    } else {
+        std::path::PathBuf::from(&home)
+    };
+    let build_free = Command::new("df")
+        .arg("-Pk")
+        .arg(&probe)
+        .output()
+        .ok()
+        .and_then(|o| crate::doctor::parse_df(&String::from_utf8_lossy(&o.stdout)))
+        .map(|(avail, _)| avail);
+    let dir = crate::self_meta::dir().ok();
+    let meta = dir.as_ref().and_then(|d| std::fs::metadata(d).ok());
+    let leftovers = dir
+        .as_ref()
+        .and_then(|d| std::fs::read_dir(d).ok())
+        .map(|rd| {
+            rd.filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n.ends_with(".part") || n == "releases.json.new")
+                .collect()
+        })
+        .unwrap_or_default();
+    let stored = crate::self_meta::load().ok();
+    let index = stored.as_ref().and_then(|s| s.index.as_ref());
+    let latest = index.and_then(|i| crate::self_meta::latest(i, &cfg.channel));
+    let online_result = online.then(|| {
+        crate::self_meta::fetch(&cfg.source)
+            .map(|b| format!("{} answered ({} bytes)", cfg.source, b.len()))
+            .map_err(|e| e.to_string())
+    });
+    DeepFacts {
+        needs,
+        build_free,
+        build_dir: probe.display().to_string(),
+        self_dir_mode: meta.as_ref().map(|m| m.mode()),
+        self_dir_mine: meta.as_ref().is_some_and(|m| m.uid() == my_uid()),
+        leftovers,
+        index_entries: index.map_or(0, |i| i.releases.len()),
+        index_news: index.map_or(0, |i| i.news.len()),
+        index_signature: stored
+            .as_ref()
+            .and_then(|s| s.state.as_ref())
+            .map(|s| s.signature.clone())
+            .unwrap_or_default(),
+        signature_file: dir
+            .as_ref()
+            .is_some_and(|d| d.join("releases.json.asc").exists()),
+        eligible: index.map_or(0, |i| {
+            i.releases
+                .iter()
+                .filter(|r| crate::self_meta::eligible(r, &cfg.channel))
+                .count()
+        }),
+        latest: latest.map(|r| format!("{} ({})", r.tag, r.version)),
+        architecture: std::env::consts::ARCH.to_string(),
+        online: online_result,
+    }
+}
+
+/// The user id of this process, from `/proc/self`.
+fn my_uid() -> u32 {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata("/proc/self")
+        .map(|m| m.uid())
+        .unwrap_or(u32::MAX)
+}
+
+/// Replaces the home directory in every text of the report with `~`, so it can
+/// be shared.
+pub fn redact_home(report: &mut DoctorReport, home: &str) {
+    if home.len() < 2 {
+        return;
+    }
+    let fix = |s: &mut String| *s = s.replace(home, "~");
+    for c in &mut report.checks {
+        fix(&mut c.summary);
+        c.detail.iter_mut().for_each(fix);
+        if let Some(f) = &mut c.fix {
+            fix(f);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -669,6 +1100,7 @@ mod tests {
                 now: 1_000,
                 ..ReleaseFacts::default()
             },
+            self_op: SelfOp::Clean,
         }
     }
 
@@ -681,7 +1113,7 @@ mod tests {
         let r = evaluate(&healthy());
         assert!(r.worst() <= Status::Note, "{:?}", r.checks);
         assert_eq!(status(&r, "owner"), Status::Ok);
-        assert_eq!(r.checks.len(), 11);
+        assert_eq!(r.checks.len(), 12);
     }
 
     #[test]
@@ -797,6 +1229,122 @@ mod tests {
             .find(|c| c.id == "release-source")
             .unwrap();
         assert_eq!(src.status, Status::Problem);
+    }
+
+    fn deep() -> DeepFacts {
+        DeepFacts {
+            needs: vec![NeedFact {
+                name: "makepkg",
+                package: "pacman",
+                present: true,
+                needed_for: "building",
+            }],
+            build_free: Some(10 * 1024 * 1024 * 1024),
+            build_dir: "/home/u/.cache".into(),
+            self_dir_mode: Some(0o755),
+            self_dir_mine: true,
+            index_entries: 3,
+            index_news: 3,
+            index_signature: "not required (integrity from the address only)".into(),
+            eligible: 3,
+            latest: Some("r2 (0.2.0)".into()),
+            architecture: "x86_64".into(),
+            ..DeepFacts::default()
+        }
+    }
+
+    #[test]
+    fn diagnose_runs_the_check_rows_first_and_adds_the_deep_ones() {
+        let f = healthy();
+        let shallow = evaluate(&f);
+        let r = evaluate_deep(&f, &deep());
+        for c in &shallow.checks {
+            assert!(
+                r.checks
+                    .iter()
+                    .any(|x| x.id == c.id && x.status == c.status),
+                "{}",
+                c.id
+            );
+        }
+        for id in ["tools", "space", "self-dir", "index", "platform"] {
+            assert!(r.checks.iter().any(|c| c.id == id), "{id}");
+        }
+        assert!(r.worst() <= Status::Note, "{:?}", r.checks);
+    }
+
+    #[test]
+    fn diagnose_explains_what_is_missing_and_what_is_unsafe() {
+        let f = healthy();
+        let mut d = deep();
+        d.needs.push(NeedFact {
+            name: "cargo",
+            package: "rust",
+            present: false,
+            needed_for: "compiling emrac",
+        });
+        d.build_free = Some(100 * 1024 * 1024);
+        d.self_dir_mode = Some(0o777);
+        d.leftovers = vec!["releases.json.part".into()];
+        d.online = Some(Err("timed out".into()));
+        let r = evaluate_deep(&f, &d);
+        let by = |id: &str| r.checks.iter().find(|c| c.id == id).unwrap();
+        assert_eq!(by("tools").status, Status::Warning);
+        assert_eq!(
+            by("tools").fix.as_deref(),
+            Some("sudo pacman -S --needed rust")
+        );
+        assert!(by("tools").detail[0].contains("compiling emrac"));
+        assert_eq!(by("space").status, Status::Warning);
+        assert_eq!(by("self-dir").status, Status::Problem);
+        assert_eq!(by("leftovers").status, Status::Note);
+        assert_eq!(by("online").status, Status::Warning);
+        let mut f2 = healthy();
+        f2.release.require_signature = true;
+        f2.release.signing_key_set = true;
+        let r = evaluate_deep(&f2, &deep());
+        assert_eq!(
+            r.checks
+                .iter()
+                .find(|c| c.id == "signature")
+                .unwrap()
+                .status,
+            Status::Warning
+        );
+        let mut signed = deep();
+        signed.signature_file = true;
+        signed.index_signature = "signed by AAAA".into();
+        assert_eq!(
+            evaluate_deep(&f2, &signed)
+                .checks
+                .iter()
+                .find(|c| c.id == "signature")
+                .unwrap()
+                .status,
+            Status::Ok
+        );
+    }
+
+    #[test]
+    fn a_cut_off_self_operation_is_a_warning_that_says_what_it_means() {
+        let mut f = healthy();
+        f.self_op = SelfOp::Interrupted(
+            "upgrade 0.2.0 → 0.3.0 (r3)".into(),
+            "nothing on the system was changed".into(),
+        );
+        let r = evaluate(&f);
+        let c = r.checks.iter().find(|c| c.id == "self-op").unwrap();
+        assert_eq!(c.status, Status::Warning);
+        assert!(c.detail[0].contains("nothing on the system"));
+    }
+
+    #[test]
+    fn the_home_directory_is_removed_from_a_shared_report() {
+        let mut r = evaluate_deep(&healthy(), &deep());
+        r.checks[0].summary = "/home/u/.cache/x and /home/u".into();
+        redact_home(&mut r, "/home/u");
+        assert_eq!(r.checks[0].summary, "~/.cache/x and ~");
+        assert!(r.checks.iter().all(|c| !c.summary.contains("/home/u")));
     }
 
     #[test]

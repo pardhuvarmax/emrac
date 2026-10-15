@@ -119,6 +119,9 @@ fn run(cli: &Cli) -> Result<()> {
         let cfg_flags = Config::load().map(|c| c.flags).unwrap_or_default();
         return match command {
             SelfCommand::Check => commands::self_cmd::check(cli.json),
+            SelfCommand::Diagnose { online } => {
+                commands::self_cmd::diagnose(*online, cli.offline || cfg_flags.offline, cli.json)
+            }
             SelfCommand::Sync => commands::self_cmd::sync(
                 cli.dry_run || cfg_flags.dry_run,
                 cli.offline || cfg_flags.offline,
