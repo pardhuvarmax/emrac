@@ -1314,3 +1314,35 @@ fn doctor_report_is_markdown_without_the_users_identity() {
         assert!(!text.contains(&hostname), "the host name is scrubbed");
     }
 }
+
+#[test]
+fn self_check_works_without_pacman_and_fails_on_a_broken_config() {
+    let home = Home::new("selfcheck");
+    let out = home.run(&["self", "check"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let text = stdout(&out);
+    assert!(
+        text.contains("Installation") && text.contains("Operation journal"),
+        "{text}"
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout(&home.run(&["self", "check", "--json"]))).unwrap();
+    assert!(json["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|c| c["id"] == "owner"));
+
+    fs::create_dir_all(home.0.join(".config/emrac")).unwrap();
+    write(
+        &home.0.join(".config/emrac/config.toml"),
+        "this is = = not toml\n",
+    );
+    let out = home.run(&["self", "check"]);
+    assert_eq!(out.status.code(), Some(1), "a broken config is a problem");
+    assert!(
+        stdout(&out).contains("config.toml can't be read"),
+        "{}",
+        stdout(&out)
+    );
+}

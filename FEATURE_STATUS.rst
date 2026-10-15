@@ -102,6 +102,9 @@ what was seen for each.
    * - ``cache [list|stats|clean|purge|trim]``
      - u28, u29
      - Source, build, binary and pacman caches; ``--lean`` keeps one rollback set; ``cc``/``cs`` shortcuts
+   * - ``self check``
+     - u11
+     - Read-only check of emrac's own installation (binary, how it was installed, config, history, journal, ledger helper); needs no pacman, network or root. The other ``self`` commands are not built
    * - ``config``
      - u1
      - Persisted defaults in ``~/.config/emrac/config.toml``

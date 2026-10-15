@@ -233,6 +233,14 @@ pub enum Commands {
         targets: Vec<String>,
     },
 
+    /// Look after emrac itself: check how it is installed and that its own
+    /// files are in order (no pacman, network or root needed)
+    #[command(name = "self")]
+    SelfCmd {
+        #[command(subcommand)]
+        command: SelfCommand,
+    },
+
     /// Check this system for common problems (read-only)
     Doctor {
         /// Print a markdown report for a bug report, with your home
@@ -531,6 +539,13 @@ pub enum HistoryCommand {
         #[arg(long)]
         failed: bool,
     },
+}
+
+#[derive(Subcommand)]
+pub enum SelfCommand {
+    /// Check emrac's own installation: the binary, how it was installed, its
+    /// configuration, its history, the journal and the ledger helper
+    Check,
 }
 
 #[derive(Subcommand)]

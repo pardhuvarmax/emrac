@@ -5,7 +5,9 @@ mod prompt;
 
 use emrac_core::{Config, Limits, Result, Sources};
 
-use cli::{Cli, Commands, HistoryCommand, LedgerCommand, SnapshotCommand, WatchCommand};
+use cli::{
+    Cli, Commands, HistoryCommand, LedgerCommand, SelfCommand, SnapshotCommand, WatchCommand,
+};
 use commands::aur_install::BuildChoice;
 use commands::rollback::Which;
 
@@ -111,6 +113,14 @@ fn run(cli: &Cli) -> Result<()> {
         return commands::pin::unpin(pkgs, cli.json);
     }
 
+    // `self check` is for the day pacman or the config is broken: it reads
+    // files and nothing else, so it runs before either is needed.
+    if let Commands::SelfCmd { command } = &cli.command {
+        return match command {
+            SelfCommand::Check => commands::self_cmd::check(cli.json),
+        };
+    }
+
     // Auditing files on disk needs no pacman or libalpm.
     if let Commands::Audit { targets } = &cli.command {
         if targets.iter().all(|t| commands::audit::is_path(t)) {
@@ -148,6 +158,7 @@ fn run(cli: &Cli) -> Result<()> {
     sources.set_interactive(!yes);
 
     match &cli.command {
+        Commands::SelfCmd { .. } => unreachable!("handled before Sources::init"),
         Commands::Search {
             query,
             limit,

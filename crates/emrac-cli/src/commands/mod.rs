@@ -21,6 +21,7 @@ pub mod remove;
 pub mod restore;
 pub mod rollback;
 pub mod search;
+pub mod self_cmd;
 pub mod snapshot;
 pub mod upgrade;
 pub mod verify;

@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 300
+     - 306
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 23
+     - 24
    * - **Automated total**
      -
-     - **332**
+     - **339**
 
-emrac-core library (300)
+emrac-core library (306)
 ------------------------
 
 ``audit::tests`` (39)
@@ -403,6 +403,16 @@ emrac-core library (300)
 * ``the_timeout_kills_a_run_on_time_and_a_normal_exit_is_reported``
 * ``tmpfs_mounts_get_a_size_cap_when_one_is_set``
 
+``self_check::tests`` (6)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_healthy_install_has_nothing_above_a_note``
+* ``a_missing_helper_is_a_note_and_an_unreadable_history_a_problem``
+* ``a_package_whose_version_differs_from_the_binary_is_noted``
+* ``each_failure_is_reported_with_its_own_status_and_fix``
+* ``version_strings_are_validated``
+* ``where_the_binary_lives_decides_the_owner_and_unknown_stays_unknown``
+
 ``snapshot::tests`` (8)
 ~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -488,10 +498,10 @@ emrac command line, unit tests (9)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (23)
+emrac command line, integration tests (24)
 ------------------------------------------
 
-``(top level)`` (23)
+``(top level)`` (24)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -510,6 +520,7 @@ emrac command line, integration tests (23)
 * ``history_archive_verify_and_ack``
 * ``history_is_empty_without_a_log_and_reads_one``
 * ``pins_list_and_unpin``
+* ``self_check_works_without_pacman_and_fails_on_a_broken_config``
 * ``snapshots_list_show_delete``
 * ``the_ledger_holds_a_second_copy_and_repairs_the_history``
 * ``the_sandbox_hides_the_network_secrets_and_home_from_a_build``
@@ -523,7 +534,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: after u10, 40 of 40 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u11, 42 of 42 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2).
 
 * version names the builder
 * usage error exits 2
@@ -565,5 +576,7 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u10, 40 of 40 passe
 * journal: a normal transaction leaves none behind
 * journal: a killed install is found by doctor, described and recorded
 * journal: the next transaction records a cut-off one by itself
+* self check runs and names how emrac was installed
+* self check reports a cut-off transaction
 
-(40 checks.)
+(42 checks.)
