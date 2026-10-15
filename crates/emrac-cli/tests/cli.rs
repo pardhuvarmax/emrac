@@ -1553,3 +1553,20 @@ fn config_refresh_restyles_an_old_plain_file_and_keeps_its_values() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(fs::read_to_string(&path).unwrap(), "not = = toml\n");
 }
+
+#[test]
+fn the_test_helper_does_not_pass_makepkgs_folders_on_to_emrac() {
+    // `makepkg` runs `check()` with PKGDEST and friends set when `emrac self
+    // upgrade` (or an AUR helper) started it; a sandbox test that builds a
+    // fixture package must not leave it where the next test will find it.
+    let home = Home::new("helperenv");
+    let cmd = home.command(&["--version"]);
+    let removed: Vec<String> = cmd
+        .get_envs()
+        .filter(|(_, v)| v.is_none())
+        .map(|(k, _)| k.to_string_lossy().into_owned())
+        .collect();
+    for var in ["PKGDEST", "SRCDEST", "SRCPKGDEST", "LOGDEST", "BUILDDIR"] {
+        assert!(removed.iter().any(|r| r == var), "{var} is passed through");
+    }
+}

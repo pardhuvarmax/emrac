@@ -28,10 +28,10 @@ Totals
      - 11
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 28
+     - 29
    * - **Automated total**
      -
-     - **441**
+     - **442**
 
 emrac-core library (402)
 ------------------------
@@ -648,10 +648,10 @@ emrac command line, unit tests (11)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (28)
+emrac command line, integration tests (29)
 ------------------------------------------
 
-``(top level)`` (28)
+``(top level)`` (29)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -678,6 +678,7 @@ emrac command line, integration tests (28)
 * ``snapshots_list_show_delete``
 * ``the_ledger_holds_a_second_copy_and_repairs_the_history``
 * ``the_sandbox_hides_the_network_secrets_and_home_from_a_build``
+* ``the_test_helper_does_not_pass_makepkgs_folders_on_to_emrac``
 * ``the_watch_install_asks_for_root_and_the_helper_stays_hidden``
 * ``usage_errors_exit_2``
 * ``version_and_help_succeed``
