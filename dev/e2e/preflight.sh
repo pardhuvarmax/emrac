@@ -4,7 +4,7 @@
 # emrac refuses a partial upgrade, lets --allow-partial and a pin through, and
 # refuses to remove the only kernel (a fake one).
 #
-# last full run: u20, 22 of 22 passed
+# last full run: u20, 24 of 24 passed
 set -u
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; tail -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -92,6 +92,8 @@ ck "--ack-news goes ahead" "as_tester env EMRAC_NEWS_FEED=file:///tmp/feed.xml $
 newer fixnew2 3.0
 feed "A new mirror in Iceland" "A new mirror is available."
 ck "news that is not critical is shown and does not stop the upgrade" "as_tester env EMRAC_NEWS_FEED=file:///tmp/feed.xml $e upgrade --yes >/tmp/o 2>&1; grep -q \"haven't seen\" /tmp/o && pacman -Q fixnew2 | grep -q '3.0'"
+ck "an upgrade shows its update risk and ends with the report" "grep -q 'Update risk' /tmp/o && grep -q 'after the upgrade' /tmp/o"
+ck "emrac report works on the last upgrade in the history" "as_tester $e report >/tmp/r 2>&1; grep -q 'report for tx-' /tmp/r"
 
 # protecting pacman's database (u20): a leftover lock, a database that is already broken
 touch /var/lib/pacman/db.lck

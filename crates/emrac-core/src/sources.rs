@@ -2039,6 +2039,78 @@ impl Sources {
             .collect()
     }
 
+    /// The facts the after-upgrade report needs (u20): the running kernel,
+    /// the services the changed packages own and when they started, failed
+    /// units, broken AUR builds and new `.pacnew` files. `failed_before` is
+    /// what was failing before the upgrade, when known. Read-only; as a
+    /// normal user only what systemd shows to a user.
+    pub fn upgrade_facts(
+        &self,
+        changes: Vec<crate::upgrade_report::Change>,
+        since: u64,
+        failed_before: Option<Vec<String>>,
+    ) -> crate::upgrade_report::Facts {
+        let running_kernel = read_trimmed("/proc/sys/kernel/osrelease").unwrap_or_default();
+        let kernel_dirs: Vec<(String, String)> = std::fs::read_dir("/usr/lib/modules")
+            .map(|rd| {
+                rd.flatten()
+                    .filter_map(|e| {
+                        let base = std::fs::read_to_string(e.path().join("pkgbase")).ok()?;
+                        Some((
+                            e.file_name().to_string_lossy().into_owned(),
+                            base.trim().to_string(),
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut services = Vec::new();
+        for c in &changes {
+            let files = self.alpm.package_files(&c.name);
+            for unit in deps::service_units(&files)
+                .into_iter()
+                .filter(|u| u.ends_with(".service"))
+            {
+                if let Some(started) = service_start(&unit) {
+                    services.push((unit, c.name.clone(), started));
+                }
+            }
+        }
+        let stale_broken = self
+            .stale_builds()
+            .into_iter()
+            .filter(|s| !s.broken.is_empty() && !s.binary)
+            .map(|s| s.name)
+            .collect();
+        let pacnew_new = find_pacnew(Path::new("/etc"))
+            .iter()
+            .filter(|p| {
+                std::fs::metadata(p)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .is_some_and(|d| d.as_secs() >= since)
+            })
+            .count();
+        crate::upgrade_report::Facts {
+            changes,
+            since,
+            running_kernel,
+            kernel_dirs,
+            services,
+            failed_now: failed_units(&[]),
+            failed_before,
+            stale_broken,
+            pacnew_new,
+        }
+    }
+
+    /// The units failing now (system manager), for comparing before and after.
+    pub fn failed_units_now(&self) -> Vec<String> {
+        failed_units(&[])
+    }
+
     /// `emrac rebuild`: the plan for building installed AUR (foreign) packages
     /// again from source. Everything named must be installed and foreign.
     pub fn plan_rebuild(&self, pkgs: &[String]) -> Result<Plan> {
@@ -2751,6 +2823,30 @@ fn on_path(name: &str) -> bool {
 }
 
 /// Names of failed systemd units (`extra` is `--user` for the user manager).
+/// When a running service was started (unix seconds); `None` if it isn't
+/// running or systemd can't say.
+fn service_start(unit: &str) -> Option<u64> {
+    let out = Command::new("systemctl")
+        .args([
+            "show",
+            unit,
+            "-p",
+            "ActiveState",
+            "-p",
+            "ExecMainStartTimestamp",
+            "--timestamp=unix",
+        ])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    if !text.lines().any(|l| l == "ActiveState=active") {
+        return None;
+    }
+    text.lines()
+        .find_map(|l| l.strip_prefix("ExecMainStartTimestamp=@"))
+        .and_then(|t| t.trim().parse().ok())
+}
+
 fn failed_units(extra: &[&str]) -> Vec<String> {
     Command::new("systemctl")
         .args(extra)

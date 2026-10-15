@@ -22,6 +22,7 @@ pub mod purge;
 pub mod rebuild;
 pub mod reinstall;
 pub mod remove;
+pub mod report;
 pub mod restore;
 pub mod rollback;
 pub mod search;

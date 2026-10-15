@@ -59,6 +59,19 @@ pub fn run(
     } else {
         crate::commands::news::gate(offline, dry_run, ack_news, json)?
     };
+    if !upgrade.plan.is_empty() && !json {
+        let aur = upgrade
+            .plan
+            .packages
+            .iter()
+            .filter(|p| p.repo == "aur")
+            .count();
+        crate::commands::report::print_risk(
+            &crate::commands::report::changes_of(&upgrade.plan.packages),
+            aur,
+            news_gate.as_ref().map_or(0, |g| g.critical),
+        );
+    }
     if !upgrade.plan.is_empty() {
         crate::commands::preflight::run(
             sources,
@@ -138,6 +151,8 @@ pub fn run(
     crate::commands::plan_check::verify_before_commit(&shown, &upgrade.plan, &|s| {
         s.plan_upgrade(pkgs, offline).map(|u| u.plan)
     })?;
+    let started = emrac_core::journal::unix_now();
+    let failed_before = sources.failed_units_now();
     history::begin(&upgrade.plan)?;
     let result = (|| {
         if has_official_targets {
@@ -161,29 +176,11 @@ pub fn run(
         gate.done();
     }
     if result.is_ok() && has_official_targets && !json && !quiet {
-        hint_stale_builds();
-    }
-    result
-}
-
-/// After an upgrade: AUR packages that the new libraries may have broken.
-/// Looked at with a new `Sources`, since the one this command started with
-/// read the package database before the upgrade changed it.
-fn hint_stale_builds() {
-    let Ok(fresh) = Sources::init() else { return };
-    let stale = fresh.stale_builds();
-    let broken: Vec<&str> = stale
-        .iter()
-        .filter(|s| !s.broken.is_empty() && !s.binary)
-        .map(|s| s.name.as_str())
-        .collect();
-    if !broken.is_empty() {
-        say!(
-            Voice::Suspects,
-            "this upgrade may have broken {} AUR {}: {}. `emrac rebuild --check` says why, `emrac rebuild --stale` builds them again.",
-            broken.len(),
-            if broken.len() == 1 { "package" } else { "packages" },
-            broken.join(", ")
+        crate::commands::report::after_upgrade(
+            crate::commands::report::changes_of(&upgrade.plan.packages),
+            started,
+            failed_before,
         );
     }
+    result
 }

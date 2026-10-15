@@ -359,6 +359,10 @@ pub enum Commands {
     /// Find installed packages that require each other in a ring
     Cycles,
 
+    /// What the last upgrade left to do: a reboot, services to restart, new
+    /// failures, broken AUR packages, new .pacnew files
+    Report,
+
     /// The Arch Linux news: which items you haven't seen, and which are
     /// critical (a breaking change, manual intervention, or a change that
     /// touches the kernel, bootloader, C library, systemd, pacman or drivers)

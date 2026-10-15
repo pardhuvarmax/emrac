@@ -35,12 +35,14 @@ pub mod self_upgrade;
 mod snapshot;
 mod sources;
 pub mod stale_builds;
+pub mod upgrade_report;
 mod verify;
 pub mod voice;
 
 pub use audit::{
     audit, scriptlet_name, AuditReport, ExtraFile, Finding, Severity, Verdict, MAX_EXTRA_FILES,
 };
+pub use backend::version_is_newer;
 pub use backend::AurSyncOutcome;
 pub use backend::BuildOptions;
 pub use cache::{

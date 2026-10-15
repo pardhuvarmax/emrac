@@ -132,6 +132,8 @@ pub fn ack(offline: bool, json: bool) -> Result<()> {
 /// What the gate found for an upgrade.
 pub struct Gate {
     loaded: Loaded,
+    /// Unread items that are critical.
+    pub critical: usize,
 }
 
 impl Gate {
@@ -194,5 +196,8 @@ pub fn gate(offline: bool, dry_run: bool, ack_news: bool, json: bool) -> Result<
             "this is a dry run, so nothing was stopped; the real run would refuse until the critical news is acknowledged."
         );
     }
-    Ok(Some(Gate { loaded }))
+    Ok(Some(Gate {
+        critical: critical.len(),
+        loaded,
+    }))
 }

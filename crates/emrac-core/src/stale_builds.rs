@@ -274,6 +274,18 @@ pub fn parse_log_time(s: &str) -> Option<u64> {
     u64::try_from(days * 86_400 + h * 3600 + mi * 60 + sec - offset).ok()
 }
 
+/// Times of the `transaction started` lines of a pacman log.
+pub fn transaction_starts(log: &str) -> Vec<u64> {
+    log.lines()
+        .filter_map(|l| {
+            let rest = l.strip_prefix('[')?;
+            let (stamp, tail) = rest.split_once("] [ALPM] ")?;
+            tail.starts_with("transaction started").then_some(())?;
+            parse_log_time(stamp)
+        })
+        .collect()
+}
+
 /// The `upgraded name (old -> new)` lines of a pacman log.
 pub fn parse_upgrades(log: &str) -> Vec<Upgrade> {
     log.lines()
@@ -637,6 +649,14 @@ mod tests {
         assert_eq!(minor_of("3.14.0-1").as_deref(), Some("3.14"));
         assert_eq!(minor_of("1:5.42.0-1").as_deref(), Some("5.42"));
         assert_eq!(minor_of("garbage"), None);
+    }
+
+    #[test]
+    fn transaction_starts_are_found_in_the_log() {
+        let log = "[2026-10-15T10:00:00+0000] [ALPM] transaction started\n[2026-10-15T10:00:30+0000] [ALPM] upgraded a (1 -> 2)\n[2026-10-15T10:01:00+0000] [ALPM] transaction completed\n[2026-10-15T12:00:00+0000] [ALPM] transaction started\n";
+        let t = transaction_starts(log);
+        assert_eq!(t.len(), 2);
+        assert_eq!(t[1] - t[0], 7200);
     }
 
     #[test]
