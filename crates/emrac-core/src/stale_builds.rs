@@ -322,9 +322,22 @@ pub fn abi_bumps(upgrades: &[Upgrade], built: u64, depends: &[String]) -> Vec<St
     out
 }
 
+/// Said wherever a rebuild of a binary package could be expected to help.
+pub const BINARY_NOTICE: &str = "rebuild is intended for source packages only: rebuilding a binary package (-bin) won't fix anything, it only downloads the vendor's files again. For breakage in binary packages, see `emrac doctor` or the package maintainer's news (the AUR page's comments).";
+
+/// A package that repackages a vendor's finished program instead of building
+/// one: by the AUR's naming convention.
+pub fn is_binary_package(name: &str) -> bool {
+    ["-bin", "-appimage", "-prebuilt"]
+        .iter()
+        .any(|suffix| name.ends_with(suffix))
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct StaleBuild {
     pub name: String,
+    /// A binary package (`-bin`): a rebuild would not change what is installed.
+    pub binary: bool,
     pub version: String,
     /// Unix seconds of the build.
     pub built: u64,
@@ -478,6 +491,7 @@ pub fn judge(
     broken.extend(interpreter_mismatches(&pkg.files, interpreters));
     StaleBuild {
         name: pkg.name.clone(),
+        binary: is_binary_package(&pkg.name),
         version: pkg.version.clone(),
         built: pkg.built,
         broken,
@@ -546,6 +560,25 @@ mod tests {
         assert_eq!(missing, ["libgone.so.2"]);
         let none = missing_libs(&ElfInfo::default(), Path::new("/"), &system, &own, &exists);
         assert!(none.is_empty());
+    }
+
+    #[test]
+    fn binary_packages_are_told_by_name() {
+        for n in ["cloudflare-warp-bin", "foo-appimage", "bar-prebuilt"] {
+            assert!(is_binary_package(n), "{n}");
+        }
+        for n in [
+            "quickshell-git",
+            "binutils",
+            "bin-tool",
+            "firefox-binary-patch",
+        ] {
+            assert!(!is_binary_package(n), "{n}");
+        }
+        assert!(
+            BINARY_NOTICE.contains("source packages only")
+                && BINARY_NOTICE.contains("emrac doctor")
+        );
     }
 
     #[test]

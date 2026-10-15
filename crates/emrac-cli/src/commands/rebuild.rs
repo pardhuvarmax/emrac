@@ -1,3 +1,4 @@
+use emrac_core::stale_builds::{is_binary_package, BINARY_NOTICE};
 use emrac_core::{say, Error, PlanAction, Result, Sources, Voice};
 
 use crate::commands::aur_install::BuildChoice;
@@ -26,10 +27,23 @@ pub fn run(
         return Ok(());
     }
     let names: Vec<String> = if stale {
-        let broken: Vec<String> = sources
-            .stale_builds()
+        let all = sources.stale_builds();
+        let skipped: Vec<&str> = all
+            .iter()
+            .filter(|s| !s.broken.is_empty() && s.binary)
+            .map(|s| s.name.as_str())
+            .collect();
+        if !skipped.is_empty() && !json {
+            say!(
+                Voice::Notes,
+                "left out (binary packages, a rebuild would not fix them): {}. {}",
+                skipped.join(", "),
+                BINARY_NOTICE
+            );
+        }
+        let broken: Vec<String> = all
             .into_iter()
-            .filter(|s| !s.broken.is_empty())
+            .filter(|s| !s.broken.is_empty() && !s.binary)
             .map(|s| s.name)
             .collect();
         if broken.is_empty() {
@@ -47,6 +61,20 @@ pub fn run(
     } else {
         pkgs.to_vec()
     };
+    let binary: Vec<&str> = names
+        .iter()
+        .map(String::as_str)
+        .filter(|n| is_binary_package(n))
+        .collect();
+    if !binary.is_empty() && !json {
+        say!(
+            Voice::Warns,
+            "{} {} a binary package. {}",
+            binary.join(", "),
+            if binary.len() == 1 { "is" } else { "are" },
+            BINARY_NOTICE
+        );
+    }
     let mut plan = sources.plan_rebuild(&names)?;
     output::print_rebuild(&plan, json);
     if offline && !dry_run {

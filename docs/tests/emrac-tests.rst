@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 358
+     - 368
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 11
@@ -31,9 +31,9 @@ Totals
      - 28
    * - **Automated total**
      -
-     - **397**
+     - **407**
 
-emrac-core library (358)
+emrac-core library (368)
 ------------------------
 
 ``audit::tests`` (39)
@@ -190,7 +190,7 @@ emrac-core library (358)
 * ``why_prefers_the_shortest_chain``
 * ``why_survives_cycles``
 
-``doctor::tests`` (25)
+``doctor::tests`` (26)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_cut_off_transaction_is_a_warning_with_the_recover_fix``
@@ -212,6 +212,7 @@ emrac-core library (358)
 * ``pending_upgrades_are_a_note_and_unknown_is_skipped``
 * ``problems_sort_before_warnings_before_notes_and_keep_check_order_within``
 * ``scrubbing_removes_the_home_user_and_host_names``
+* ``stale_aur_builds_are_a_warning_when_broken_and_a_note_when_they_may_be``
 * ``systemctl_and_df_output_are_parsed``
 * ``the_ledger_check_reports_each_state``
 * ``the_ledger_watch_check_reports_each_state``
@@ -523,6 +524,19 @@ emrac-core library (358)
 * ``only_a_failed_dependency_step_is_explained``
 * ``undoing_needs_the_old_versions_of_only_what_the_record_really_changed``
 
+``stale_builds::tests`` (9)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_library_is_missing_unless_the_system_the_package_or_a_search_path_has_it``
+* ``a_minor_bump_of_qt_after_the_build_may_break_what_depends_on_qt``
+* ``a_needed_name_with_a_path_is_checked_as_a_path``
+* ``a_package_is_judged_from_its_files_its_dependencies_and_the_log``
+* ``binary_packages_are_told_by_name``
+* ``interpreter_folders_of_an_old_version_are_found``
+* ``only_the_systems_own_folders_count_as_broken_and_bundled_apps_as_maybe``
+* ``pacman_log_lines_give_upgrades_with_their_times``
+* ``the_elf_reader_agrees_with_readelf_on_a_real_binary_and_a_library``
+
 ``verify::tests`` (13)
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -620,7 +634,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: after u18, 44 of 44 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u19, 47 of 47 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3).
 
 * version names the builder
 * usage error exits 2
@@ -647,6 +661,9 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u18, 44 of 44 passe
 * audit flags curl | sh
 * AUR install: audit, sandbox build, manifest, pacman -U
 * build without installing
+* rebuild builds an installed AUR package again
+* rebuild refuses an official package and a missing one
+* rebuild --check lists nothing broken for a healthy AUR package
 * a closed stdin declines (no install)
 * history: 22 real transactions chain and verify
 * history archive keeps what undo and the cache policy answer
@@ -667,4 +684,4 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u18, 44 of 44 passe
 * self check runs and names how emrac was installed
 * self check reports a cut-off transaction
 
-(44 checks.)
+(47 checks.)

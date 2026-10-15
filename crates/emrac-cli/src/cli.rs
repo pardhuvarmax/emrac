@@ -378,7 +378,8 @@ pub enum Commands {
     },
 
     /// Build installed AUR packages again from source (after a library, Python
-    /// or Qt update broke them): fetches and audits the sources like `upgrade`
+    /// or Qt update broke them): fetches and audits the sources like `upgrade`.
+    /// For source packages only: rebuilding a -bin package fixes nothing
     Rebuild {
         /// The packages to build again (not with --check or --stale)
         pkgs: Vec<String>,

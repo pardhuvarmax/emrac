@@ -1742,12 +1742,17 @@ impl Sources {
         let stale = self.stale_builds();
         let stale_broken = stale
             .iter()
-            .filter(|s| !s.broken.is_empty())
+            .filter(|s| !s.broken.is_empty() && !s.binary)
+            .map(|s| s.name.clone())
+            .collect();
+        let stale_binary = stale
+            .iter()
+            .filter(|s| !s.broken.is_empty() && s.binary)
             .map(|s| s.name.clone())
             .collect();
         let stale_maybe = stale
             .iter()
-            .filter(|s| s.broken.is_empty())
+            .filter(|s| s.broken.is_empty() && !s.binary)
             .map(|s| s.name.clone())
             .collect();
         let recent_failed_transactions = History::all()
@@ -1801,6 +1806,7 @@ impl Sources {
             expired_pins,
             recent_failed_transactions,
             stale_broken,
+            stale_binary,
             stale_maybe,
             history,
             ledger,

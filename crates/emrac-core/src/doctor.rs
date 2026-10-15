@@ -147,6 +147,8 @@ pub struct DoctorInputs {
     /// AUR packages broken by a library or language update (u19), and the
     /// ones that may be.
     pub stale_broken: Vec<String>,
+    /// Binary (`-bin`) packages with a missing library: a rebuild won't help.
+    pub stale_binary: Vec<String>,
     pub stale_maybe: Vec<String>,
     /// `None`: there is no history yet.
     pub history: Option<HistoryFacts>,
@@ -612,6 +614,29 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             )
             .detail(listed(&i.stale_maybe))
             .fix("emrac rebuild --check"),
+        );
+    }
+
+    if !i.stale_binary.is_empty() {
+        checks.push(
+            check(
+                "stale-binary",
+                "Binary AUR packages missing a library",
+                Status::Note,
+                format!(
+                    "{} cannot find a library it needs",
+                    plural(
+                        i.stale_binary.len(),
+                        "binary AUR package",
+                        "binary AUR packages"
+                    )
+                ),
+            )
+            .detail({
+                let mut d = listed(&i.stale_binary);
+                d.push(crate::stale_builds::BINARY_NOTICE.to_string());
+                d
+            }),
         );
     }
 
@@ -1522,7 +1547,7 @@ mod tests {
             one(&r, "stale-builds").fix.as_deref(),
             Some("emrac rebuild --check")
         );
-        i.stale_broken = vec!["cloudflare-warp-bin".into()];
+        i.stale_broken = vec!["somelib".into()];
         let r = evaluate(&i);
         assert_eq!(one(&r, "stale-builds").status, Status::Warning);
         assert!(one(&r, "stale-builds")

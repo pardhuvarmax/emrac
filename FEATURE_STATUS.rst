@@ -93,6 +93,9 @@ what was seen for each.
    * - ``deps`` / ``rdeps`` / ``why`` / ``orphans``
      - u12
      - Read-only dependency inspection
+   * - ``rebuild`` / ``rebuild --check`` / ``--stale``
+     - u19
+     - Build installed AUR packages again from source through the audited path; find the ones a library, Python or Qt update broke or may have broken (also a ``doctor`` row); source packages only, binary packages are named and left out
    * - plan ids / ``--expect-plan``
      - u18
      - A digest of what a plan does, shown under every plan (``digest`` in ``--json``); ``--expect-plan`` runs only that plan; a plan that was on screen for 30 seconds is made again before the commit and must be the same; history records carry the digest

@@ -770,14 +770,9 @@ pub fn print_stale(stale: &[emrac_core::stale_builds::StaleBuild], json: bool) {
         );
         return;
     }
-    let broken: Vec<&str> = stale
-        .iter()
-        .filter(|s| !s.broken.is_empty())
-        .map(|s| s.name.as_str())
-        .collect();
     say!(
         Voice::Found,
-        "{} installed AUR {} could need building again\n",
+        "{} installed AUR {} could need attention\n",
         stale.len(),
         if stale.len() == 1 {
             "package"
@@ -786,7 +781,12 @@ pub fn print_stale(stale: &[emrac_core::stale_builds::StaleBuild], json: bool) {
         }
     );
     for s in stale {
-        println!("  {} {}", s.name, s.version);
+        println!(
+            "  {} {}{}",
+            s.name,
+            s.version,
+            if s.binary { "  (binary package)" } else { "" }
+        );
         for b in &s.broken {
             println!("      broken: {b}");
         }
@@ -795,21 +795,32 @@ pub fn print_stale(stale: &[emrac_core::stale_builds::StaleBuild], json: bool) {
         }
     }
     println!();
-    if !broken.is_empty() {
+    let fixable: Vec<&str> = stale
+        .iter()
+        .filter(|s| !s.broken.is_empty() && !s.binary)
+        .map(|s| s.name.as_str())
+        .collect();
+    if !fixable.is_empty() {
         println!(
             "Build the broken ones again: emrac rebuild --stale   (or emrac rebuild {})",
-            broken.join(" ")
+            fixable.join(" ")
         );
     }
     let maybe: Vec<&str> = stale
         .iter()
-        .filter(|s| s.broken.is_empty())
+        .filter(|s| s.broken.is_empty() && !s.binary)
         .map(|s| s.name.as_str())
         .collect();
     if !maybe.is_empty() {
         println!(
             "Only if one of them misbehaves: emrac rebuild {}",
             maybe.join(" ")
+        );
+    }
+    if stale.iter().any(|s| s.binary) {
+        println!(
+            "\nNote on the binary packages: {}",
+            emrac_core::stale_builds::BINARY_NOTICE
         );
     }
 }

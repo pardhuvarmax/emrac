@@ -165,7 +165,7 @@ fn hint_stale_builds() {
     let stale = fresh.stale_builds();
     let broken: Vec<&str> = stale
         .iter()
-        .filter(|s| !s.broken.is_empty())
+        .filter(|s| !s.broken.is_empty() && !s.binary)
         .map(|s| s.name.as_str())
         .collect();
     if !broken.is_empty() {
