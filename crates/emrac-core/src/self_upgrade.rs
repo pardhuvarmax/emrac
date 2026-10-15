@@ -78,7 +78,7 @@ pub enum Outcome {
     Refused { reasons: Vec<String> },
     /// Can be done: the steps, and what to know first.
     Ready {
-        target: Release,
+        target: Box<Release>,
         steps: Vec<String>,
         warnings: Vec<String>,
     },
@@ -206,7 +206,7 @@ pub fn plan_upgrade(ctx: &Context) -> Plan {
             ));
         }
         Outcome::Ready {
-            target: target.clone(),
+            target: Box::new(target.clone()),
             steps: steps(Op::Upgrade, ctx, target),
             warnings,
         }
@@ -318,7 +318,7 @@ pub fn plan_downgrade(ctx: &Context, version: Option<&str>, tag: Option<&str>) -
             ));
         }
         Outcome::Ready {
-            target: target.clone(),
+            target: Box::new(target.clone()),
             steps: steps(Op::Downgrade, ctx, target),
             warnings,
         }
