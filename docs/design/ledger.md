@@ -64,7 +64,12 @@ The rules (`-w /var/lib/emrac/ -p wa -k emrac-ledger` and `-w /usr/bin/chattr -p
 log; they do not block. Each time emrac's helper appends it writes one line to the journal
 (`SYSLOG_IDENTIFIER=emrac-ledger`); an event by emrac's own program with such a line close
 in time is its own. Another program, or emrac's name without the line, is reported.
-Reading the events needs the `systemd-journal` (or `adm`) group, or `sudo emrac ledger events`.
+emrac reads the events from the journal and from auditd's own log, `/var/log/audit/audit.log`
+(with `auditd` running the journal often receives none, which a real run showed). That log is
+readable only by root: use `sudo emrac ledger events`, or let your group read it with
+`log_group = wheel` in `/etc/audit/auditd.conf` (and the log directory's mode to match), after
+which `emrac doctor` can check it without sudo. Until then `doctor` says the events
+"can't be read from here" instead of reporting zero.
 
 `doctor` says which step is missing: no rules, events unreadable, or "not active" (emrac
 appended but the audit system saw nothing).

@@ -210,6 +210,9 @@ pub fn events(json: bool) -> Result<()> {
         );
         return Ok(());
     }
+    if let Some(why) = &read.unreadable {
+        say!(Voice::Suspects, "this may be incomplete: {why}");
+    }
     if read.events.is_empty() {
         say!(
             Voice::Notes,

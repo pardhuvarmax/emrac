@@ -103,6 +103,8 @@ pub struct WatchRead {
     pub witnesses: usize,
     /// When emrac logged each of its appends (unix seconds).
     pub witness_times: Vec<u64>,
+    /// Why the events may be incomplete.
+    pub unreadable: Option<String>,
 }
 
 fn name_of(uid: u32) -> String {
@@ -225,6 +227,55 @@ fn id_field(f: &BTreeMap<String, String>, k: &str) -> Option<u32> {
         .filter(|v| *v != u32::MAX)
 }
 
+fn absorb(
+    builders: &mut BTreeMap<String, Builder>,
+    id: String,
+    kind: &str,
+    time: u64,
+    f: &BTreeMap<String, String>,
+) {
+    let b = builders.entry(id).or_default();
+    b.time = time;
+    match kind {
+        "SYSCALL" => {
+            b.key = f.get("key").cloned().unwrap_or_default();
+            b.action = f
+                .get("syscall")
+                .map_or_else(String::new, |n| syscall_name(n));
+            b.exe = f.get("exe").cloned().unwrap_or_default();
+            b.comm = f.get("comm").cloned().unwrap_or_default();
+            b.uid = id_field(f, "uid");
+            b.auid = id_field(f, "auid");
+            b.success = f.get("success").is_none_or(|v| v == "yes");
+        }
+        "PATH" => {
+            if let Some(n) = f.get("name") {
+                b.paths.push(n.clone());
+            }
+        }
+        _ => {}
+    }
+}
+
+fn finish(builders: BTreeMap<String, Builder>) -> Vec<WatchEvent> {
+    builders
+        .into_values()
+        .filter(|b| b.key.starts_with(KEY))
+        .map(|b| WatchEvent {
+            verdict: Verdict::Foreign,
+            time: b.time,
+            key: b.key,
+            action: b.action,
+            exe: b.exe,
+            comm: b.comm,
+            uid: b.uid,
+            auid: b.auid,
+            success: b.success,
+            paths: b.paths,
+        })
+        .collect()
+}
+
 /// Audit events from `journalctl -o json` output (one JSON object per line).
 pub fn parse_journal(text: &str, trusted: &[String]) -> (Vec<WatchEvent>, Vec<Witness>) {
     let mut builders: BTreeMap<String, Builder> = BTreeMap::new();
@@ -253,52 +304,45 @@ pub fn parse_journal(text: &str, trusted: &[String]) -> (Vec<WatchEvent>, Vec<Wi
         let Some((kind, time, f)) = split_record(message) else {
             continue;
         };
-        let id = s("_AUDIT_ID").map(str::to_string).unwrap_or_else(|| {
-            // Raw lines carry the id after the colon; journald has the field.
-            "?".into()
-        });
-        let b = builders.entry(id).or_default();
-        b.time = time.unwrap_or(micros / 1_000_000);
-        match kind.as_str() {
-            "SYSCALL" => {
-                b.key = f.get("key").cloned().unwrap_or_default();
-                b.action = f
-                    .get("syscall")
-                    .map_or_else(String::new, |n| syscall_name(n));
-                b.exe = f.get("exe").cloned().unwrap_or_default();
-                b.comm = f.get("comm").cloned().unwrap_or_default();
-                b.uid = id_field(&f, "uid");
-                b.auid = id_field(&f, "auid");
-                b.success = f.get("success").is_none_or(|v| v == "yes");
-            }
-            "PATH" => {
-                if let Some(n) = f.get("name") {
-                    b.paths.push(n.clone());
-                }
-            }
-            _ => {}
-        }
+        let id = s("_AUDIT_ID").unwrap_or("?").to_string();
+        absorb(
+            &mut builders,
+            id,
+            &kind,
+            time.unwrap_or(micros / 1_000_000),
+            &f,
+        );
     }
-    let events = builders
-        .into_values()
-        .filter(|b| b.key.starts_with(KEY))
-        .map(|b| WatchEvent {
-            verdict: Verdict::Foreign,
-            time: b.time,
-            key: b.key,
-            action: b.action,
-            exe: b.exe,
-            comm: b.comm,
-            uid: b.uid,
-            auid: b.auid,
-            success: b.success,
-            paths: b.paths,
-        })
-        .collect();
-    let mut events: Vec<WatchEvent> = events;
+    let mut events = finish(builders);
     classify(&mut events, &witnesses, trusted);
     events.sort_by_key(|e| e.time);
     (events, witnesses)
+}
+
+/// Events from auditd's own log (`/var/log/audit/audit.log`), raw format:
+/// `type=SYSCALL msg=audit(1760544267.717:167): arch=c000003e syscall=257 … key="emrac-ledger"`.
+/// Only records newer than `since` (unix seconds) are kept.
+pub fn parse_audit_log(text: &str, since: u64) -> Vec<WatchEvent> {
+    let mut builders: BTreeMap<String, Builder> = BTreeMap::new();
+    for line in text.lines() {
+        let Some((kind, Some(time), f)) = split_record(line) else {
+            continue;
+        };
+        if time < since {
+            continue;
+        }
+        // The serial after the colon in `msg=audit(<time>:<serial>)` ties the records of one event.
+        let Some(serial) = line
+            .split_once("msg=audit(")
+            .and_then(|(_, r)| r.split_once("):"))
+            .and_then(|(stamp, _)| stamp.split_once(':'))
+            .map(|(_, n)| n.to_string())
+        else {
+            continue;
+        };
+        absorb(&mut builders, format!("{time}:{serial}"), &kind, time, &f);
+    }
+    finish(builders)
 }
 
 /// Sets each event's verdict: emrac's own only with its program and its
@@ -344,20 +388,50 @@ fn journal(args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// auditd's own log, where it writes what the kernel reports.
+pub const AUDIT_LOG: &str = "/var/log/audit/audit.log";
+
 /// The audit events about the ledger from the last 30 days, and how many
-/// appends emrac logged itself.
+/// appends emrac logged itself. Events come from the journal and from
+/// auditd's own log; when auditd is running the journal often gets none, and
+/// the log is readable only by root unless `log_group` says otherwise.
 pub fn read(trusted: &[String]) -> Result<WatchRead> {
     let audit = journal(&["_TRANSPORT=audit"])?;
     let mine = journal(&["-t", WITNESS_TAG])?;
-    let (_, mut witnesses) = parse_journal(&mine, trusted);
-    let (events, w2) = parse_journal(&audit, trusted);
-    witnesses.extend(w2);
-    let mut events = events;
+    let (_, witnesses) = parse_journal(&mine, trusted);
+    let (mut events, _) = parse_journal(&audit, trusted);
+    let from_journal = events.len();
+
+    let mut log_unreadable = None;
+    if std::path::Path::new(AUDIT_LOG).exists() {
+        match std::fs::read_to_string(AUDIT_LOG) {
+            Ok(text) => {
+                let since = crate::history::now().saturating_sub(30 * 86_400);
+                for e in parse_audit_log(&text, since) {
+                    let dup = events
+                        .iter()
+                        .any(|x| x.time == e.time && x.key == e.key && x.action == e.action);
+                    if !dup {
+                        events.push(e);
+                    }
+                }
+            }
+            Err(e) => {
+                log_unreadable = Some(format!(
+                    "auditd's log {AUDIT_LOG} can't be read as this user ({e}); use `sudo emrac ledger events`, or let your group read it (log_group in /etc/audit/auditd.conf)"
+                ));
+            }
+        }
+    }
     classify(&mut events, &witnesses, trusted);
+    events.sort_by_key(|e| e.time);
     Ok(WatchRead {
         witnesses: witnesses.len(),
         witness_times: witnesses.iter().map(|w| w.time).collect(),
         events,
+        // Nothing from the journal and a log we cannot open: "no events"
+        // would be a guess.
+        unreadable: log_unreadable.filter(|_| from_journal == 0),
     })
 }
 
@@ -386,6 +460,7 @@ pub fn facts(trusted: &[String]) -> WatchFacts {
     };
     match read(trusted) {
         Ok(r) => {
+            f.unreadable = r.unreadable.clone();
             f.events = r.events.len();
             f.witnesses = r.witnesses;
             let installed_at = rules_installed_at();
@@ -588,6 +663,48 @@ mod tests {
             serde_json::json!({"MESSAGE": "hello"}).to_string(),
         ]);
         assert!(ev.is_empty());
+    }
+
+    /// What auditd wrote for `sudo sed -i '$ d' …/ledger.jsonl` and `sudo chattr +a …`
+    /// on a real machine (raw log format, numeric ids, enrichment after \x1d).
+    const AUDIT_LOG_FIXTURE: &str = concat!(
+        "type=PATH msg=audit(1792059867.717:170): item=4 name=\"/var/lib/emrac/ledger.jsonl\" inode=1481166 dev=103:04 mode=0100644 ouid=0 ogid=0 rdev=00:00 nametype=CREATE cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0\x1dOUID=\"root\" OGID=\"root\"\n",
+        "type=PATH msg=audit(1792059867.717:170): item=2 name=\"/var/lib/emrac/sedMt1VOh\" inode=1481166 dev=103:04 mode=0100644 ouid=0 ogid=0 rdev=00:00 nametype=DELETE cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0\n",
+        "type=CWD msg=audit(1792059867.717:170): cwd=\"/home/sicmundus\"\n",
+        "type=SYSCALL msg=audit(1792059867.717:170): arch=c000003e syscall=82 success=yes exit=0 a0=562306b24f90 a1=7ffcf3fbae66 a2=e a3=21 items=5 ppid=630752 pid=630753 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts2 ses=2 comm=\"sed\" exe=\"/usr/bin/sed\" key=\"emrac-ledger\"\x1dARCH=x86_64 SYSCALL=rename AUID=\"sicmundus\" UID=\"root\"\n",
+        "type=PROCTITLE msg=audit(1792059867.717:170): proctitle=7365\n",
+        "type=EXECVE msg=audit(1792059867.728:176): argc=3 a0=\"chattr\" a1=\"+a\" a2=\"/var/lib/emrac/ledger.jsonl\"\n",
+        "type=SYSCALL msg=audit(1792059867.728:176): arch=c000003e syscall=59 success=yes exit=0 a0=56466e05d648 a1=56466e06d7e0 a2=56466e0c4090 a3=7ff7641da6f0 items=2 ppid=630756 pid=630757 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts2 ses=2 comm=\"chattr\" exe=\"/usr/bin/chattr\" key=\"emrac-ledger-attr\"\x1dARCH=x86_64 SYSCALL=execve\n",
+        "type=SYSCALL msg=audit(1792059999.001:200): arch=c000003e syscall=257 success=yes exit=3 items=1 auid=1000 uid=1000 comm=\"cat\" exe=\"/usr/bin/cat\" key=\"something-else\"\n",
+    );
+
+    #[test]
+    fn auditds_own_log_gives_the_same_events_as_the_journal_would() {
+        let mut events = parse_audit_log(AUDIT_LOG_FIXTURE, 0);
+        classify(&mut events, &[], &[EMRAC.to_string()]);
+        assert_eq!(events.len(), 2, "{events:?}");
+        let rename = events.iter().find(|e| e.action == "rename").unwrap();
+        assert_eq!(
+            (rename.exe.as_str(), rename.uid, rename.auid),
+            ("/usr/bin/sed", Some(0), Some(1000))
+        );
+        assert_eq!(rename.verdict, Verdict::Foreign);
+        assert!(rename
+            .paths
+            .iter()
+            .any(|p| p == "/var/lib/emrac/ledger.jsonl"));
+        let text = rename.describe();
+        assert!(
+            text.contains("/usr/bin/sed") && text.contains("rename"),
+            "{text}"
+        );
+        let chattr = events.iter().find(|e| e.key == KEY_ATTR).unwrap();
+        assert_eq!(
+            (chattr.action.as_str(), chattr.exe.as_str()),
+            ("execve", "/usr/bin/chattr")
+        );
+        // Older records are left out.
+        assert_eq!(parse_audit_log(AUDIT_LOG_FIXTURE, 1_792_059_868).len(), 0);
     }
 
     #[test]

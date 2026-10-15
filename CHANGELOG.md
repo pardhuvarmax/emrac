@@ -20,6 +20,10 @@ emrac is now licensed under the GNU General Public License, version 3 or any lat
 
 `emrac --version` and every `--help` screen (the top one and each subcommand's) now add the line `Sic Mundus Creatus Est.` after the credit (in `--version` between `built by pardhuvarmax` and the URL; in `--help` after the `Built by …` line).
 
+## Fix (after u9), fourth — 2026-10-15 — the watch, tried on a real machine
+
+With `auditd` running, the audit system logged every step of the ledger restore (the `sed` rewrite of `ledger.jsonl` as a create, delete and rename, and the `chattr +a`, each with key, program, user and login user), but the journal got none of it, so `emrac ledger events` and `doctor` said "0 events, all emrac's own": a wrong all-clear. emrac now also reads auditd's own log (`/var/log/audit/audit.log`, parsed in its raw format, tested on a fixture shaped like what that machine wrote). The log is readable only by root, so as a normal user `doctor` and `ledger events` now say the events can't be read from here and point to `sudo emrac ledger events` (or to `log_group` in `/etc/audit/auditd.conf`), rather than reporting none. The earlier fixtures, written from the documentation, did match the real field names.
+
 ## Correction (after u9), third — 2026-10-15
 
 My hand procedure for the watch told you to run `echo x >> /var/lib/emrac/ledger.jsonl` as root and expect the append-only flag to refuse it. It does not: append-only allows appends, so the line went in. What the real run showed is useful: emrac caught it (`doctor`: PROBLEM, "the ledger's own chain is broken", line 11 named), and the helper now refuses to extend the ledger. But it also showed two gaps, both fixed in the documents: `doctor` suggested `history verify --repair`, which rebuilds the history *from* the ledger and cannot help when the ledger itself is broken (it now points to a manual restore), and there was no restore procedure (`docs/design/ledger.md` now has "What append-only does and does not stop" and "Restoring a tampered ledger"). The audit watch recorded no event for that append, which is unexplained; being looked into.

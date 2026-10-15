@@ -89,8 +89,11 @@ the chain's head that does not.
   id, the ledger's new head hash, whether it created the ledger, and the `sudo` user. It is
   written with `logger -t emrac-ledger`. The `chattr +a` the helper runs when it creates the
   ledger is matched to that line (`created=1`); any other `chattr` is foreign.
-- **Reading** is `journalctl` only; the `sudo ausearch` fallback is not built (use
-  `sudo emrac ledger events`).
+- **Reading** is the journal (`journalctl`) plus auditd's own log `/var/log/audit/audit.log`,
+  parsed in its raw format (a real run showed that with `auditd` running the journal gets no
+  audit records). The log is root-only, so `sudo emrac ledger events` reads it, and an
+  unreadable log is reported, not counted as "no events". The `sudo ausearch` fallback is
+  not built.
 - **`history verify`** only adds one warning line if foreign events exist; `doctor` has the
   full "Ledger watch" check (set up / unreadable / not active / foreign / unlogged / ok).
 - **Anchors:** `history anchor` and `history verify --against CODE`, as planned; the code is

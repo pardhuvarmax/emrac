@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 288
+     - 289
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
@@ -31,9 +31,9 @@ Totals
      - 23
    * - **Automated total**
      -
-     - **320**
+     - **321**
 
-emrac-core library (288)
+emrac-core library (289)
 ------------------------
 
 ``audit::tests`` (39)
@@ -260,10 +260,11 @@ emrac-core library (288)
 * ``the_history_is_rebuilt_from_the_ledger_and_verifies``
 * ``the_ledger_notices_an_archive_file_that_changed``
 
-``ledger_watch::tests`` (9)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``ledger_watch::tests`` (10)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_denied_write_is_still_reported_as_denied``
+* ``auditds_own_log_gives_the_same_events_as_the_journal_would``
 * ``both_the_raw_and_the_journald_forms_of_a_record_split``
 * ``chattr_is_foreign_except_when_emrac_just_created_the_ledger``
 * ``emrac_without_a_journal_line_is_unwitnessed_and_a_late_line_does_not_count``
