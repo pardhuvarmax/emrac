@@ -30,6 +30,7 @@ pub mod self_ops;
 pub mod self_upgrade;
 mod snapshot;
 mod sources;
+pub mod stale_builds;
 mod verify;
 pub mod voice;
 

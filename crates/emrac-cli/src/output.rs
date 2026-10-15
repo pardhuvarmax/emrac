@@ -758,6 +758,62 @@ pub fn print_why(report: &WhyReport, json: bool) {
     }
 }
 
+pub fn print_stale(stale: &[emrac_core::stale_builds::StaleBuild], json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(stale).unwrap());
+        return;
+    }
+    if stale.is_empty() {
+        say!(
+            Voice::Notes,
+            "no installed AUR package looks like it needs building again."
+        );
+        return;
+    }
+    let broken: Vec<&str> = stale
+        .iter()
+        .filter(|s| !s.broken.is_empty())
+        .map(|s| s.name.as_str())
+        .collect();
+    say!(
+        Voice::Found,
+        "{} installed AUR {} could need building again\n",
+        stale.len(),
+        if stale.len() == 1 {
+            "package"
+        } else {
+            "packages"
+        }
+    );
+    for s in stale {
+        println!("  {} {}", s.name, s.version);
+        for b in &s.broken {
+            println!("      broken: {b}");
+        }
+        for m in &s.maybe {
+            println!("      may break: {m}");
+        }
+    }
+    println!();
+    if !broken.is_empty() {
+        println!(
+            "Build the broken ones again: emrac rebuild --stale   (or emrac rebuild {})",
+            broken.join(" ")
+        );
+    }
+    let maybe: Vec<&str> = stale
+        .iter()
+        .filter(|s| s.broken.is_empty())
+        .map(|s| s.name.as_str())
+        .collect();
+    if !maybe.is_empty() {
+        println!(
+            "Only if one of them misbehaves: emrac rebuild {}",
+            maybe.join(" ")
+        );
+    }
+}
+
 pub fn print_rebuild(plan: &Plan, json: bool) {
     if json {
         let mut value = serde_json::to_value(plan).unwrap();

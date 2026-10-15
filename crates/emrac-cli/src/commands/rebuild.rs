@@ -11,6 +11,8 @@ use crate::prompt::confirm;
 pub fn run(
     sources: &Sources,
     pkgs: &[String],
+    check: bool,
+    stale: bool,
     dry_run: bool,
     yes: bool,
     offline: bool,
@@ -19,7 +21,33 @@ pub fn run(
     choice: BuildChoice,
     json: bool,
 ) -> Result<()> {
-    let mut plan = sources.plan_rebuild(pkgs)?;
+    if check {
+        output::print_stale(&sources.stale_builds(), json);
+        return Ok(());
+    }
+    let names: Vec<String> = if stale {
+        let broken: Vec<String> = sources
+            .stale_builds()
+            .into_iter()
+            .filter(|s| !s.broken.is_empty())
+            .map(|s| s.name)
+            .collect();
+        if broken.is_empty() {
+            say!(
+                Voice::Notes,
+                "no installed AUR package is broken right now; `emrac rebuild --check` also lists the ones that may break."
+            );
+            return Ok(());
+        }
+        broken
+    } else if pkgs.is_empty() {
+        return Err(Error::Rebuild(
+            "name the packages to rebuild, or use --check to see which ones need it, or --stale to rebuild the broken ones".into(),
+        ));
+    } else {
+        pkgs.to_vec()
+    };
+    let mut plan = sources.plan_rebuild(&names)?;
     output::print_rebuild(&plan, json);
     if offline && !dry_run {
         return Err(Error::Rebuild(

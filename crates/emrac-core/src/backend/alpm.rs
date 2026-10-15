@@ -828,6 +828,30 @@ impl AlpmBackend {
             .collect()
     }
 
+    /// What `stale_builds` needs about each foreign package.
+    pub fn foreign_details(&self) -> Vec<crate::stale_builds::Foreign> {
+        let local = self.handle.localdb();
+        let mut out: Vec<crate::stale_builds::Foreign> = self
+            .foreign_package_names()
+            .iter()
+            .filter_map(|name| local.pkg(name.as_str()).ok())
+            .map(|pkg| crate::stale_builds::Foreign {
+                name: pkg.name().to_string(),
+                version: pkg.version().to_string(),
+                built: pkg.build_date().max(0) as u64,
+                depends: pkg.depends().iter().map(|d| d.name().to_string()).collect(),
+                files: pkg
+                    .files()
+                    .files()
+                    .iter()
+                    .map(|f| String::from_utf8_lossy(f.name()).into_owned())
+                    .collect(),
+            })
+            .collect();
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out
+    }
+
     /// Where an installed package came from, or `None` if it isn't
     /// installed at all. Used to route a named `upgrade` target to the
     /// right backend (official vs. AUR).

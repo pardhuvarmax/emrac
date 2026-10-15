@@ -336,6 +336,8 @@ fn run(cli: &Cli) -> Result<()> {
         Commands::Verify { pkgs } => commands::verify::run(&sources, pkgs, json),
         Commands::Rebuild {
             pkgs,
+            check,
+            stale,
             skip_pkgbuild,
             skip_diff,
             accept_risks,
@@ -353,6 +355,8 @@ fn run(cli: &Cli) -> Result<()> {
             commands::rebuild::run(
                 &sources,
                 pkgs,
+                *check,
+                *stale,
                 dry_run,
                 yes,
                 offline,

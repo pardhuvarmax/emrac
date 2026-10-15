@@ -144,6 +144,10 @@ pub struct DoctorInputs {
     pub orphan_bytes: u64,
     pub expired_pins: Vec<String>,
     pub recent_failed_transactions: Vec<String>,
+    /// AUR packages broken by a library or language update (u19), and the
+    /// ones that may be.
+    pub stale_broken: Vec<String>,
+    pub stale_maybe: Vec<String>,
     /// `None`: there is no history yet.
     pub history: Option<HistoryFacts>,
     /// `None`: there is no ledger file.
@@ -569,6 +573,45 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             )
             .detail(listed(&i.expired_pins))
             .fix("emrac pin <pkg> --until … to renew, or emrac unpin <pkg>"),
+        );
+    }
+
+    // AUR packages that need building again.
+    if !i.stale_broken.is_empty() {
+        checks.push(
+            check(
+                "stale-builds",
+                "AUR packages built against older libraries",
+                Status::Warning,
+                format!(
+                    "{} broken by a library or language update",
+                    plural(
+                        i.stale_broken.len(),
+                        "installed AUR package is",
+                        "installed AUR packages are"
+                    )
+                ),
+            )
+            .detail(listed(&i.stale_broken))
+            .fix("emrac rebuild --stale   (emrac rebuild --check says why)"),
+        );
+    } else if !i.stale_maybe.is_empty() {
+        checks.push(
+            check(
+                "stale-builds",
+                "AUR packages built against older libraries",
+                Status::Note,
+                format!(
+                    "{} may need building again",
+                    plural(
+                        i.stale_maybe.len(),
+                        "installed AUR package",
+                        "installed AUR packages"
+                    )
+                ),
+            )
+            .detail(listed(&i.stale_maybe))
+            .fix("emrac rebuild --check"),
         );
     }
 
@@ -1466,6 +1509,27 @@ mod tests {
             ..good
         });
         assert_eq!(one(&evaluate(&i), "ledger").status, Status::Problem);
+    }
+
+    #[test]
+    fn stale_aur_builds_are_a_warning_when_broken_and_a_note_when_they_may_be() {
+        let mut i = healthy();
+        assert!(evaluate(&i).checks.iter().all(|c| c.id != "stale-builds"));
+        i.stale_maybe = vec!["quickshell-git".into()];
+        let r = evaluate(&i);
+        assert_eq!(one(&r, "stale-builds").status, Status::Note);
+        assert_eq!(
+            one(&r, "stale-builds").fix.as_deref(),
+            Some("emrac rebuild --check")
+        );
+        i.stale_broken = vec!["cloudflare-warp-bin".into()];
+        let r = evaluate(&i);
+        assert_eq!(one(&r, "stale-builds").status, Status::Warning);
+        assert!(one(&r, "stale-builds")
+            .fix
+            .as_deref()
+            .unwrap()
+            .contains("--stale"));
     }
 
     #[test]

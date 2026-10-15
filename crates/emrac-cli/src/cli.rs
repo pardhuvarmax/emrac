@@ -377,11 +377,21 @@ pub enum Commands {
         pkgs: Vec<String>,
     },
 
-    /// Build installed AUR packages again from source (after a library or Qt
-    /// update broke them): fetches and audits the sources like `upgrade`
+    /// Build installed AUR packages again from source (after a library, Python
+    /// or Qt update broke them): fetches and audits the sources like `upgrade`
     Rebuild {
-        #[arg(required = true)]
+        /// The packages to build again (not with --check or --stale)
         pkgs: Vec<String>,
+
+        /// List the installed AUR packages that need building again, or may,
+        /// and why (reads files and pacman's log; changes nothing)
+        #[arg(long, conflicts_with_all = ["pkgs", "stale"])]
+        check: bool,
+
+        /// Build again every package that is broken now (a missing library, an
+        /// old Python or Perl folder); `--check` lists them
+        #[arg(long, conflicts_with = "pkgs")]
+        stale: bool,
 
         /// Never show the PKGBUILD/diff for review (the audit still runs)
         #[arg(long)]

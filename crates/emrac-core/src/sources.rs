@@ -1739,6 +1739,17 @@ impl Sources {
             }
             crate::ledger_watch::facts(&trusted)
         });
+        let stale = self.stale_builds();
+        let stale_broken = stale
+            .iter()
+            .filter(|s| !s.broken.is_empty())
+            .map(|s| s.name.clone())
+            .collect();
+        let stale_maybe = stale
+            .iter()
+            .filter(|s| s.broken.is_empty())
+            .map(|s| s.name.clone())
+            .collect();
         let recent_failed_transactions = History::all()
             .unwrap_or_default()
             .into_iter()
@@ -1789,6 +1800,8 @@ impl Sources {
             orphan_bytes: orphans.iter().map(|o| o.installed_size).sum(),
             expired_pins,
             recent_failed_transactions,
+            stale_broken,
+            stale_maybe,
             history,
             ledger,
             history_has_records,
@@ -1886,6 +1899,30 @@ impl Sources {
             }
         }
         out
+    }
+
+    /// Foreign packages that need building again, or may (see `stale_builds`).
+    /// Packages with nothing to report are left out. Read-only, no network.
+    pub fn stale_builds(&self) -> Vec<crate::stale_builds::StaleBuild> {
+        let system = crate::stale_builds::system_libs();
+        let interpreters: Vec<(&str, String)> = ["python", "perl"]
+            .into_iter()
+            .filter_map(|n| {
+                let (version, _, _) = self.alpm.package_info(n)?;
+                Some((n, crate::stale_builds::minor_of(&version)?))
+            })
+            .collect();
+        let upgrades = std::fs::read_to_string("/var/log/pacman.log")
+            .map(|t| crate::stale_builds::parse_upgrades(&t))
+            .unwrap_or_default();
+        self.alpm
+            .foreign_details()
+            .iter()
+            .map(|pkg| {
+                crate::stale_builds::judge(pkg, &system, &interpreters, &upgrades, Path::new("/"))
+            })
+            .filter(|s| !s.broken.is_empty() || !s.maybe.is_empty())
+            .collect()
     }
 
     /// `emrac rebuild`: the plan for building installed AUR (foreign) packages

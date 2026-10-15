@@ -151,5 +151,30 @@ pub fn run(
         Ok(())
     })();
     history::record(&upgrade.plan, &result);
+    if result.is_ok() && has_official_targets && !json && !quiet {
+        hint_stale_builds();
+    }
     result
+}
+
+/// After an upgrade: AUR packages that the new libraries may have broken.
+/// Looked at with a new `Sources`, since the one this command started with
+/// read the package database before the upgrade changed it.
+fn hint_stale_builds() {
+    let Ok(fresh) = Sources::init() else { return };
+    let stale = fresh.stale_builds();
+    let broken: Vec<&str> = stale
+        .iter()
+        .filter(|s| !s.broken.is_empty())
+        .map(|s| s.name.as_str())
+        .collect();
+    if !broken.is_empty() {
+        say!(
+            Voice::Suspects,
+            "this upgrade may have broken {} AUR {}: {}. `emrac rebuild --check` says why, `emrac rebuild --stale` builds them again.",
+            broken.len(),
+            if broken.len() == 1 { "package" } else { "packages" },
+            broken.join(", ")
+        );
+    }
 }
