@@ -80,6 +80,28 @@ the chain's head that does not.
   before a compromise unforgeable without a verification key kept off the machine.
 - **Forwarding** audit events or the journal to another host.
 
+## What was built, and where it differs
+
+- **Rules are inside the binary**, not a package file: `sudo emrac ledger watch install`
+  writes `/etc/audit/rules.d/50-emrac-ledger.rules` itself (asks; `--dry-run` shows it).
+  Nothing is added to the package.
+- **The witness** is one journal line per helper call (not per record): count, first and last
+  id, the ledger's new head hash, whether it created the ledger, and the `sudo` user. It is
+  written with `logger -t emrac-ledger`. The `chattr +a` the helper runs when it creates the
+  ledger is matched to that line (`created=1`); any other `chattr` is foreign.
+- **Reading** is `journalctl` only; the `sudo ausearch` fallback is not built (use
+  `sudo emrac ledger events`).
+- **`history verify`** only adds one warning line if foreign events exist; `doctor` has the
+  full "Ledger watch" check (set up / unreadable / not active / foreign / unlogged / ok).
+- **Anchors:** `history anchor` and `history verify --against CODE`, as planned; the code is
+  `<seq>:<first 32 hex>`, accepted down to 16 hex.
+- **Not built: the optional RFC 3161 timestamp authority** (`history.anchor_tsa`,
+  `verify --anchors`). It means building and checking DER timestamp requests and signed
+  answers; nothing leaves the machine, as before.
+- **Not verified on a live audit daemon.** The audit-record parser follows the documented
+  format and is tested on fixtures written from it, not on events captured from `auditd`
+  (it cannot run here). The hand procedure is in `docs/design/ledger.md`; run it once.
+
 ## Not covered
 
 Signed checkpoints with a hardware key (a later, optional slice); a SELinux or AppArmor
@@ -95,5 +117,4 @@ load audit rules or run a journal, so the real behaviour is checked by hand on a
 with the `audit` package: install the watch, then as root append with a shell, run
 `chattr -a` and `+a`, rename and delete a copy, and confirm `emrac history verify` and
 `doctor` name each one with its program and user, that emrac's own appends are not flagged,
-and that deleting the watch's rules turns the check into "not active". The procedure and
-its expected output are written into the slice's changelog entry when it is run.
+and that deleting the watch's rules turns the check into "not active". The procedure is in `docs/design/ledger.md`.

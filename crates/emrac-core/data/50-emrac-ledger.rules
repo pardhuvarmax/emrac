@@ -1,0 +1,6 @@
+## emrac: watch the history ledger (see `emrac ledger watch install`).
+## Any write, truncate, rename, delete, chmod or chown of the ledger or its folder:
+-w /var/lib/emrac/ -p wa -k emrac-ledger
+## Clearing the append-only flag is an ioctl a path watch does not see, but it
+## takes chattr, so every run of it is logged:
+-w /usr/bin/chattr -p x -k emrac-ledger-attr

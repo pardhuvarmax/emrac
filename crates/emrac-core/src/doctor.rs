@@ -77,6 +77,8 @@ pub struct HistoryFacts {
     pub archives: usize,
 }
 
+pub use crate::ledger_watch::WatchFacts;
+
 /// What the ledger looks like, for the doctor.
 #[derive(Debug, Clone, Default)]
 pub struct LedgerFacts {
@@ -148,6 +150,8 @@ pub struct DoctorInputs {
     pub ledger: Option<LedgerFacts>,
     /// The history has records (so a missing ledger is worth a word).
     pub history_has_records: bool,
+    /// Set when there is a ledger: what the audit watch saw.
+    pub ledger_watch: Option<WatchFacts>,
     pub config: ConfigFacts,
     pub tools: Vec<ToolFact>,
     /// `Err` carries bubblewrap's reason.
@@ -694,6 +698,75 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             }
             checks.push(c);
         }
+    }
+
+    // The audit watch on the ledger.
+    if let Some(w) = &i.ledger_watch {
+        let c = if !w.foreign.is_empty() {
+            check(
+                "ledger-watch",
+                "Ledger watch",
+                Status::Warning,
+                format!(
+                    "{} touched the ledger that {} not emrac's own appends",
+                    plural(w.foreign.len(), "event", "events"),
+                    if w.foreign.len() == 1 { "was" } else { "were" }
+                ),
+            )
+            .detail(w.foreign.clone())
+            .fix("emrac ledger events")
+        } else if !w.unwitnessed.is_empty() {
+            check(
+                "ledger-watch",
+                "Ledger watch",
+                Status::Warning,
+                "emrac's program wrote to the ledger without leaving its journal line".to_string(),
+            )
+            .detail(w.unwitnessed.clone())
+            .fix("emrac ledger events")
+        } else if !w.rules_installed {
+            check(
+                "ledger-watch",
+                "Ledger watch",
+                Status::Note,
+                "not set up: nothing records who else touches the ledger".to_string(),
+            )
+            .fix("sudo emrac ledger watch install")
+        } else if let Some(why) = &w.unreadable {
+            check(
+                "ledger-watch",
+                "Ledger watch",
+                Status::Note,
+                "the audit events can't be read from here".to_string(),
+            )
+            .detail(vec![why.clone()])
+            .fix("sudo emrac ledger events")
+        } else if w.events == 0 && w.witnesses > 0 {
+            check(
+                "ledger-watch",
+                "Ledger watch",
+                Status::Warning,
+                format!(
+                    "not active: emrac appended to the ledger {} but the audit system saw nothing",
+                    plural(w.witnesses, "time", "times")
+                ),
+            )
+            .detail(vec![
+                "auditd may be stopped, the rules not loaded, or the kernel started without audit=1".to_string(),
+            ])
+            .fix("sudo systemctl enable --now auditd && sudo augenrules --load")
+        } else {
+            check(
+                "ledger-watch",
+                "Ledger watch",
+                Status::Ok,
+                format!(
+                    "{} in the last 30 days, all emrac's own",
+                    plural(w.events, "audit event", "audit events")
+                ),
+            )
+        };
+        checks.push(c);
     }
 
     // emrac's own config.
@@ -1375,5 +1448,58 @@ mod tests {
             ..good
         });
         assert_eq!(one(&evaluate(&i), "ledger").status, Status::Problem);
+    }
+
+    #[test]
+    fn the_ledger_watch_check_reports_each_state() {
+        let watch = |w: WatchFacts| {
+            let mut i = healthy();
+            i.ledger_watch = Some(w);
+            let r = evaluate(&i);
+            one(&r, "ledger-watch").clone()
+        };
+        let installed = WatchFacts {
+            rules_installed: true,
+            ..WatchFacts::default()
+        };
+        assert!(find(&evaluate(&healthy()), "ledger-watch").is_empty());
+
+        let c = watch(WatchFacts::default());
+        assert_eq!(
+            (c.status, c.fix.as_deref()),
+            (Status::Note, Some("sudo emrac ledger watch install"))
+        );
+        let c = watch(WatchFacts {
+            unreadable: Some("join systemd-journal".into()),
+            ..installed.clone()
+        });
+        assert_eq!(c.status, Status::Note);
+        assert!(c.detail[0].contains("systemd-journal"));
+        let c = watch(WatchFacts {
+            witnesses: 3,
+            ..installed.clone()
+        });
+        assert_eq!(c.status, Status::Warning);
+        assert!(c.summary.contains("not active"), "{}", c.summary);
+        let c = watch(WatchFacts {
+            events: 1,
+            foreign: vec!["rm touched it".into()],
+            ..installed.clone()
+        });
+        assert_eq!(c.status, Status::Warning);
+        assert_eq!(c.detail, ["rm touched it"]);
+        let c = watch(WatchFacts {
+            events: 1,
+            unwitnessed: vec!["emrac wrote".into()],
+            ..installed.clone()
+        });
+        assert_eq!(c.status, Status::Warning);
+        let c = watch(WatchFacts {
+            events: 4,
+            witnesses: 4,
+            ..installed
+        });
+        assert_eq!(c.status, Status::Ok);
+        assert!(c.summary.contains("4 audit events"), "{}", c.summary);
     }
 }

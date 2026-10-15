@@ -373,6 +373,75 @@ fn the_ledger_holds_a_second_copy_and_repairs_the_history() {
     assert_eq!(json.as_array().unwrap().len(), 3);
 }
 
+#[test]
+fn an_anchor_taken_earlier_catches_a_cut_off_tail() {
+    let home = Home::new("anchor");
+    let log = home.data().join("history.jsonl");
+    let lines: Vec<String> = (1..=3)
+        .map(|n| {
+            let status = if n == 1 { "committed" } else { "failed" };
+            format!(
+                r#"{{"id":"tx-{n}","timestamp":{},"action":"install","packages":[{{"name":"tree","version":"2.3.2-1","repo":"extra","explicit":true}}],"status":"{status}"}}"#,
+                1_000_000_000 + n * 100
+            )
+        })
+        .collect();
+    write(&log, &(lines.join("\n") + "\n"));
+
+    // Nothing is chained yet: no anchor.
+    let out = home.run(&["history", "anchor"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stderr(&out).contains("nothing in the history is chained"),
+        "{}",
+        stderr(&out)
+    );
+
+    // Acknowledgements are chained lines (after the chain-start): seq 2, then 3.
+    assert_eq!(home.run(&["history", "ack", "tx-2"]).status.code(), Some(0));
+    assert_eq!(home.run(&["history", "ack", "tx-3"]).status.code(), Some(0));
+    let out = home.run(&["history", "anchor"]);
+    let code = stdout(&out).lines().next().unwrap().to_string();
+    assert!(code.starts_with("3:"), "{code}");
+
+    let out = home.run(&["history", "verify", "--against", &code]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(
+        stdout(&out).contains("still matches the anchor"),
+        "{}",
+        stdout(&out)
+    );
+
+    assert_eq!(
+        home.run(&["history", "verify", "--against", "nonsense"])
+            .status
+            .code(),
+        Some(1)
+    );
+
+    // (The ledger would notice the missing line too; take it away to show
+    // that the anchor does not need it.)
+    fs::remove_file(home.0.join("ledger.jsonl")).unwrap();
+    // Cut the last line off: the chain alone is still fine, the anchor is not.
+    let text = fs::read_to_string(&log).unwrap();
+    let mut kept: Vec<&str> = text.lines().collect();
+    kept.pop();
+    write(&log, &(kept.join("\n") + "\n"));
+    assert_eq!(home.run(&["history", "verify"]).status.code(), Some(0));
+    let out = home.run(&["history", "verify", "--against", &code]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("cut off the end"), "{}", stderr(&out));
+}
+
+#[test]
+fn the_watch_install_asks_for_root_and_the_helper_stays_hidden() {
+    let home = Home::new("watch");
+    let out = home.run(&["ledger", "watch", "install"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("needs root"), "{}", stderr(&out));
+    assert!(!stdout(&home.run(&["--help"])).contains("ledger-append"));
+}
+
 fn snapshot_json(name: &str, count: usize) -> String {
     let packages: Vec<String> = (0..count)
         .map(|i| {

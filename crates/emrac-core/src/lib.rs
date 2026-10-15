@@ -9,6 +9,7 @@ mod error;
 mod history;
 mod history_log;
 pub mod ledger;
+pub mod ledger_watch;
 mod manifest;
 mod package;
 mod pacnew;
@@ -43,7 +44,7 @@ pub use history::{
     format_utc_date, parse_date, ArchiveInfo, Break as HistoryBreak, History, TransactionRecord,
     TxStatus, VerifyReport as HistoryVerify, RECENT_KEPT,
 };
-pub use history_log::ArchivePlan;
+pub use history_log::{AnchorCheck, ArchivePlan};
 pub use manifest::Manifest;
 pub use package::{PackageDetails, PackageSummary};
 pub use pacnew::unified_diff;

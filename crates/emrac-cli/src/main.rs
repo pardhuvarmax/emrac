@@ -6,7 +6,7 @@ mod prompt;
 use clap::Parser;
 use emrac_core::{Config, Limits, Result, Sources};
 
-use cli::{Cli, Commands, HistoryCommand, SnapshotCommand};
+use cli::{Cli, Commands, HistoryCommand, LedgerCommand, SnapshotCommand, WatchCommand};
 use commands::aur_install::BuildChoice;
 use commands::rollback::Which;
 
@@ -32,6 +32,15 @@ fn run(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
+    if let Commands::Ledger { command } = &cli.command {
+        return match command {
+            LedgerCommand::Events => commands::ledger::events(cli.json),
+            LedgerCommand::Watch {
+                command: WatchCommand::Install,
+            } => commands::ledger::watch_install(cli.dry_run),
+        };
+    }
+
     if let Commands::LedgerAppend = &cli.command {
         return commands::ledger::append_from_stdin();
     }
@@ -48,7 +57,10 @@ fn run(cli: &Cli) -> Result<()> {
             Some(HistoryCommand::Archive { older_than }) => {
                 commands::history::archive(older_than, cli.dry_run, cli.json)
             }
-            Some(HistoryCommand::Verify { repair }) => commands::history::verify(*repair, cli.json),
+            Some(HistoryCommand::Verify { repair, against }) => {
+                commands::history::verify(*repair, against.as_deref(), cli.json)
+            }
+            Some(HistoryCommand::Anchor) => commands::history::anchor(cli.json),
             Some(HistoryCommand::Sync) => commands::ledger::sync_interactive(cli.json),
             Some(HistoryCommand::Ack { ids, failed }) => {
                 commands::history::ack(ids, *failed, cli.json)
@@ -265,6 +277,7 @@ fn run(cli: &Cli) -> Result<()> {
         Commands::Config { .. }
         | Commands::Completion { .. }
         | Commands::History { .. }
+        | Commands::Ledger { .. }
         | Commands::LedgerAppend => {
             unreachable!("handled above")
         }

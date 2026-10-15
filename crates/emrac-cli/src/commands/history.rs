@@ -2,8 +2,8 @@ use emrac_core::{say, Voice};
 use std::collections::HashMap;
 
 use emrac_core::{
-    ledger, parse_date, parse_duration, parse_tx_id, rolled_back_by, Config, Error, History, Plan,
-    Result, RollbackPlan, RECENT_KEPT,
+    ledger, ledger_watch, parse_date, parse_duration, parse_tx_id, rolled_back_by, Config, Error,
+    History, Plan, Result, RollbackPlan, RECENT_KEPT,
 };
 
 use crate::{output, prompt};
@@ -105,7 +105,7 @@ pub fn archive(older_than: &str, dry_run: bool, json: bool) -> Result<()> {
 
 /// `history verify`: the hash chain over the log and its archives, and
 /// the comparison with the ledger.
-pub fn verify(repair: bool, json: bool) -> Result<()> {
+pub fn verify(repair: bool, against: Option<&str>, json: bool) -> Result<()> {
     let report = History::verify()?;
     let history_path = History::path()?;
     let ledger_path = ledger::path(ledger::running_as_root());
@@ -134,6 +134,19 @@ pub fn verify(repair: bool, json: bool) -> Result<()> {
         print_ledger(&ledger, comparison.as_ref(), &report);
     }
 
+    if let Some(code) = against {
+        check_against(code, json)?;
+    }
+    if !json && ledger.is_some() {
+        let watch = ledger_watch::facts(&super::ledger::trusted_exes());
+        if !watch.foreign.is_empty() || !watch.unwitnessed.is_empty() {
+            say!(
+                Voice::Warns,
+                "{} event(s) in the audit log touched the ledger and were not emrac's own appends; `emrac ledger events` lists them.",
+                watch.foreign.len() + watch.unwitnessed.len()
+            );
+        }
+    }
     let chain_broken = report.problem.is_some();
     if repair && (chain_broken || ledger_trouble) {
         return repair_from_ledger(ledger.as_ref(), &history_path);
@@ -164,6 +177,55 @@ pub fn verify(repair: bool, json: bool) -> Result<()> {
                 describe_differences(c)
             )));
         }
+    }
+    Ok(())
+}
+
+/// `history verify --against CODE`.
+fn check_against(code: &str, json: bool) -> Result<()> {
+    use emrac_core::AnchorCheck;
+    let result = History::check_anchor(code)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&result).unwrap());
+    }
+    match result {
+        AnchorCheck::Matches => {
+            if !json {
+                say!(
+                    Voice::Confirms,
+                    "the history still matches the anchor {code}: nothing up to that point was rewritten."
+                );
+            }
+            Ok(())
+        }
+        AnchorCheck::Differs { found } => Err(Error::History(format!(
+            "the history does not match the anchor {code}: that line now hashes to {found}…. Something up to that point was rewritten, even if the chain still holds."
+        ))),
+        AnchorCheck::Shorter { head_seq } => Err(Error::History(format!(
+            "the history ends at line #{head_seq}, before the anchor {code}: lines were cut off the end."
+        ))),
+        AnchorCheck::Broken { at } => Err(Error::History(format!(
+            "the history cannot vouch for the anchor {code}: its chain breaks first — {}",
+            at.describe()
+        ))),
+    }
+}
+
+/// `history anchor`: the code to keep somewhere else.
+pub fn anchor(json: bool) -> Result<()> {
+    let Some(code) = History::anchor()? else {
+        return Err(Error::History(
+            "nothing in the history is chained yet, so there is nothing to anchor (the next transaction starts the chain)".into(),
+        ));
+    };
+    if json {
+        println!("{}", serde_json::json!({ "anchor": code }));
+    } else {
+        println!("{code}");
+        say!(
+            Voice::Notes,
+            "keep that where this machine cannot change it (a note, a message to yourself, a repository). `emrac history verify --against {code}` later shows whether anything up to that line was rewritten or cut off."
+        );
     }
     Ok(())
 }

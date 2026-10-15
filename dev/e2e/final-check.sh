@@ -5,7 +5,7 @@
 #
 # Each `ck "title" "command"` line is one check; the titles are listed in
 # docs/tests/emrac-tests.rst. Update the next line when you run them all.
-# last full run: r2, 26 of 26 passed (u7 adds 4, u8 adds 5)
+# last full run: r2, 26 of 26 passed (u7 adds 4, u8 adds 5, u9 adds 2)
 e=/usr/local/bin/emrac
 export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 n=0; bad=0
@@ -56,4 +56,7 @@ ck "ledger: the user can neither rewrite, truncate nor delete it" "! (echo x > $
 ck "ledger: the helper refuses what is not a history line" "! (echo '{\"type\":\"shell\"}' | sudo -n $e ledger-append) 2>/dev/null"
 ck "ledger: doctor describes its protection" "$e doctor 2>&1 | grep -q 'Ledger'"
 ck "ledger: a deleted history is rebuilt from it" "rm -f \$HOME/.local/share/emrac/history.jsonl; ! $e history verify; printf y | $e history verify --repair >/dev/null && $e history verify | grep -q 'ledger agrees'"
+# anchors and the watch (u9); the container has no audit daemon or journal, so only these
+ck "an anchor taken now still matches later, after more transactions" "A=\$($e history anchor | head -1); $e history verify --against \$A | grep -q 'still matches'"
+ck "doctor reports the ledger watch (not set up here)" "$e doctor 2>&1 | grep -q 'Ledger watch'"
 echo; echo "$n checks, $bad failed"

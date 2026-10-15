@@ -510,6 +510,50 @@ pub(crate) fn verify(path: &Path) -> Result<VerifyReport> {
     Ok(finish(walker, report, None))
 }
 
+// ---- anchors ------------------------------------------------------------
+
+/// How the history stands against an anchor (a sequence number and the
+/// start of the hash of that line, kept somewhere else).
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "result", rename_all = "lowercase")]
+pub enum AnchorCheck {
+    /// The line at that number still hashes to the anchor, and every line up to it chains.
+    Matches,
+    /// There is a line at that number but it is not the one that was anchored.
+    Differs { found: String },
+    /// The history stops before the anchor: lines were cut off the end.
+    Shorter { head_seq: u64 },
+    /// The chain breaks before the anchor, so it cannot vouch for anything after the break.
+    Broken { at: Break },
+}
+
+pub(crate) fn check_anchor(path: &Path, seq: u64, hash_prefix: &str) -> Result<AnchorCheck> {
+    let lines = all_lines(path, true)?;
+    let mut walker = Walker::new();
+    let file = path.file_name().map_or_else(
+        || "history.jsonl".into(),
+        |f| f.to_string_lossy().into_owned(),
+    );
+    for (i, line) in lines.iter().enumerate() {
+        if let Err(b) = walker.feed(&file, i + 1, line) {
+            return Ok(AnchorCheck::Broken { at: b });
+        }
+        if walker.head.as_ref().is_some_and(|(s, _)| *s == seq) {
+            let hash = sha256_hex(line.as_bytes());
+            return Ok(if hash.starts_with(hash_prefix) {
+                AnchorCheck::Matches
+            } else {
+                AnchorCheck::Differs {
+                    found: hash[..hash_prefix.len().min(hash.len())].to_string(),
+                }
+            });
+        }
+    }
+    Ok(AnchorCheck::Shorter {
+        head_seq: walker.head.map_or(0, |(s, _)| s),
+    })
+}
+
 // ---- archiving ----------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize)]

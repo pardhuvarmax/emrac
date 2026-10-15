@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use emrac_core::ledger_watch::{self, Verdict};
 use emrac_core::{ledger, say, Error, History, Result, Voice};
 
 /// The most the helper reads: far more than any real history.
@@ -37,9 +38,30 @@ pub fn append_from_stdin() -> Result<()> {
         .map(str::to_string)
         .collect();
     let path = ledger::path(ledger::running_as_root());
-    let added = ledger::append(&path, &lines, now(), true)?;
-    println!("{added}");
+    let done = ledger::append_detailed(&path, &lines, now(), true)?;
+    if done.added > 0 {
+        witness(&done);
+    }
+    println!("{}", done.added);
     Ok(())
+}
+
+/// The journal line that says emrac did this append (u9): the audit events
+/// about the ledger are matched against it. Best effort.
+fn witness(done: &ledger::Appended) {
+    let message = ledger_watch::witness_message(
+        done.added,
+        &done.first,
+        &done.last,
+        &done.head,
+        done.created,
+    );
+    let by = std::env::var("SUDO_USER").unwrap_or_default();
+    let _ = Command::new("/usr/bin/logger")
+        .args(["-t", ledger_watch::WITNESS_TAG, "-p", "authpriv.notice"])
+        .arg(format!("{message} by={by}"))
+        .stdin(Stdio::null())
+        .output();
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -161,5 +183,119 @@ pub fn sync_interactive(json: bool) -> Result<()> {
             if added == 1 { "" } else { "s" }
         );
     }
+    Ok(())
+}
+
+/// The paths this emrac program may be audited as.
+pub(crate) fn trusted_exes() -> Vec<String> {
+    let mut v = vec!["/usr/bin/emrac".to_string()];
+    if let Ok(p) = std::env::current_exe() {
+        v.push(p.display().to_string());
+    }
+    v
+}
+
+/// `emrac ledger events`.
+pub fn events(json: bool) -> Result<()> {
+    let read = ledger_watch::read(&trusted_exes())?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "events": read.events,
+                "emrac_appends_logged": read.witnesses,
+                "rules_installed": ledger_watch::rules_installed(),
+            }))
+            .unwrap()
+        );
+        return Ok(());
+    }
+    if read.events.is_empty() {
+        say!(
+            Voice::Notes,
+            "no audit events about the ledger in the last 30 days ({} appends logged by emrac).{}",
+            read.witnesses,
+            if ledger_watch::rules_installed() {
+                ""
+            } else {
+                " The watch is not installed: `sudo emrac ledger watch install`."
+            }
+        );
+        return Ok(());
+    }
+    say!(
+        Voice::Found,
+        "{} audit event(s) about the ledger in the last 30 days:\n",
+        read.events.len()
+    );
+    for e in &read.events {
+        let mark = match e.verdict {
+            Verdict::Emrac => "emrac     ",
+            Verdict::Unwitnessed => "UNLOGGED  ",
+            Verdict::Foreign => "FOREIGN   ",
+        };
+        println!("  {mark}{}", e.describe());
+    }
+    Ok(())
+}
+
+/// `sudo emrac ledger watch install`.
+pub fn watch_install(dry_run: bool) -> Result<()> {
+    use std::path::Path;
+    if !ledger::running_as_root() {
+        return Err(Error::History(
+            "installing audit rules needs root: run `sudo emrac ledger watch install`".into(),
+        ));
+    }
+    let dir = Path::new("/etc/audit/rules.d");
+    let augenrules = ["/usr/bin/augenrules", "/usr/sbin/augenrules"]
+        .into_iter()
+        .find(|p| Path::new(p).exists());
+    if !dir.is_dir() || augenrules.is_none() {
+        return Err(Error::History(
+            "the audit package is not installed (no /etc/audit/rules.d or augenrules): `sudo pacman -S audit`, then run this again".into(),
+        ));
+    }
+    let target = dir.join(ledger_watch::RULES_NAME);
+    say!(
+        Voice::Plans,
+        "write {} and load it with augenrules. It watches every write, rename, delete or permission change of /var/lib/emrac/ and every run of chattr, and logs them; it blocks nothing.",
+        target.display()
+    );
+    println!("{}", ledger_watch::RULES.trim_end());
+    if dry_run {
+        say!(Voice::Notes, "dry run: nothing was written.");
+        return Ok(());
+    }
+    if !crate::prompt::confirm_default_no("Install it?") {
+        say!(Voice::Notes, "nothing was changed.");
+        return Ok(());
+    }
+    fs::write(&target, ledger_watch::RULES)
+        .map_err(|e| Error::History(format!("couldn't write {}: {e}", target.display())))?;
+    let status = Command::new(augenrules.expect("checked above"))
+        .arg("--load")
+        .status()
+        .map_err(|e| Error::History(format!("couldn't run augenrules: {e}")))?;
+    if !status.success() {
+        return Err(Error::History(
+            "augenrules --load failed; the rules file is in place and loads at the next start of auditd".into(),
+        ));
+    }
+    say!(
+        Voice::Confirms,
+        "the audit watch on the ledger is installed and loaded."
+    );
+    let cmdline = fs::read_to_string("/proc/cmdline").unwrap_or_default();
+    if !cmdline.split_whitespace().any(|a| a == "audit=1") {
+        say!(
+            Voice::Suspects,
+            "the kernel was not started with audit=1, so programs started before the rules loaded are not covered; add it to the kernel command line."
+        );
+    }
+    say!(
+        Voice::Suggests,
+        "make sure auditd is enabled (`systemctl enable --now auditd`); `emrac ledger events` and `emrac doctor` read what it saw."
+    );
     Ok(())
 }

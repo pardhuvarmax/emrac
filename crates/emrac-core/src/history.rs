@@ -95,6 +95,35 @@ impl History {
         Self::acknowledge_at(&Self::path()?, ids, now())
     }
 
+    /// The anchor code for the newest line: `<seq>:<first 32 hex of its hash>`.
+    /// `None` while nothing is chained yet.
+    pub fn anchor() -> Result<Option<String>> {
+        let report = log::verify(&Self::path()?)?;
+        Ok(report
+            .head_seq
+            .zip(report.head_hash)
+            .map(|(seq, hash)| format!("{seq}:{}", &hash[..32])))
+    }
+
+    /// Checks the history against an anchor code taken earlier.
+    pub fn check_anchor(code: &str) -> Result<log::AnchorCheck> {
+        let bad = || {
+            Error::History(format!(
+                "'{code}' is not an anchor code — they look like 42:0123456789abcdef0123456789abcdef (from `emrac history anchor`)"
+            ))
+        };
+        let (seq, hash) = code.trim().split_once(':').ok_or_else(bad)?;
+        let seq: u64 = seq.parse().map_err(|_| bad())?;
+        if seq == 0
+            || hash.len() < 16
+            || hash.len() > 64
+            || !hash.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err(bad());
+        }
+        log::check_anchor(&Self::path()?, seq, &hash.to_ascii_lowercase())
+    }
+
     /// Checks the hash chain over the live log and its archives.
     pub fn verify() -> Result<VerifyReport> {
         log::verify(&Self::path()?)
@@ -892,5 +921,111 @@ mod tests {
             Err(Error::UnknownTransaction(_))
         ));
         assert_eq!(lines(&s).len(), 1, "a refusal writes nothing");
+    }
+
+    fn anchor_at(s: &Scratch, seq: u64) -> String {
+        let l = lines(s);
+        sha_prefix(&l[seq as usize - 1], 32)
+    }
+
+    fn sha_prefix(line: &str, n: usize) -> String {
+        log::sha256_hex(line.as_bytes())[..n].to_string()
+    }
+
+    #[test]
+    fn an_anchor_still_matches_after_the_log_grows_or_is_archived() {
+        let s = Scratch::new("anchor-ok");
+        fill(&s, 25);
+        let code = anchor_at(&s, 3);
+        assert!(matches!(
+            log::check_anchor(&s.file(), 3, &code).unwrap(),
+            log::AnchorCheck::Matches
+        ));
+        fill_more(&s, 25, 3);
+        assert!(matches!(
+            log::check_anchor(&s.file(), 3, &code).unwrap(),
+            log::AnchorCheck::Matches
+        ));
+        log::archive(&s.file(), u64::MAX, 1).unwrap().unwrap();
+        assert!(
+            matches!(
+                log::check_anchor(&s.file(), 3, &code).unwrap(),
+                log::AnchorCheck::Matches
+            ),
+            "an archived line is still checked"
+        );
+        // The newest line is an anchor too.
+        let head = verdict(&s);
+        let newest = &head.head_hash.clone().unwrap()[..32];
+        assert!(matches!(
+            log::check_anchor(&s.file(), head.head_seq.unwrap(), newest).unwrap(),
+            log::AnchorCheck::Matches
+        ));
+    }
+
+    #[test]
+    fn an_anchor_catches_a_cut_tail_an_edit_and_a_rewrite_that_rebuilds_the_chain() {
+        let s = Scratch::new("anchor-bad");
+        fill(&s, 5);
+        let code = anchor_at(&s, 4);
+        let original = lines(&s);
+
+        // A cut-off tail: the chain alone cannot see it, the anchor does.
+        put(&s, &original[..2]);
+        assert!(matches!(
+            log::check_anchor(&s.file(), 4, &code).unwrap(),
+            log::AnchorCheck::Shorter { head_seq: 2 }
+        ));
+
+        // An edit before the anchor breaks the chain on the way to it.
+        let mut l = original.clone();
+        l[1] = l[1].replace("install", "remove");
+        put(&s, &l);
+        assert!(matches!(
+            log::check_anchor(&s.file(), 4, &code).unwrap(),
+            log::AnchorCheck::Broken { .. }
+        ));
+
+        // The anchored line itself changed.
+        let mut l = original.clone();
+        l[3] = l[3].replace("install", "remove");
+        put(&s, &l);
+        assert!(matches!(
+            log::check_anchor(&s.file(), 4, &code).unwrap(),
+            log::AnchorCheck::Differs { .. }
+        ));
+
+        // Someone edits line 2 and recomputes every later `prev`: the chain
+        // is whole again, the anchor is not.
+        let mut l = original.clone();
+        l[1] = l[1].replace("install", "remove");
+        for i in 2..l.len() {
+            let mut v: serde_json::Value = serde_json::from_str(&l[i]).unwrap();
+            v["prev"] = log::sha256_hex(l[i - 1].as_bytes()).into();
+            l[i] = serde_json::to_string(&v).unwrap();
+        }
+        put(&s, &l);
+        assert!(verdict(&s).problem.is_none(), "the rebuilt chain verifies");
+        assert!(matches!(
+            log::check_anchor(&s.file(), 4, &code).unwrap(),
+            log::AnchorCheck::Differs { .. }
+        ));
+    }
+
+    #[test]
+    fn anchor_codes_are_validated() {
+        for bad in [
+            "",
+            "42",
+            "x:abcdefabcdefabcd",
+            "0:abcdefabcdefabcd",
+            "3:xyz",
+            "3:abc",
+        ] {
+            assert!(
+                matches!(History::check_anchor(bad), Err(Error::History(_))),
+                "{bad}"
+            );
+        }
     }
 }

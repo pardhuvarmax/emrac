@@ -208,6 +208,27 @@ pub fn read(path: &Path) -> Result<Option<Ledger>> {
 /// Returns how many lines were added. With `set_attr`, a ledger created by
 /// this call gets the append-only attribute where the filesystem has one.
 pub fn append(path: &Path, lines: &[String], now: u64, set_attr: bool) -> Result<usize> {
+    Ok(append_detailed(path, lines, now, set_attr)?.added)
+}
+
+/// What one call to the helper did, for the line it leaves in the journal.
+#[derive(Debug, Clone, Default)]
+pub struct Appended {
+    pub added: usize,
+    pub first: String,
+    pub last: String,
+    /// Hash of the ledger's newest line afterwards.
+    pub head: String,
+    /// This call created the ledger (and ran `chattr`).
+    pub created: bool,
+}
+
+pub fn append_detailed(
+    path: &Path,
+    lines: &[String],
+    now: u64,
+    set_attr: bool,
+) -> Result<Appended> {
     if lines.len() > MAX_BATCH {
         return Err(Error::History(format!(
             "ledger-append takes at most {MAX_BATCH} lines at a time"
@@ -243,6 +264,7 @@ pub fn append(path: &Path, lines: &[String], now: u64, set_attr: bool) -> Result
     let mut out = String::new();
     let mut seen: HashSet<String> = HashSet::new();
     let mut added = 0;
+    let (mut first, mut last) = (String::new(), String::new());
     for (line, label) in labelled {
         let sha = sha256_hex(line.as_bytes());
         if have.contains(sha.as_str()) || !seen.insert(sha.clone()) {
@@ -256,11 +278,15 @@ pub fn append(path: &Path, lines: &[String], now: u64, set_attr: bool) -> Result
         prev = sha256_hex(wrapped.as_bytes());
         seq += 1;
         added += 1;
+        if first.is_empty() {
+            first = label.clone();
+        }
+        last = label.clone();
         out.push_str(&wrapped);
         out.push('\n');
     }
     if added == 0 {
-        return Ok(0);
+        return Ok(Appended::default());
     }
 
     let creating = !path.exists();
@@ -280,7 +306,13 @@ pub fn append(path: &Path, lines: &[String], now: u64, set_attr: bool) -> Result
         // Best effort: not every filesystem has the attribute (doctor says so).
         let _ = Command::new(ATTR_TOOL).arg("+a").arg(path).output();
     }
-    Ok(added)
+    Ok(Appended {
+        added,
+        first,
+        last,
+        head: prev,
+        created: creating,
+    })
 }
 
 /// `lseq` and the hash of the last raw line, if any.

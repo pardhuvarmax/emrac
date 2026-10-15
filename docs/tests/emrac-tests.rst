@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 275
+     - 288
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 20
+     - 22
    * - **Automated total**
      -
-     - **304**
+     - **319**
 
-emrac-core library (275)
+emrac-core library (288)
 ------------------------
 
 ``audit::tests`` (39)
@@ -173,7 +173,7 @@ emrac-core library (275)
 * ``why_prefers_the_shortest_chain``
 * ``why_survives_cycles``
 
-``doctor::tests`` (23)
+``doctor::tests`` (24)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_failed_online_check_says_so_instead_of_guessing``
@@ -196,6 +196,7 @@ emrac-core library (275)
 * ``scrubbing_removes_the_home_user_and_host_names``
 * ``systemctl_and_df_output_are_parsed``
 * ``the_ledger_check_reports_each_state``
+* ``the_ledger_watch_check_reports_each_state``
 * ``the_report_is_markdown_with_every_check_and_its_detail``
 * ``the_sandbox_check_reflects_bwrap_and_the_limits``
 * ``unmet_dependencies_are_a_problem_with_the_pairs_listed_and_capped``
@@ -214,7 +215,7 @@ emrac-core library (275)
 
 * ``only_the_no_network_failure_suggests_a_retry_with_network``
 
-``history::tests`` (24)
+``history::tests`` (27)
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_changed_or_missing_archive_is_reported``
@@ -224,7 +225,10 @@ emrac-core library (275)
 * ``a_record_a_kept_rollback_names_stays_in_the_live_log``
 * ``a_second_archive_extends_the_first_and_both_verify``
 * ``acknowledging_hides_a_failure_from_the_count_and_not_from_history``
+* ``an_anchor_catches_a_cut_tail_an_edit_and_a_rewrite_that_rebuilds_the_chain``
+* ``an_anchor_still_matches_after_the_log_grows_or_is_archived``
 * ``an_edited_line_breaks_the_chain_at_the_next_one``
+* ``anchor_codes_are_validated``
 * ``archiving_a_log_from_before_the_chain_starts_the_chain_first``
 * ``archiving_keeps_the_chain_ids_and_the_live_records``
 * ``bad_dates_are_rejected``
@@ -255,6 +259,19 @@ emrac-core library (275)
 * ``the_helper_takes_records_and_markers_and_nothing_else``
 * ``the_history_is_rebuilt_from_the_ledger_and_verifies``
 * ``the_ledger_notices_an_archive_file_that_changed``
+
+``ledger_watch::tests`` (9)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_denied_write_is_still_reported_as_denied``
+* ``both_the_raw_and_the_journald_forms_of_a_record_split``
+* ``chattr_is_foreign_except_when_emrac_just_created_the_ledger``
+* ``emrac_without_a_journal_line_is_unwitnessed_and_a_late_line_does_not_count``
+* ``emracs_own_append_with_its_journal_line_is_not_flagged``
+* ``events_with_other_keys_and_unrelated_journal_lines_are_ignored``
+* ``fields_are_read_with_and_without_quotes``
+* ``other_programs_are_named_with_user_and_login_user``
+* ``the_shipped_rules_watch_the_ledger_folder_and_chattr``
 
 ``manifest::tests`` (16)
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -455,13 +472,14 @@ emrac command line, unit tests (9)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (20)
+emrac command line, integration tests (22)
 ------------------------------------------
 
-``(top level)`` (20)
+``(top level)`` (22)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
+* ``an_anchor_taken_earlier_catches_a_cut_off_tail``
 * ``audit_grades_pkgbuilds_by_severity_and_exit_code``
 * ``audit_inspects_a_built_package_file``
 * ``audit_json_and_errors``
@@ -478,6 +496,7 @@ emrac command line, integration tests (20)
 * ``snapshots_list_show_delete``
 * ``the_ledger_holds_a_second_copy_and_repairs_the_history``
 * ``the_sandbox_hides_the_network_secrets_and_home_from_a_build``
+* ``the_watch_install_asks_for_root_and_the_helper_stays_hidden``
 * ``usage_errors_exit_2``
 * ``version_and_help_succeed``
 * ``without_a_systemd_session_the_build_says_so_and_still_runs``
@@ -487,7 +506,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed (u7 adds 4, u8 adds 5).
+them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed (u7 adds 4, u8 adds 5, u9 adds 2).
 
 * version names the builder
 * usage error exits 2
@@ -524,5 +543,7 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed (u7 a
 * ledger: the helper refuses what is not a history line
 * ledger: doctor describes its protection
 * ledger: a deleted history is rebuilt from it
+* an anchor taken now still matches later, after more transactions
+* doctor reports the ledger watch (not set up here)
 
-(35 checks.)
+(37 checks.)

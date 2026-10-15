@@ -1717,6 +1717,13 @@ impl Sources {
             }
             _ => None,
         };
+        let ledger_watch = ledger.as_ref().map(|_| {
+            let mut trusted = vec!["/usr/bin/emrac".to_string()];
+            if let Ok(p) = std::env::current_exe() {
+                trusted.push(p.display().to_string());
+            }
+            crate::ledger_watch::facts(&trusted)
+        });
         let recent_failed_transactions = History::all()
             .unwrap_or_default()
             .into_iter()
@@ -1770,6 +1777,7 @@ impl Sources {
             history,
             ledger,
             history_has_records,
+            ledger_watch,
             config: doctor::ConfigFacts {
                 parse_error: config_error,
                 world_writable: config_world_writable,

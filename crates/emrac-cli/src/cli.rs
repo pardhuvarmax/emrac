@@ -333,6 +333,12 @@ pub enum Commands {
     /// Re-apply the most recent rollback
     Redo,
 
+    /// Look at the ledger: what touched it, and the audit watch on it
+    Ledger {
+        #[command(subcommand)]
+        command: LedgerCommand,
+    },
+
     /// (Internal) append history lines read from stdin to the root-owned ledger;
     /// run through sudo by emrac itself
     #[command(hide = true)]
@@ -464,6 +470,10 @@ pub enum HistoryCommand {
     /// Check that nothing in the history was edited, removed or added, and
     /// that it agrees with the ledger
     Verify {
+        /// Also check the history against an anchor code from `history anchor`
+        #[arg(long, value_name = "CODE")]
+        against: Option<String>,
+
         /// Rebuild the history from the ledger when they disagree (asks;
         /// --yes does not answer; the old file is kept as history.jsonl.broken)
         #[arg(long)]
@@ -472,6 +482,10 @@ pub enum HistoryCommand {
 
     /// Send the history lines the ledger does not hold yet (asks for sudo)
     Sync,
+
+    /// Print a short code for the newest history line, to keep somewhere
+    /// else (a note, a repository): `verify --against` checks it later
+    Anchor,
 
     /// Mark failed transactions as seen: they stay, and doctor stops counting them
     Ack {
@@ -483,6 +497,25 @@ pub enum HistoryCommand {
         #[arg(long)]
         failed: bool,
     },
+}
+
+#[derive(Subcommand)]
+pub enum LedgerCommand {
+    /// List what the audit system saw done to the ledger, and by which program
+    Events,
+
+    /// The kernel audit rules that watch the ledger
+    Watch {
+        #[command(subcommand)]
+        command: WatchCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum WatchCommand {
+    /// Install the audit rules (run as root: sudo emrac ledger watch install;
+    /// asks first, --yes does not answer)
+    Install,
 }
 
 #[derive(Subcommand)]
