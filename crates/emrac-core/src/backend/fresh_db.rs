@@ -3,7 +3,7 @@
 //! pacman-contrib's `checkupdates` does it. The real database is never
 //! touched and no root is needed: the new directory symlinks the real `local`
 //! database and `fakeroot -- pacman -Sy --dbpath <dir>` fills its `sync/`.
-//! See `docs/plan/u22-fresh-upgrade-view.md`.
+//! See `docs/plan/r1/u22-fresh-upgrade-view.md`.
 
 use std::fs;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};

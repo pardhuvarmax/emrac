@@ -1,6 +1,6 @@
 //! The mechanics under `history.rs`: a hash chain over the log's lines, the
 //! archive that moves old lines out of the live log, and the acknowledgement
-//! markers. See `docs/plan/u7-history-integrity.md`.
+//! markers. See `docs/plan/r2/u7-history-integrity.md`.
 //!
 //! Every line written by this version carries `seq` and `prev`, the SHA-256
 //! of the previous line byte for byte. Lines from before the chain existed

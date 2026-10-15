@@ -1,6 +1,6 @@
 //! Changing config files for `emrac pacnew`: validating the candidate, keeping
 //! copies, replacing the file, recording it, and putting it back. See
-//! `docs/plan/u30-pacnew-revert.md`.
+//! `docs/plan/r1/u30-pacnew-revert.md`.
 
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};

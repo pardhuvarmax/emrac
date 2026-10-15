@@ -26,7 +26,7 @@ pub struct Config {
     pub cache: CacheConfig,
 }
 
-/// What `emrac cache clean` keeps. See `docs/plan/u29-lean-cache.md`.
+/// What `emrac cache clean` keeps. See `docs/plan/r1/u29-lean-cache.md`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheConfig {
     /// `"standard"` keeps the installed and the previous version of every

@@ -1167,7 +1167,7 @@ impl Sources {
             return Ok(None);
         }
         // The current version is on the mirrors; the Archive may not have it
-        // yet. This is what lets a lean cache drop it (`docs/plan/u29`).
+        // yet. This is what lets a lean cache drop it (`docs/plan/r1/u29`).
         if let Some(url) = self.alpm.sync_download_url(name, version) {
             if let Some(filename) = url.rsplit('/').next() {
                 return Ok(Some(RemoteFile {

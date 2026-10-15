@@ -3,7 +3,7 @@
 Design and planning documents that aren't shipped product code, and don't
 fit in a single crate's own README.
 
-- [`plan/`](./plan) — per-slice implementation plans, written before the
+- [`plan/`](./plan) (one folder per release cycle) — per-slice implementation plans, written before the
   work starts.
 - [`design/`](./design) — design documents that settle how a part of emrac works.
 - [`releases/`](./releases) — one release document per release (`r2.md` is

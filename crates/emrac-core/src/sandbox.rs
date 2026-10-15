@@ -1,7 +1,7 @@
 //! Running the build steps of `makepkg` inside bubblewrap. The argument list
 //! is built by a pure function so it can be tested without running anything;
 //! the probe actually runs `bwrap`, so a disabled user-namespace setup is
-//! caught too. See `docs/plan/u19-sandbox.md`.
+//! caught too. See `docs/plan/r1/u19-sandbox.md`.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};

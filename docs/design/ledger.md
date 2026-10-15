@@ -1,7 +1,7 @@
 # The history, the ledger and the watch
 
 How emrac keeps a record of what it did, and how far that record can be trusted. Written
-for people who use emrac; the build notes are in `docs/plan/u7-history-integrity.md`,
+for people who use emrac; the build notes are in `docs/plan/r2/u7-history-integrity.md`,
 `u8-ledger.md` and `u9-ledger-watch.md`.
 
 ## Three layers, each with a limit

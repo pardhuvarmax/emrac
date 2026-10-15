@@ -1,7 +1,7 @@
 //! The record of what `emrac pacnew` changed: one JSON object per line in
 //! `~/.local/share/emrac/pacnew-log.jsonl`. A change is written as `started`
 //! before anything happens and again as `done` or `failed` after, so a crash
-//! leaves a visible half-finished entry. See `docs/plan/u30-pacnew-revert.md`.
+//! leaves a visible half-finished entry. See `docs/plan/r1/u30-pacnew-revert.md`.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};

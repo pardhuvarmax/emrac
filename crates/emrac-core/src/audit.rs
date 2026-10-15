@@ -2,7 +2,7 @@
 //! running any of it. A conservative reader pulls out the declarative fields
 //! and the function bodies; pattern rules then flag what a reader should look
 //! at. This is a reading aid, not a guarantee: it can miss obfuscation it
-//! doesn't know and can flag legitimate code. See `docs/plan/u15-audit.md`
+//! doesn't know and can flag legitimate code. See `docs/plan/r1/u15-audit.md`
 //! and the severity policy in `docs/design/source-build.md`.
 
 use serde::Serialize;

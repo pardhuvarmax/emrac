@@ -1,7 +1,7 @@
 //! `emrac doctor`: read-only health checks. Everything the checks look at is
 //! gathered into `DoctorInputs` (plain facts), and `evaluate` turns that into
 //! a report — so every status decision is a pure function that can be tested
-//! without touching the system. See `docs/plan/u21-doctor.md`.
+//! without touching the system. See `docs/plan/r1/u21-doctor.md`.
 
 use serde::Serialize;
 

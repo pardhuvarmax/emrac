@@ -1,5 +1,5 @@
 //! Reading back what the kernel's audit system saw happen to the ledger
-//! (see `docs/plan/u9-ledger-watch.md`). The rules that make it watch are
+//! (see `docs/plan/r2/u9-ledger-watch.md`). The rules that make it watch are
 //! `data/50-emrac-ledger.rules`; emrac's own helper leaves a line in the
 //! journal for each append (`emrac-ledger`), so a write that has no such
 //! line, or was made by another program, stands out.

@@ -125,7 +125,7 @@ fn run(cli: &Cli) -> Result<()> {
 
     let config = Config::load()?;
     // Config only ever raises the effective default (a flag on the CLI has
-    // no way to turn one of these back off) — see docs/plan/u1-config.md.
+    // no way to turn one of these back off) — see docs/plan/r1/u1-config.md.
     let offline = cli.offline || config.flags.offline;
     let yes = cli.yes || config.flags.yes;
     let dry_run = cli.dry_run || config.flags.dry_run;

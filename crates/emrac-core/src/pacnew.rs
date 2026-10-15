@@ -2,7 +2,7 @@
 //! file (the "base"), telling what the user changed from what upstream changed,
 //! and merging. Pure functions and small file helpers; the lookups that need
 //! libalpm, the pacman cache or the Archive live in `sources.rs`. See
-//! `docs/plan/u27-pacnew.md`.
+//! `docs/plan/r1/u27-pacnew.md`.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -293,7 +293,7 @@ const SHELL_SOURCED: &[&str] = &[
 ];
 
 /// Checks `candidate`, the text that would become `live`, with whatever can
-/// check that kind of file (`docs/plan/u30-pacnew-revert.md`).
+/// check that kind of file (`docs/plan/r1/u30-pacnew-revert.md`).
 pub fn validate(live: &str, candidate: &str) -> Result<Validation> {
     if live == "/etc/pacman.d/mirrorlist" {
         let has_server = candidate.lines().any(|l| {

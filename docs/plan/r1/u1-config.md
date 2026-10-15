@@ -4,7 +4,7 @@
 
 `r1` (the core CLI loop — `search`/`info`/`install`/`remove`/`upgrade`,
 official repos + AUR) is done as of `196141a`. Per
-[`FEATURE_STATUS.rst`](../../FEATURE_STATUS.rst), category #19
+[`FEATURE_STATUS.rst`](../../../FEATURE_STATUS.rst), category #19
 "Configuration" is Not started — every run reads live `pacman-conf` and
 every flag defaults to `false`/unset, with no way to persist a preference.
 This is the first `u1` increment: small, self-contained, and it unblocks

@@ -1,7 +1,7 @@
 //! The ledger: a second copy of the history that the user's own programs
 //! cannot rewrite. A root-owned, append-only file at `/var/lib/emrac/ledger.jsonl`;
 //! only the hidden `emrac ledger-append` helper, run through `sudo`, writes it.
-//! See `docs/plan/u8-ledger.md`.
+//! See `docs/plan/r2/u8-ledger.md`.
 //!
 //! Each ledger line wraps one line of the user's history, byte for byte:
 //! `{"at":…,"line":"<the user's line>","lprev":…,"lseq":…,"sha":…,"tx":"tx-3"}`.

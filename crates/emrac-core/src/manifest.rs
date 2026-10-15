@@ -3,7 +3,7 @@
 //! pacman hooks, sudoers drop-ins, accounts, the packaged `.INSTALL`
 //! scriptlet. The source audit can't see these — they come out of `package()`.
 //! Findings use the audit's severity vocabulary so the same policy applies.
-//! See `docs/plan/u17-manifest.md`.
+//! See `docs/plan/r1/u17-manifest.md`.
 
 use std::collections::HashMap;
 

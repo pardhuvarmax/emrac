@@ -2,7 +2,7 @@
 
 ## Context
 
-`u1` shipped `emrac config`. [`FEATURE_STATUS.rst`](../../FEATURE_STATUS.rst)
+`u1` shipped `emrac config`. [`FEATURE_STATUS.rst`](../../../FEATURE_STATUS.rst)
 category #18 "Unified Interfaces" lists shell completion as missing, and
 `SPEC.md` (Part V, `completion / alias / integrate`) specifies
 `emrac completion bash|zsh|fish`. It is small, self-contained, and needs

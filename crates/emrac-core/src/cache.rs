@@ -1,6 +1,6 @@
 //! What emrac and pacman keep on disk, and what is safe to remove. Pure
 //! decisions (`plan`) are kept apart from the scan and the deletion so they can
-//! be tested without touching anything. See `docs/plan/u28-cache.md`.
+//! be tested without touching anything. See `docs/plan/r1/u28-cache.md`.
 
 use std::collections::{HashMap, HashSet};
 use std::os::unix::fs::MetadataExt;
@@ -90,7 +90,7 @@ pub struct Facts {
     pub now: u64,
     /// How many seconds old a source file must be to go (default 30 days).
     pub source_age: u64,
-    /// The lean policy (`docs/plan/u29-lean-cache.md`): package files are kept
+    /// The lean policy (`docs/plan/r1/u29-lean-cache.md`): package files are kept
     /// only for what undoing the last transactions needs and what cannot be
     /// downloaded again.
     pub lean: bool,

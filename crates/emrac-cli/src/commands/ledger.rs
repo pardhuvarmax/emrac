@@ -1,4 +1,4 @@
-//! The user's side of the ledger (see `docs/plan/u8-ledger.md`): sending
+//! The user's side of the ledger (see `docs/plan/r2/u8-ledger.md`): sending
 //! history lines to the root-owned file through `sudo emrac ledger-append`,
 //! and that hidden helper itself.
 

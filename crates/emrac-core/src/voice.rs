@@ -1,6 +1,6 @@
 //! emrac's voice: one verb for each kind of statement, so the verb tells the
 //! reader how sure emrac is and what to do with the line. See
-//! `docs/plan/u6-voice.md`. Nothing outside this module builds an
+//! `docs/plan/r2/u6-voice.md`. Nothing outside this module builds an
 //! `emrac <word>:` prefix by hand (a test scans the sources for that).
 
 use std::fmt;
