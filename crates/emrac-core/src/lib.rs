@@ -1,4 +1,5 @@
 mod audit;
+pub mod aur_trust;
 mod backend;
 mod cache;
 mod config;

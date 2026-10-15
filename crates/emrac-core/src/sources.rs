@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::audit::{self, AuditReport};
+use crate::aur_trust;
 use crate::backend::{
     version_is_newer, AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome,
     BuildOptions, FreshDb, InstalledSource, PacmanBackend, ResolvedPackage, SimOp, Simulation,
@@ -359,6 +360,93 @@ impl Sources {
                 self.audit_aur_text(name, &pkgbuild, None)
             }
         })
+    }
+
+    /// The trust signals for an AUR package about to be built (u20): what the
+    /// AUR says, how the name compares with real packages, and what changed
+    /// since you last built it. The record to keep once it is built is held
+    /// until `aur_trust_commit`. A failed AUR lookup gives the change signals
+    /// only.
+    pub fn aur_trust(&self, name: &str, outcome: &AurSyncOutcome) -> Vec<aur_trust::Signal> {
+        let (old, new) = match outcome {
+            AurSyncOutcome::Changed { .. } => (
+                self.aur_build.read_file(name, None, ".SRCINFO"),
+                self.aur_build
+                    .read_file(name, Some("FETCH_HEAD"), ".SRCINFO"),
+            ),
+            _ => (None, self.aur_build.read_file(name, None, ".SRCINFO")),
+        };
+        let old = old.map(|t| aur_trust::parse_srcinfo(&t));
+        let new = new.map(|t| aur_trust::parse_srcinfo(&t));
+        let store = aur_trust::load();
+        let recorded = store.get(name);
+        let mut signals = Vec::new();
+        let mut facts = aur_trust::AurFacts {
+            name: name.to_string(),
+            ..aur_trust::AurFacts::default()
+        };
+        if let Ok(Some(d)) = self.aur.info(name) {
+            facts = aur_trust::AurFacts {
+                name: name.to_string(),
+                maintainer: d.maintainer,
+                first_submitted: d.first_submitted,
+                votes: d.votes.unwrap_or(0),
+                out_of_date: d.out_of_date.is_some(),
+                provides: d.provides,
+                conflicts: d.conflicts,
+                replaces: d.replaces,
+            };
+            let official_names = self.alpm.sync_names();
+            let official: std::collections::BTreeSet<&str> =
+                official_names.iter().map(String::as_str).collect();
+            let installed = self.alpm.installed_names();
+            signals.extend(aur_trust::signals_from_aur(
+                &facts,
+                &official,
+                &installed,
+                recorded,
+                now() as i64,
+            ));
+        }
+        if let Some(new) = &new {
+            signals.extend(aur_trust::signals_from_change(old.as_ref(), new, recorded));
+            aur_trust::hold(name, aur_trust::record_of(&facts, new));
+        }
+        signals.sort_by_key(|s| std::cmp::Reverse(s.level));
+        signals
+    }
+
+    /// The same signals without a checkout, for `emrac info` on an AUR package.
+    pub fn aur_trust_for_info(&self, details: &PackageDetails) -> Vec<aur_trust::Signal> {
+        let facts = aur_trust::AurFacts {
+            name: details.name.clone(),
+            maintainer: details.maintainer.clone(),
+            first_submitted: details.first_submitted,
+            votes: details.votes.unwrap_or(0),
+            out_of_date: details.out_of_date.is_some(),
+            provides: details.provides.clone(),
+            conflicts: details.conflicts.clone(),
+            replaces: details.replaces.clone(),
+        };
+        let official_names = self.alpm.sync_names();
+        let official: std::collections::BTreeSet<&str> =
+            official_names.iter().map(String::as_str).collect();
+        let installed = self.alpm.installed_names();
+        let store = aur_trust::load();
+        let mut signals = aur_trust::signals_from_aur(
+            &facts,
+            &official,
+            &installed,
+            store.get(&details.name),
+            now() as i64,
+        );
+        signals.sort_by_key(|s| std::cmp::Reverse(s.level));
+        signals
+    }
+
+    /// The package was built and installed: keep what was learned about it.
+    pub fn aur_trust_commit(&self, name: &str) {
+        let _ = aur_trust::commit(name);
     }
 
     /// Fast-forwards the cached checkout to what `aur_sync` last fetched.

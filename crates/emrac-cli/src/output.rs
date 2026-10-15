@@ -825,6 +825,24 @@ pub fn print_stale(stale: &[emrac_core::stale_builds::StaleBuild], json: bool) {
     }
 }
 
+/// The trust signals under an AUR package's review. Nothing when there are none.
+pub fn print_trust(name: &str, signals: &[emrac_core::aur_trust::Signal]) {
+    use emrac_core::aur_trust::Level;
+    if signals.is_empty() {
+        return;
+    }
+    println!("Trust signals for '{name}':");
+    for s in signals {
+        let mark = match s.level {
+            Level::High => "HIGH   ",
+            Level::Warning => "warning",
+            Level::Note => "note   ",
+        };
+        println!("  {mark}  {}", s.text);
+    }
+    println!();
+}
+
 pub fn print_rebuild(plan: &Plan, json: bool) {
     if json {
         let mut value = serde_json::to_value(plan).unwrap();

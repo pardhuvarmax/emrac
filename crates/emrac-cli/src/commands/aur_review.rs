@@ -49,6 +49,20 @@ pub fn review_aur_package(
         _ => {}
     }
 
+    // What the AUR and the change since your last build say about trusting it.
+    let signals = sources.aur_trust(name, &outcome);
+    output::print_trust(name, &signals);
+    if signals
+        .iter()
+        .any(|s| s.level == emrac_core::aur_trust::Level::High)
+        && !accept_risks
+        && !confirm_default_no(&format!(
+            "The trust signals for '{name}' include HIGH ones (see above). Build it anyway?"
+        ))
+    {
+        return Ok(false);
+    }
+
     match outcome {
         AurSyncOutcome::UpToDate => Ok(true),
 

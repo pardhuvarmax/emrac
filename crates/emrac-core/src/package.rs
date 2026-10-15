@@ -28,4 +28,9 @@ pub struct PackageDetails {
     pub popularity: Option<f64>,
     /// Unix timestamp the package was flagged out-of-date, if it is.
     pub out_of_date: Option<i64>,
+    /// AUR only: unix seconds the package was first submitted / last changed.
+    pub first_submitted: Option<i64>,
+    pub last_modified: Option<i64>,
+    pub conflicts: Vec<String>,
+    pub replaces: Vec<String>,
 }

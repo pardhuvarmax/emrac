@@ -71,13 +71,16 @@ impl AurBackend {
                 license: r.license,
                 url: r.url,
                 depends: r.depends,
-                // The v5 RPC schema doesn't expose Provides/Conflicts/Replaces.
-                provides: Vec::new(),
+                provides: r.provides,
                 installed_size: None,
                 maintainer: r.maintainer,
                 votes: Some(r.num_votes),
                 popularity: Some(r.popularity),
                 out_of_date: r.out_of_date,
+                first_submitted: r.first_submitted,
+                last_modified: r.last_modified,
+                conflicts: r.conflicts,
+                replaces: r.replaces,
             })
             .collect())
     }
@@ -202,6 +205,16 @@ struct AurInfoResult {
     popularity: f64,
     #[serde(rename = "OutOfDate")]
     out_of_date: Option<i64>,
+    #[serde(rename = "FirstSubmitted")]
+    first_submitted: Option<i64>,
+    #[serde(rename = "LastModified")]
+    last_modified: Option<i64>,
+    #[serde(rename = "Provides", default)]
+    provides: Vec<String>,
+    #[serde(rename = "Conflicts", default)]
+    conflicts: Vec<String>,
+    #[serde(rename = "Replaces", default)]
+    replaces: Vec<String>,
 }
 
 #[cfg(test)]

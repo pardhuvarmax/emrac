@@ -474,6 +474,10 @@ impl AlpmBackend {
                     votes: None,
                     popularity: None,
                     out_of_date: None,
+                    first_submitted: None,
+                    last_modified: None,
+                    conflicts: pkg.conflicts().into_iter().map(|d| d.to_string()).collect(),
+                    replaces: pkg.replaces().into_iter().map(|d| d.to_string()).collect(),
                 });
             }
         }
@@ -712,6 +716,15 @@ impl AlpmBackend {
         names.sort();
         names.dedup();
         names
+    }
+
+    /// Names of every package in the sync databases.
+    pub fn sync_names(&self) -> Vec<String> {
+        self.handle
+            .syncdbs()
+            .into_iter()
+            .flat_map(|db| db.pkgs().into_iter().map(|p| p.name().to_string()))
+            .collect()
     }
 
     /// Names of every installed package.

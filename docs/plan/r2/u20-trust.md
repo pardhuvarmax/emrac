@@ -34,12 +34,26 @@ the `.SRCINFO` of the old and new revision.
 `emrac news [--all] [--json]` reads `https://archlinux.org/feeds/news/` (cached in
 `~/.local/share/emrac/news.json`, labelled stale offline), lists items newest first, and marks
 the ones you have not seen. `emrac news ack` marks all as seen. In `upgrade` the unread items are
-shown inside the plan. **Warn by default; block only when critical**: an item is critical when it
-asks for manual intervention (its text says so: "manual intervention", "action required", "before
-upgrading", "will fail", "must be") **and** names a package in this upgrade. A critical unread
-item stops the run (not a `--dry-run`) until you have read it and run `emrac news ack`, or pass
-`--ack-news` for this run. A feed that can't be read is a warning, never a block. Setting
-`safety.arch_news = gate | warn | off`.
+shown inside the plan. **Warn by default; block only when critical.**
+
+*Critical* is about how risky the change is, not about whether it names a package in this
+upgrade. An item is critical when its text shows any of:
+
+- a **breaking change or manual intervention**: "manual intervention", "action required",
+  "breaking change", "will fail", "will break", "no longer", "before upgrading", "must be",
+  "incompatible", "requires you to";
+- a change that touches a **critical part of the system**: the kernel (`linux`, `initramfs`,
+  `mkinitcpio`, modules, `dkms`), the bootloader (`grub`, `systemd-boot`, `limine`, `efi`,
+  `secure boot`), the C library and toolchain (`glibc`, `gcc`, `libstdc++`), init and boot
+  (`systemd`), `pacman` and its keyring, `openssl`/`ca-certificates`, graphics and firmware
+  drivers (`nvidia`, `mesa`, `linux-firmware`), the filesystem layout (`/usr`, `/lib`, `usrmerge`,
+  `filesystem`).
+
+An unread critical item stops the run (not a `--dry-run`), listing why it counts ("touches the
+kernel", "asks for manual intervention"), until you have read it and run `emrac news ack`, or pass
+`--ack-news` for this run. Every other unread item is only shown. A feed that can't be read is a
+warning, never a block. Setting `safety.arch_news = gate | warn | off` (`warn` never blocks).
+The same classes feed the update risk rating in part 5, so the two agree on what is risky.
 
 ## 3. Protecting pacman's own database (C6)
 

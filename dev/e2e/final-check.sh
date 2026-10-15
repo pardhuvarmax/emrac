@@ -41,10 +41,14 @@ ck "audit flags curl | sh"            "$e audit /tmp/aud | grep -qi 'remote-exec
 # AUR build in the sandbox, from a local checkout
 B=$HOME/.cache/emrac/build; mkdir -p /tmp/w $B; rm -rf /tmp/up.git $B/pfetch /tmp/w/*
 printf 'pkgname=pfetch\npkgver=9.9\npkgrel=1\npkgdesc=fixture\narch=(any)\nlicense=(MIT)\npackage() {\n  install -Dm755 /dev/stdin "$pkgdir/usr/bin/pfetch" <<<"#!/bin/sh"\n}\n' > /tmp/w/PKGBUILD
+printf 'pkgbase = pfetch\n\tpkgdesc = fixture\n\tpkgver = 9.9\n\tpkgrel = 1\n\tarch = any\n\tsource = https://github.com/dylanaraps/pfetch/archive/9.9.tar.gz\n\tsha256sums = aaaa\n\npkgname = pfetch\n' > /tmp/w/.SRCINFO
 (cd /tmp/w && git init -q -b master && git add -A && git commit -q -m x) && git clone -q --bare /tmp/w /tmp/up.git && git clone -q /tmp/up.git $B/pfetch
 ck "AUR install: audit, sandbox build, manifest, pacman -U" "$e install pfetch --yes --skip-pkgbuild </dev/null && pacman -Q pfetch"
 ck "build without installing"         "$e build pfetch --skip-pkgbuild </dev/null | grep -q 'emrac confirms: built'"
 ck "rebuild builds an installed AUR package again" "b1=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p'); sleep 2; $e rebuild pfetch --yes --skip-pkgbuild </dev/null >/tmp/rb 2>&1; rc=\$?; tail -6 /tmp/rb; [ \$rc -eq 0 ] && b2=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p') && [ \"\$b1\" != \"\$b2\" ] && $e history | grep -q pfetch"
+# AUR trust signals (u20): the sources change under the same version
+ck "trust signals: changed sources under the same version are HIGH and a closed stdin declines" "rm -rf /tmp/tamper && git clone -q /tmp/up.git /tmp/tamper && sed -i 's/aaaa/bbbb/' /tmp/tamper/.SRCINFO && (cd /tmp/tamper && git -c user.name=t -c user.email=t@t commit -qam tamper && git push -q origin HEAD) && b1=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p'); $e rebuild pfetch --yes --skip-pkgbuild </dev/null >/tmp/tr 2>&1; grep -q 'HIGH' /tmp/tr && grep -q 'sources or their checksums changed' /tmp/tr && [ \"\$b1\" = \"\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p')\" ]"
+ck "trust signals: emrac info shows them for an AUR package" "$e info pfetch 2>&1 | grep -q 'Trust signals'"
 ck "rebuild refuses an official package and a missing one" "! $e rebuild tree --dry-run 2>&1 | tee /tmp/o; grep -q 'official package' /tmp/o; ! $e rebuild nosuchthing --dry-run"
 ck "rebuild --check lists nothing broken for a healthy AUR package" "$e rebuild --check | grep -q 'no installed AUR package'"
 ck "a closed stdin declines (no install)" "sudo pacman -Rns --noconfirm pfetch tree >/dev/null; $e install tree </dev/null >/dev/null; ! pacman -Q tree"

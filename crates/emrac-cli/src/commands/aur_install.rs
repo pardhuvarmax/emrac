@@ -178,5 +178,7 @@ pub fn build_and_install(sources: &Sources, name: &str, choice: BuildChoice) -> 
         }
     }
 
-    sources.install_built(&files)
+    sources.install_built(&files)?;
+    sources.aur_trust_commit(name);
+    Ok(())
 }
