@@ -583,7 +583,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: after u16, 44 of 44 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u16, 43 of 44 passed (downgrade --list: archive.archlinux.org did not answer that day) (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2).
 
 * version names the builder
 * usage error exits 2

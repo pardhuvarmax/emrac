@@ -5,7 +5,7 @@
 #
 # Each `ck "title" "command"` line is one check; the titles are listed in
 # docs/tests/emrac-tests.rst. Update the next line when you run them all.
-# last full run: after u16, 44 of 44 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2)
+# last full run: after u16, 43 of 44 passed (downgrade --list: archive.archlinux.org did not answer that day) (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2)
 e=/usr/local/bin/emrac
 export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 n=0; bad=0
