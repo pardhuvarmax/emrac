@@ -93,6 +93,21 @@ what was seen for each.
    * - ``deps`` / ``rdeps`` / ``why`` / ``orphans``
      - u12
      - Read-only dependency inspection
+   * - AUR trust signals
+     - u20
+     - Lookalike names, a claim on an official package, orphaned/new/few users, a changed maintainer, sources changed under the same version, a new source host, changed signing keys; shown in the review and in ``info``
+   * - ``news`` / ``news ack`` / ``--ack-news``
+     - u20
+     - The Arch news; unread items under every upgrade plan; critical ones (breaking, manual intervention, kernel, bootloader, C library, systemd, pacman, drivers, filesystem) stop an upgrade until acknowledged
+   * - pacman database protection
+     - u20
+     - A backup of the local database before each transaction, ``pacman -Dk`` before and after, the restore command, the lock in pre-flight
+   * - repository trust
+     - u20
+     - An older version than the installed one is refused in pre-flight; a repository database older than one seen is a warning
+   * - update risk / ``report``
+     - u20
+     - LOW/MEDIUM/HIGH under an upgrade plan; after it (and ``emrac report``): reboot, services to restart, new failures, broken AUR packages, new .pacnew files
    * - ``rebuild`` / ``rebuild --check`` / ``--stale``
      - u19
      - Build installed AUR packages again from source through the audited path; find the ones a library, Python or Qt update broke or may have broken (also a ``doctor`` row); source packages only, binary packages are named and left out

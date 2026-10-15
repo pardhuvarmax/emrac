@@ -239,6 +239,21 @@ impl Report {
     }
 }
 
+/// The kernel package a release string belongs to, by its suffix.
+fn kernel_family(release: &str) -> Option<&'static str> {
+    if release.ends_with("-zen") {
+        Some("linux-zen")
+    } else if release.ends_with("-lts") {
+        Some("linux-lts")
+    } else if release.ends_with("-hardened") {
+        Some("linux-hardened")
+    } else if release.contains("-arch") {
+        Some("linux")
+    } else {
+        None
+    }
+}
+
 /// Packages whose upgrade leaves running programs on the old copy of a core
 /// library, so that logging out or rebooting is the clean answer.
 const REBOOT_PACKAGES: [&str; 3] = ["glibc", "systemd", "linux-firmware"];
@@ -266,39 +281,47 @@ pub fn assess(f: &Facts, newer: &dyn Fn(&str, &str) -> bool) -> Report {
         }
     }
 
-    // The kernel in use against the newest installed of the same kind.
-    let running_base = f
+    // The kernel in use against the newest installed of the same kind. The
+    // kind is read from the modules folder of the running kernel, or, when an
+    // upgrade has removed that folder, from the release's suffix (`-zen`):
+    // with no installed kernel of that kind nothing is said, which is also
+    // what a container, running the host's kernel, needs.
+    let exact = f
         .kernel_dirs
         .iter()
         .find(|(dir, _)| *dir == f.running_kernel)
         .map(|(_, base)| base.clone());
-    match running_base {
-        None if !f.running_kernel.is_empty() && !f.kernel_dirs.is_empty() => {
-            r.reboot.push(format!(
-                "the running kernel ({}) has been removed: its modules are gone, so devices that load a module later will fail",
-                f.running_kernel
-            ));
-        }
-        Some(base) => {
-            let newest = f
-                .kernel_dirs
-                .iter()
-                .filter(|(_, b)| *b == base)
-                .map(|(d, _)| d.as_str())
-                .fold(None::<&str>, |best, d| match best {
-                    Some(b) if !newer(b, d) => Some(b),
-                    _ => Some(d),
-                });
-            if let Some(newest) = newest {
-                if newest != f.running_kernel && newer(&f.running_kernel, newest) {
-                    r.reboot.push(format!(
-                        "{base} {newest} is installed, you are running {}",
-                        f.running_kernel
-                    ));
-                }
+    let removed = exact.is_none();
+    let base = exact.or_else(|| {
+        let family = kernel_family(&f.running_kernel)?;
+        f.kernel_dirs
+            .iter()
+            .any(|(_, b)| b == family)
+            .then(|| family.to_string())
+    });
+    if let Some(base) = base {
+        let newest = f
+            .kernel_dirs
+            .iter()
+            .filter(|(_, b)| *b == base)
+            .map(|(d, _)| d.as_str())
+            .fold(None::<&str>, |best, d| match best {
+                Some(b) if !newer(b, d) => Some(b),
+                _ => Some(d),
+            });
+        if let Some(newest) = newest {
+            if removed {
+                r.reboot.push(format!(
+                    "{base} was upgraded to {newest} and you are still running {}, whose modules are gone, so devices that load a module later will fail",
+                    f.running_kernel
+                ));
+            } else if newest != f.running_kernel && newer(&f.running_kernel, newest) {
+                r.reboot.push(format!(
+                    "{base} {newest} is installed, you are running {}",
+                    f.running_kernel
+                ));
             }
         }
-        None => {}
     }
     for c in &f.changes {
         if REBOOT_PACKAGES.contains(&c.name.as_str())
@@ -458,7 +481,10 @@ mod tests {
     fn a_removed_or_older_running_kernel_calls_for_a_reboot() {
         let r = assess(&base_facts(), &newer);
         assert!(
-            r.reboot.iter().any(|x| x.contains("has been removed")),
+            r.reboot
+                .iter()
+                .any(|x| x.contains("linux-zen was upgraded to 7.2.9-zen1-1-zen")
+                    && x.contains("whose modules are gone")),
             "{:?}",
             r.reboot
         );

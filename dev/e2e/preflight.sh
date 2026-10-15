@@ -92,7 +92,7 @@ ck "--ack-news goes ahead" "as_tester env EMRAC_NEWS_FEED=file:///tmp/feed.xml $
 newer fixnew2 3.0
 feed "A new mirror in Iceland" "A new mirror is available."
 ck "news that is not critical is shown and does not stop the upgrade" "as_tester env EMRAC_NEWS_FEED=file:///tmp/feed.xml $e upgrade --yes >/tmp/o 2>&1; grep -q \"haven't seen\" /tmp/o && pacman -Q fixnew2 | grep -q '3.0'"
-ck "an upgrade shows its update risk and ends with the report" "grep -q 'Update risk' /tmp/o && grep -q 'after the upgrade' /tmp/o"
+ck "an upgrade shows its update risk and ends with the report" "grep -q 'Update risk' /tmp/o && grep -q -e 'after the upgrade' -e 'reboot is advised' /tmp/o"
 ck "emrac report works on the last upgrade in the history" "as_tester $e report >/tmp/r 2>&1; grep -q 'report for tx-' /tmp/r"
 
 # protecting pacman's database (u20): a leftover lock, a database that is already broken

@@ -99,3 +99,30 @@ Pure rules get unit tests (each signal, the news parser and classifier on a fixt
 risk rules, the report). Container: a local AUR-like repository for the trust signals, a served
 feed for the news gate (a `file://` feed address for tests), a corrupted database for the backup
 check, and a fixture upgrade for the report.
+
+## What was built, and where it differs
+
+- All five parts, in five commits. `aur_trust.rs`, `arch_news.rs`, `pacman_db.rs`, `repo_trust.rs`,
+  `upgrade_report.rs`; settings `safety.arch_news` and `safety.db_backup`; commands `emrac news`,
+  `emrac news ack`, `emrac report`; flag `--ack-news`.
+- The news gate's "critical" follows the developer's definition (risk: breaking, manual
+  intervention, or a critical part of the system), not "names a package in this upgrade". Parts of
+  the system are matched in the **title** only: a first version matched the body, and an item that
+  merely told you to run `pacman` was flagged as touching pacman.
+- "Unread" before any acknowledgement means since your last upgrade (two weeks without one): the
+  first version called the whole feed unread, which would have blocked the first upgrade.
+- The database backup leaves out the `mtree` files: 6 MiB instead of 43 MiB, and `pacman` doesn't
+  need them.
+- `x-git` providing and conflicting with `x` is not flagged as claiming an official package (the
+  first version flagged `quickshell-git`).
+- Service start times come from `systemctl show --timestamp=unix`; the boot-time arithmetic that
+  was considered drifts after every suspend.
+- A running kernel whose modules folder has gone is reported only when an installed kernel of the
+  same kind is there (the kind comes from the release's suffix: `-zen`, `-lts`, `-hardened`,
+  `-arch`): "linux-zen was upgraded to X and you are still running Y". A first version said "the
+  running kernel has been removed" whenever the folder was missing; the container test showed it
+  on a container (which runs the host's kernel and has no package for it), and the developer
+  rightly asked what it meant on a machine where nothing was removed. With no installed kernel of
+  that kind nothing is said.
+- Container runs: `final-check.sh` (50 checks) and `preflight.sh` (24); the fixture repository
+  of the second now also drives the news, backup, lock, downgrade and rollback cases.

@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 368
+     - 401
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 11
@@ -31,10 +31,21 @@ Totals
      - 28
    * - **Automated total**
      -
-     - **407**
+     - **440**
 
-emrac-core library (368)
+emrac-core library (401)
 ------------------------
+
+``arch_news::tests`` (7)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_critical_part_of_the_system_counts_from_the_title_only``
+* ``a_feed_file_is_fetched_and_an_empty_or_missing_one_is_an_error``
+* ``nothing_acknowledged_yet_means_news_since_your_last_upgrade``
+* ``the_cache_age_is_worded_and_stale_after_two_days``
+* ``the_feed_is_parsed_newest_first_with_markup_and_entities_removed``
+* ``unread_items_are_the_ones_after_the_last_acknowledgement``
+* ``what_makes_an_item_critical_is_risk_not_a_package_name``
 
 ``audit::tests`` (39)
 ~~~~~~~~~~~~~~~~~~~~~
@@ -78,6 +89,18 @@ emrac-core library (368)
 * ``unpacking_into_a_shell_is_high``
 * ``verdict_follows_the_highest_severity``
 * ``writes_outside_the_package_are_warnings``
+
+``aur_trust::tests`` (8)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_changed_maintainer_is_high_only_against_what_was_recorded``
+* ``names_one_edit_apart_are_found_and_others_are_not``
+* ``pinned_keys_must_not_change``
+* ``reordered_words_and_one_letter_slips_are_lookalikes``
+* ``sources_that_change_under_the_same_version_are_high_and_a_new_host_is_a_warning``
+* ``srcinfo_is_read_and_hosts_found``
+* ``the_aur_data_gives_the_signals_it_should``
+* ``what_is_remembered_survives_a_round_trip``
 
 ``backend::alpm::conflict_tests`` (3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -190,7 +213,7 @@ emrac-core library (368)
 * ``why_prefers_the_shortest_chain``
 * ``why_survives_cycles``
 
-``doctor::tests`` (26)
+``doctor::tests`` (27)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_cut_off_transaction_is_a_warning_with_the_recover_fix``
@@ -198,6 +221,7 @@ emrac-core library (368)
 * ``a_healthy_machine_has_nothing_above_a_note``
 * ``a_kernel_whose_modules_are_gone_says_reboot``
 * ``a_lock_is_only_stale_when_no_pacman_is_running``
+* ``a_rolled_back_repository_is_a_warning_and_the_db_backup_row_tells_none_from_some``
 * ``a_stale_list_with_upgrades_says_there_are_probably_more``
 * ``caches_orphans_pins_history_are_reported_when_there_is_something_to_say``
 * ``config_problems``
@@ -327,6 +351,14 @@ emrac-core library (368)
 * ``what_installing_would_remove_is_a_warning_and_a_summary_line``
 * ``what_the_package_changes_is_reported``
 
+``pacman_db::tests`` (4)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_backup_leaves_out_mtree_keeps_the_rest_and_only_the_newest_few_stay``
+* ``names_carry_their_time_and_the_recipe_names_the_file``
+* ``the_lock_is_absent_held_or_stale``
+* ``the_report_of_dk_is_read``
+
 ``pacnew::tests`` (8)
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -362,12 +394,14 @@ emrac-core library (368)
 * ``the_changes_between_two_plans_are_listed``
 * ``the_digest_ignores_order_sizes_and_warnings_and_sees_everything_else``
 
-``preflight::tests`` (9)
-~~~~~~~~~~~~~~~~~~~~~~~~
+``preflight::tests`` (11)
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_kernel_image_is_found_as_a_whole_word_only``
 * ``a_kernel_upgrade_checks_boot_space_fallbacks_and_the_boot_entry``
+* ``a_running_pacman_blocks_and_a_stale_lock_warns``
 * ``a_waiting_upgrade_makes_a_partial_upgrade_a_problem_that_lists_the_packages``
+* ``an_older_version_is_a_problem_and_a_rolled_back_repository_a_warning``
 * ``an_unreadable_boot_degrades_to_notes_and_a_fixed_space_floor``
 * ``mount_tables_and_mirror_addresses_are_parsed``
 * ``power_matters_only_on_battery_and_only_for_risky_work``
@@ -390,6 +424,14 @@ emrac-core library (368)
 * ``official_with_nothing_available_explains_why``
 * ``offline_never_consults_the_archive_and_says_so``
 * ``the_archive_is_not_consulted_when_not_needed``
+
+``repo_trust::tests`` (4)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_database_much_older_than_one_seen_is_a_rollback_and_a_small_lag_is_not``
+* ``a_plan_that_installs_an_older_version_is_found``
+* ``database_times_are_read_from_the_files``
+* ``marks_only_rise``
 
 ``rollback::tests`` (27)
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -524,8 +566,8 @@ emrac-core library (368)
 * ``only_a_failed_dependency_step_is_explained``
 * ``undoing_needs_the_old_versions_of_only_what_the_record_really_changed``
 
-``stale_builds::tests`` (9)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``stale_builds::tests`` (10)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_library_is_missing_unless_the_system_the_package_or_a_search_path_has_it``
 * ``a_minor_bump_of_qt_after_the_build_may_break_what_depends_on_qt``
@@ -536,6 +578,17 @@ emrac-core library (368)
 * ``only_the_systems_own_folders_count_as_broken_and_bundled_apps_as_maybe``
 * ``pacman_log_lines_give_upgrades_with_their_times``
 * ``the_elf_reader_agrees_with_readelf_on_a_real_binary_and_a_library``
+* ``transaction_starts_are_found_in_the_log``
+
+``upgrade_report::tests`` (6)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_removed_or_older_running_kernel_calls_for_a_reboot``
+* ``core_libraries_and_services_started_before_the_upgrade_are_listed``
+* ``notable_changes_name_the_big_steps_only``
+* ``only_new_failures_count_when_the_old_ones_are_known``
+* ``the_risk_is_high_for_the_kernel_the_c_library_and_critical_news_and_low_for_ordinary_updates``
+* ``version_steps_are_classified``
 
 ``verify::tests`` (13)
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -634,7 +687,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: after u19, 47 of 47 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u20, 50 of 50 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3, u20 adds 3) (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3).
 
 * version names the builder
 * usage error exits 2
@@ -662,6 +715,9 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u19, 47 of 47 passe
 * AUR install: audit, sandbox build, manifest, pacman -U
 * build without installing
 * rebuild builds an installed AUR package again
+* a backup of pacman's local database is made before a transaction
+* trust signals: changed sources under the same version are HIGH and a closed stdin declines
+* trust signals: emrac info shows them for an AUR package
 * rebuild refuses an official package and a missing one
 * rebuild --check lists nothing broken for a healthy AUR package
 * a closed stdin declines (no install)
@@ -684,4 +740,4 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u19, 47 of 47 passe
 * self check runs and names how emrac was installed
 * self check reports a cut-off transaction
 
-(47 checks.)
+(50 checks.)
