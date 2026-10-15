@@ -1346,3 +1346,88 @@ fn self_check_works_without_pacman_and_fails_on_a_broken_config() {
         stdout(&out)
     );
 }
+
+#[test]
+fn self_sync_and_news_use_the_configured_source_and_keep_the_last_good_index() {
+    let home = Home::new("selfsync");
+    let sha = "a20701e9d20b4a677c1dc1c6333682d09f7f5c65a3c0afad26396630bf1a6c40";
+    let index = |extra: &str| {
+        format!(
+            r#"{{"schema":1,"releases":[{{"tag":"r9","version":"9.0.0","date":"2026-10-15","channel":"stable","tarball":"https://github.com/pardhuvarmax/emrac/archive/refs/tags/r9.tar.gz","sha256":"{sha}"{extra}}}],"news":[{{"date":"2026-10-15","category":"release","title":"Emrac r9","summary":"Nine.","version":"9.0.0"}}]}}"#
+        )
+    };
+    let src = home.0.join("releases.json");
+    write(&src, &index(""));
+    let source = format!("file://{}", src.display());
+
+    // Nothing fetched yet.
+    let out = home.run(&["self", "news"]);
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        stdout(&out).contains("no release news yet"),
+        "{}",
+        stderr(&out)
+    );
+
+    assert_eq!(
+        home.run(&["config", "set", "self.source", &source])
+            .status
+            .code(),
+        Some(0)
+    );
+    let out = home.run(&["self", "sync", "--dry-run"]);
+    assert!(
+        stdout(&out).contains("Synchronisation plan") && stdout(&out).contains("none (dry run)"),
+        "{}",
+        stdout(&out)
+    );
+    assert!(
+        !home
+            .0
+            .join(".local/share/emrac/self/releases.json")
+            .exists(),
+        "a dry run fetches nothing"
+    );
+
+    let out = home.run(&["self", "sync"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(stdout(&out).contains("1 new (r9)"), "{}", stderr(&out));
+    assert!(
+        stdout(&out).contains("a newer release is out: r9"),
+        "{}",
+        stderr(&out)
+    );
+
+    let out = home.run(&["self", "news"]);
+    assert!(
+        stdout(&out).contains("Emrac r9") && stdout(&out).contains("[newer than yours]"),
+        "{}",
+        stdout(&out)
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout(&home.run(&["self", "news", "--json"]))).unwrap();
+    assert_eq!(json["items"][0]["newer_than_installed"], true);
+
+    // A rejected index changes nothing and says why.
+    write(&src, &index("").replace(sha, "short"));
+    let out = home.run(&["self", "sync"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("rejected"), "{}", stderr(&out));
+    assert!(stdout(&home.run(&["self", "news"])).contains("Emrac r9"));
+
+    // --offline refuses a network source without touching it.
+    assert_eq!(
+        home.run(&[
+            "config",
+            "set",
+            "self.source",
+            "https://example.invalid/releases.json"
+        ])
+        .status
+        .code(),
+        Some(0)
+    );
+    let out = home.run(&["--offline", "self", "sync"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("--offline"), "{}", stderr(&out));
+}

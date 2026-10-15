@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "releases": [
+    {
+      "tag": "r1",
+      "version": "0.1.0",
+      "date": "2026-10-13",
+      "channel": "stable",
+      "state_schema": 1,
+      "summary": "The core loop: search, info, install, remove and upgrade against the official repositories and the AUR.",
+      "url": "https://github.com/pardhuvarmax/emrac/releases/tag/r1",
+      "tarball": "https://github.com/pardhuvarmax/emrac/archive/refs/tags/r1.tar.gz",
+      "sha256": "fbfad93ee01217ed78dec6eb874591989aa13cede396c61a6e0bda64625253df"
+    },
+    {
+      "tag": "r2",
+      "version": "0.2.0",
+      "date": "2026-10-14",
+      "channel": "stable",
+      "state_schema": 1,
+      "summary": "r1 plus the update slices u1 to u30: audit, sandboxed builds, doctor, rollback, snapshots, pacnew, cache.",
+      "url": "https://github.com/pardhuvarmax/emrac/releases/tag/r2",
+      "tarball": "https://github.com/pardhuvarmax/emrac/archive/refs/tags/r2.tar.gz",
+      "sha256": "7f38593076690626cd1bfd1961898b1be24e24bba1b9006a79d636b3fd9d27e4"
+    },
+    {
+      "tag": "r2-aur",
+      "version": "0.2.0",
+      "date": "2026-10-14",
+      "channel": "stable",
+      "state_schema": 1,
+      "summary": "r2 plus a license, the tracked test list and the READMEs, for the first AUR package.",
+      "url": "https://github.com/pardhuvarmax/emrac/releases/tag/r2-aur",
+      "tarball": "https://github.com/pardhuvarmax/emrac/archive/refs/tags/r2-aur.tar.gz",
+      "sha256": "a20701e9d20b4a677c1dc1c6333682d09f7f5c65a3c0afad26396630bf1a6c40"
+    }
+  ],
+  "news": [
+    {
+      "date": "2026-10-13",
+      "category": "release",
+      "title": "Emrac r1",
+      "summary": "First release: the core loop against the official repositories and the AUR.",
+      "version": "0.1.0"
+    },
+    {
+      "date": "2026-10-14",
+      "category": "release",
+      "title": "Emrac First AUR Release",
+      "summary": "r2 with a license and the tracked tests, packaged for the AUR.",
+      "version": "0.2.0"
+    },
+    {
+      "date": "2026-10-14",
+      "category": "release",
+      "title": "Emrac r2",
+      "summary": "Audit, sandboxed AUR builds, doctor, rollback, snapshots, pacnew and the cache.",
+      "version": "0.2.0"
+    }
+  ],
+  "generated": "2026-10-14"
+}

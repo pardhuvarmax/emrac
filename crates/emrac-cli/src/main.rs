@@ -116,8 +116,15 @@ fn run(cli: &Cli) -> Result<()> {
     // `self check` is for the day pacman or the config is broken: it reads
     // files and nothing else, so it runs before either is needed.
     if let Commands::SelfCmd { command } = &cli.command {
+        let cfg_flags = Config::load().map(|c| c.flags).unwrap_or_default();
         return match command {
             SelfCommand::Check => commands::self_cmd::check(cli.json),
+            SelfCommand::Sync => commands::self_cmd::sync(
+                cli.dry_run || cfg_flags.dry_run,
+                cli.offline || cfg_flags.offline,
+                cli.json,
+            ),
+            SelfCommand::News { all } => commands::self_cmd::news(*all, cli.json),
         };
     }
 

@@ -23,6 +23,7 @@ mod reinstall;
 mod rollback;
 mod sandbox;
 pub mod self_check;
+pub mod self_meta;
 mod snapshot;
 mod sources;
 mod verify;

@@ -18,3 +18,4 @@ again from `u1`. They go into the next release (`r3`). `u1` to `u5` had no plan 
   during it, so a transaction cut off by a crash or a power loss is found next time, described
   from pacman's log and the installed versions, and put on record (`history recover`).
 - [`u11-self-check.md`](./u11-self-check.md) — `emrac self check`: a read-only look at emrac's own installation that needs no pacman, config or network.
+- [`u12-self-service.md`](./u12-self-service.md) — u12–u15: the release index, `self sync`/`news` (u12), `self diagnose` (u13), `self upgrade` (u14), `self downgrade` (u15).

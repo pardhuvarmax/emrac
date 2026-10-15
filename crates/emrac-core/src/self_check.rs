@@ -85,6 +85,26 @@ pub struct SelfFacts {
     /// Why emrac's data folder can't be written, if it can't.
     pub data_dir_problem: Option<String>,
     pub helper: HelperFacts,
+    pub release: ReleaseFacts,
+}
+
+/// What the release index looks like on disk and in the settings.
+#[derive(Debug, Clone, Default)]
+pub struct ReleaseFacts {
+    pub source: String,
+    pub channel: String,
+    pub require_signature: bool,
+    pub signing_key_set: bool,
+    /// The stored index could not be read back; why.
+    pub index_problem: Option<String>,
+    /// `None`: never synced.
+    pub last_ok: Option<u64>,
+    /// The last sync failed with this.
+    pub last_error: Option<String>,
+    pub releases: usize,
+    /// `tag (version)` of the newest eligible release above the installed one.
+    pub newer: Option<String>,
+    pub now: u64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -244,6 +264,83 @@ pub fn evaluate(f: &SelfFacts) -> DoctorReport {
             Status::Note,
             "no package manager owns this copy, so it has to be replaced by hand; emrac does not update itself yet",
         ),
+    });
+
+    // Where releases are announced, and how much of it emrac knows.
+    let r = &f.release;
+    checks.push(if r.require_signature && !r.signing_key_set {
+        let mut c = check(
+            "release-source",
+            "Release source",
+            Status::Problem,
+            "a signature is required but no signing key is set",
+        );
+        c.fix = Some("emrac config set self.signing_key <fingerprint>".into());
+        c
+    } else {
+        let mut c = check(
+            "release-source",
+            "Release source",
+            Status::Ok,
+            format!(
+                "{} (channel {}, signature {})",
+                r.source,
+                r.channel,
+                if r.require_signature {
+                    "required"
+                } else {
+                    "not required"
+                }
+            ),
+        );
+        c.detail.clear();
+        c
+    });
+    checks.push(if let Some(why) = &r.index_problem {
+        let mut c = check(
+            "release-metadata",
+            "Release metadata",
+            Status::Warning,
+            "the stored release index can't be read",
+        );
+        c.detail.push(why.clone());
+        c.fix = Some("emrac self sync".into());
+        c
+    } else if r.last_ok.is_none() {
+        let mut c = check(
+            "release-metadata",
+            "Release metadata",
+            Status::Note,
+            "never synced: emrac doesn't know what releases exist",
+        );
+        if let Some(e) = &r.last_error {
+            c.detail.push(format!("the last attempt failed: {e}"));
+        }
+        c.fix = Some("emrac self sync".into());
+        c
+    } else {
+        let (age, stale) = crate::self_meta::age_label(r.last_ok, r.now);
+        let mut c = check(
+            "release-metadata",
+            "Release metadata",
+            if stale { Status::Warning } else { Status::Ok },
+            format!("{} releases known, {age}", r.releases),
+        );
+        if let Some(e) = &r.last_error {
+            c.status = c.status.max(Status::Warning);
+            c.detail.push(format!("the last sync failed: {e}"));
+        }
+        if stale || r.last_error.is_some() {
+            c.fix = Some("emrac self sync".into());
+        }
+        if let Some(newer) = &r.newer {
+            c.status = c.status.max(Status::Note);
+            c.detail.push(format!("a newer release is out: {newer}"));
+            if c.fix.is_none() {
+                c.fix = Some("emrac self news".into());
+            }
+        }
+        c
     });
 
     // Configuration.
@@ -433,6 +530,7 @@ pub fn gather() -> SelfFacts {
         Ok(crate::journal::State::Running) => Journal::Running,
         _ => Journal::Clean,
     };
+    let release = release_facts();
     SelfFacts {
         exe,
         version: env!("CARGO_PKG_VERSION").to_string(),
@@ -443,7 +541,35 @@ pub fn gather() -> SelfFacts {
         journal,
         data_dir_problem: data_dir_problem(&home),
         helper: helper_facts(),
+        release,
     }
+}
+
+fn release_facts() -> ReleaseFacts {
+    let cfg = crate::Config::load()
+        .map(|c| c.self_service)
+        .unwrap_or_default();
+    let mut r = ReleaseFacts {
+        source: cfg.source.clone(),
+        channel: cfg.channel.clone(),
+        require_signature: cfg.require_signature,
+        signing_key_set: !cfg.signing_key.is_empty(),
+        now: crate::journal::unix_now(),
+        ..ReleaseFacts::default()
+    };
+    if let Ok(stored) = crate::self_meta::load() {
+        r.index_problem = stored.index_problem;
+        if let Some(state) = stored.state {
+            r.last_ok = state.last_ok;
+            r.last_error = state.error;
+        }
+        if let Some(index) = stored.index {
+            r.releases = index.releases.len();
+            r.newer = crate::self_meta::newer_than(&index, &cfg.channel, env!("CARGO_PKG_VERSION"))
+                .map(|x| format!("{} ({})", x.tag, x.version));
+        }
+    }
+    r
 }
 
 fn owner_of(exe: &str, home: &str) -> Owner {
@@ -535,6 +661,14 @@ mod tests {
                 root_owned: true,
                 writable_by_others: false,
             },
+            release: ReleaseFacts {
+                source: "https://example.org/releases.json".into(),
+                channel: "stable".into(),
+                last_ok: Some(1_000),
+                releases: 3,
+                now: 1_000,
+                ..ReleaseFacts::default()
+            },
         }
     }
 
@@ -547,7 +681,7 @@ mod tests {
         let r = evaluate(&healthy());
         assert!(r.worst() <= Status::Note, "{:?}", r.checks);
         assert_eq!(status(&r, "owner"), Status::Ok);
-        assert_eq!(r.checks.len(), 9);
+        assert_eq!(r.checks.len(), 11);
     }
 
     #[test]
@@ -624,6 +758,45 @@ mod tests {
         assert_eq!(j.fix.as_deref(), Some("emrac history recover"));
         let h = r.checks.iter().find(|c| c.id == "helper").unwrap();
         assert!(h.fix.as_deref().unwrap().contains("chmod 755"));
+    }
+
+    #[test]
+    fn the_release_metadata_row_tells_never_stale_failed_and_newer_apart() {
+        let row = |f: &SelfFacts| {
+            evaluate(f)
+                .checks
+                .into_iter()
+                .find(|c| c.id == "release-metadata")
+                .unwrap()
+        };
+        let mut f = healthy();
+        assert_eq!(row(&f).status, Status::Ok);
+        f.release.newer = Some("r3 (0.3.0)".into());
+        let c = row(&f);
+        assert_eq!(c.status, Status::Note);
+        assert!(c.detail[0].contains("r3"));
+        f.release.newer = None;
+        f.release.now = 1_000 + 9 * 86_400;
+        let c = row(&f);
+        assert_eq!(c.status, Status::Warning);
+        assert_eq!(c.fix.as_deref(), Some("emrac self sync"));
+        f.release.now = 1_000;
+        f.release.last_error = Some("404".into());
+        assert_eq!(row(&f).status, Status::Warning);
+        f.release.last_ok = None;
+        f.release.last_error = None;
+        let c = row(&f);
+        assert_eq!(c.status, Status::Note);
+        assert!(c.summary.starts_with("never synced"));
+        f.release.index_problem = Some("bad".into());
+        assert_eq!(row(&f).status, Status::Warning);
+        f.release.require_signature = true;
+        let src = evaluate(&f)
+            .checks
+            .into_iter()
+            .find(|c| c.id == "release-source")
+            .unwrap();
+        assert_eq!(src.status, Status::Problem);
     }
 
     #[test]

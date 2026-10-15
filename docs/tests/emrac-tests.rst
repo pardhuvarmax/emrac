@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 306
+     - 318
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 24
+     - 25
    * - **Automated total**
      -
-     - **339**
+     - **352**
 
-emrac-core library (306)
+emrac-core library (318)
 ------------------------
 
 ``audit::tests`` (39)
@@ -143,7 +143,7 @@ emrac-core library (306)
 * ``purge_ignores_the_protections_and_trim_stops_at_the_limit``
 * ``the_standard_policy_is_unchanged_by_the_lean_facts``
 
-``config::tests`` (17)
+``config::tests`` (18)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_partial_build_section_keeps_the_other_defaults``
@@ -160,6 +160,7 @@ emrac-core library (306)
 * ``search_limit_accepts_numbers_and_unset``
 * ``set_get_unset_roundtrip_for_every_bool_key``
 * ``the_cache_policy_is_standard_or_lean_and_keeps_at_least_nothing_invalid``
+* ``the_self_service_keys_validate_and_unset_restores_the_defaults``
 * ``toml_roundtrip_preserves_values``
 * ``unknown_keys_error_on_get_set_and_unset``
 * ``unset_then_save_resets_only_that_key_on_disk``
@@ -403,15 +404,30 @@ emrac-core library (306)
 * ``the_timeout_kills_a_run_on_time_and_a_normal_exit_is_reported``
 * ``tmpfs_mounts_get_a_size_cap_when_one_is_set``
 
-``self_check::tests`` (6)
+``self_check::tests`` (7)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_healthy_install_has_nothing_above_a_note``
 * ``a_missing_helper_is_a_note_and_an_unreadable_history_a_problem``
 * ``a_package_whose_version_differs_from_the_binary_is_noted``
 * ``each_failure_is_reported_with_its_own_status_and_fix``
+* ``the_release_metadata_row_tells_never_stale_failed_and_newer_apart``
 * ``version_strings_are_validated``
 * ``where_the_binary_lives_decides_the_owner_and_unknown_stays_unknown``
+
+``self_meta::tests`` (10)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_bad_or_missing_index_leaves_the_active_one_alone_and_records_why``
+* ``a_good_index_parses_and_normalises``
+* ``a_real_gpg_signature_is_checked_against_the_trusted_fingerprint``
+* ``each_bad_field_rejects_the_whole_index``
+* ``news_is_newest_first_limited_and_marked_when_about_a_newer_release``
+* ``syncing_stages_commits_and_reports_what_changed``
+* ``the_cache_age_is_worded_and_stale_after_a_week``
+* ``the_gpg_status_must_name_the_trusted_key``
+* ``the_index_host_may_serve_tarballs_too``
+* ``versions_order_and_channels_filter``
 
 ``snapshot::tests`` (8)
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -498,10 +514,10 @@ emrac command line, unit tests (9)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (24)
+emrac command line, integration tests (25)
 ------------------------------------------
 
-``(top level)`` (24)
+``(top level)`` (25)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -521,6 +537,7 @@ emrac command line, integration tests (24)
 * ``history_is_empty_without_a_log_and_reads_one``
 * ``pins_list_and_unpin``
 * ``self_check_works_without_pacman_and_fails_on_a_broken_config``
+* ``self_sync_and_news_use_the_configured_source_and_keep_the_last_good_index``
 * ``snapshots_list_show_delete``
 * ``the_ledger_holds_a_second_copy_and_repairs_the_history``
 * ``the_sandbox_hides_the_network_secrets_and_home_from_a_build``

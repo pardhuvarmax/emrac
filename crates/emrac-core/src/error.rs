@@ -113,6 +113,10 @@ pub enum Error {
     #[error("{0}")]
     Journal(String),
 
+    /// A refusal or failure of `emrac self ...`, already worded.
+    #[error("{0}")]
+    SelfService(String),
+
     #[error("'{0}' isn't a date I understand — use YYYY-MM-DD, like 2026-10-11")]
     InvalidDate(String),
 
@@ -345,6 +349,7 @@ impl Error {
             | Error::UnknownTransaction(_)
             | Error::History(_)
             | Error::Journal(_)
+            | Error::SelfService(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

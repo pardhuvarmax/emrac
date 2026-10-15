@@ -546,6 +546,17 @@ pub enum SelfCommand {
     /// Check emrac's own installation: the binary, how it was installed, its
     /// configuration, its history, the journal and the ledger helper
     Check,
+
+    /// Fetch emrac's release index and news from the configured source
+    /// (`self.source`); never upgrades anything. --dry-run shows the plan
+    Sync,
+
+    /// Release news and announcements, from what the last sync fetched
+    News {
+        /// Every item, not only the newest 10
+        #[arg(long)]
+        all: bool,
+    },
 }
 
 #[derive(Subcommand)]

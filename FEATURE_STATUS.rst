@@ -105,6 +105,9 @@ what was seen for each.
    * - ``self check``
      - u11
      - Read-only check of emrac's own installation (binary, how it was installed, config, history, journal, ledger helper); needs no pacman, network or root. The other ``self`` commands are not built
+   * - ``self sync`` / ``self news``
+     - u12
+     - A validated, staged copy of the project's release index (``releases.json``; gpg signature checked if you require it) and the news from it; fetches nothing else, installs nothing
    * - ``config``
      - u1
      - Persisted defaults in ``~/.config/emrac/config.toml``

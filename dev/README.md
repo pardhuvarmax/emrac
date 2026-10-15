@@ -14,6 +14,10 @@ End-to-end checks of the release binary against a real pacman, run in the contai
 
 Points the root `install.sh` at a release tag: `dev/pin-install-script.sh <tag>` downloads the tag's tarball, computes its SHA-256, reads the version and rewrites the three pinned values at the top of the script. Run it after pushing a new tag and commit the result.
 
+## release-index.sh
+
+Adds a release (or a news item) to the root `releases.json`, the index `emrac self sync` reads: `dev/release-index.sh <tag> [stable|prerelease] ["summary"]` downloads the tag's tarball, computes its SHA-256, reads the version and the state schema from inside it and the date from the tag's commit. `dev/release-index.sh --news <date> <category> <title> <summary> [version]` adds a news item. Run it after pushing a tag, check the diff, commit `releases.json`. The format and publishing are in [`../docs/design/release-index.md`](../docs/design/release-index.md).
+
 ## gen-tests-doc.sh
 
 Runs the tests and rewrites [`docs/tests/emrac-tests.rst`](../docs/tests/emrac-tests.rst), the list of every passing test; `--check` fails if the committed file is stale, and CI runs it. See [`docs/tests/README.md`](../docs/tests/README.md).

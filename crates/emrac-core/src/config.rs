@@ -24,6 +24,46 @@ pub struct Config {
     pub build: BuildConfig,
     #[serde(default)]
     pub cache: CacheConfig,
+    #[serde(default, rename = "self")]
+    pub self_service: SelfConfig,
+}
+
+/// Where emrac looks for news of its own releases (`emrac self`). See
+/// `docs/plan/r2/u12-self-service.md`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SelfConfig {
+    /// `https://` address or `file://` path of `releases.json`.
+    #[serde(default = "default_self_source")]
+    pub source: String,
+    /// `"stable"` or `"prerelease"` (which also sees stable ones).
+    #[serde(default = "default_self_channel")]
+    pub channel: String,
+    /// Refuse an index without a valid signature by `signing_key`.
+    #[serde(default)]
+    pub require_signature: bool,
+    /// Fingerprint of the key that signs `releases.json.asc`.
+    #[serde(default)]
+    pub signing_key: String,
+}
+
+pub const DEFAULT_SELF_SOURCE: &str = "https://pardhuvarmax.github.io/emrac/releases.json";
+
+fn default_self_source() -> String {
+    DEFAULT_SELF_SOURCE.to_string()
+}
+fn default_self_channel() -> String {
+    "stable".to_string()
+}
+
+impl Default for SelfConfig {
+    fn default() -> Self {
+        Self {
+            source: default_self_source(),
+            channel: default_self_channel(),
+            require_signature: false,
+            signing_key: String::new(),
+        }
+    }
 }
 
 /// What `emrac cache clean` keeps. See `docs/plan/r1/u29-lean-cache.md`.
@@ -221,6 +261,10 @@ impl Config {
             "build.tmpfs_gib" => self.build.tmpfs_gib.to_string(),
             "cache.policy" => self.cache.policy.clone(),
             "cache.keep_days" => self.cache.keep_days.to_string(),
+            "self.source" => self.self_service.source.clone(),
+            "self.channel" => self.self_service.channel.clone(),
+            "self.require_signature" => self.self_service.require_signature.to_string(),
+            "self.signing_key" => self.self_service.signing_key.clone(),
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         })
     }
@@ -281,6 +325,32 @@ impl Config {
             "cache.keep_days" => {
                 self.cache.keep_days = value.parse().map_err(|_| invalid())?;
             }
+            "self.source" => {
+                if !(value.starts_with("https://") || value.starts_with("file://")) {
+                    return Err(invalid());
+                }
+                self.self_service.source = value.to_string();
+            }
+            "self.channel" => {
+                if !matches!(value, "stable" | "prerelease") {
+                    return Err(invalid());
+                }
+                self.self_service.channel = value.to_string();
+            }
+            "self.require_signature" => {
+                self.self_service.require_signature = parse_bool(value).ok_or_else(invalid)?;
+            }
+            "self.signing_key" => {
+                let fpr: String = value.split_whitespace().collect();
+                if !fpr.is_empty()
+                    && !(fpr.len() >= 16
+                        && fpr.len() <= 64
+                        && fpr.bytes().all(|b| b.is_ascii_hexdigit()))
+                {
+                    return Err(invalid());
+                }
+                self.self_service.signing_key = fpr.to_ascii_uppercase();
+            }
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         }
         Ok(())
@@ -306,6 +376,10 @@ impl Config {
             "build.tmpfs_gib" => self.build.tmpfs_gib = default_tmpfs_gib(),
             "cache.policy" => self.cache.policy = default_cache_policy(),
             "cache.keep_days" => self.cache.keep_days = default_keep_days(),
+            "self.source" => self.self_service.source = default_self_source(),
+            "self.channel" => self.self_service.channel = default_self_channel(),
+            "self.require_signature" => self.self_service.require_signature = false,
+            "self.signing_key" => self.self_service.signing_key.clear(),
             _ => return Err(Error::UnknownConfigKey(key.to_string())),
         }
         Ok(())
@@ -389,6 +463,40 @@ mod tests {
             "a percentage"
         );
         config.set("build.memory_percent", "100").unwrap();
+    }
+
+    #[test]
+    fn the_self_service_keys_validate_and_unset_restores_the_defaults() {
+        let mut c = Config::default();
+        assert_eq!(c.get("self.source").unwrap(), DEFAULT_SELF_SOURCE);
+        assert_eq!(c.get("self.channel").unwrap(), "stable");
+        assert_eq!(c.get("self.require_signature").unwrap(), "false");
+        c.set("self.source", "file:///tmp/releases.json").unwrap();
+        c.set("self.channel", "prerelease").unwrap();
+        c.set("self.require_signature", "true").unwrap();
+        c.set("self.signing_key", "ab12 cd34 ef56 7890 ab12")
+            .unwrap();
+        assert_eq!(c.get("self.signing_key").unwrap(), "AB12CD34EF567890AB12");
+        for (key, bad) in [
+            ("self.source", "http://example.com/releases.json"),
+            ("self.source", "ftp://x"),
+            ("self.channel", "nightly"),
+            ("self.require_signature", "yes"),
+            ("self.signing_key", "not hex"),
+            ("self.signing_key", "ABCD"),
+        ] {
+            assert!(c.set(key, bad).is_err(), "{key}={bad}");
+        }
+        for key in [
+            "self.source",
+            "self.channel",
+            "self.require_signature",
+            "self.signing_key",
+        ] {
+            c.unset(key).unwrap();
+        }
+        assert_eq!(c.get("self.source").unwrap(), DEFAULT_SELF_SOURCE);
+        assert_eq!(c.get("self.signing_key").unwrap(), "");
     }
 
     #[test]
