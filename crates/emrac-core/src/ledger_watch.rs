@@ -410,6 +410,26 @@ fn journal(args: &[&str]) -> Result<String> {
 /// auditd's own log, where it writes what the kernel reports.
 pub const AUDIT_LOG: &str = "/var/log/audit/audit.log";
 
+/// What reading auditd's log gave: its events, or why they are missing. A log
+/// that is not there means no auditd; one that cannot be opened (the usual
+/// case for a normal user: the directory is root-only) is reported, because
+/// "nothing seen" would be a guess.
+fn from_log(read: std::io::Result<String>) -> (Vec<WatchEvent>, Option<String>) {
+    match read {
+        Ok(text) => {
+            let since = crate::history::now().saturating_sub(30 * 86_400);
+            (parse_audit_log(&text, since), None)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (Vec::new(), None),
+        Err(e) => (
+            Vec::new(),
+            Some(format!(
+                "auditd's log {AUDIT_LOG} can't be read as this user ({e}); use `sudo emrac ledger events`, or let your group read it (log_group in /etc/audit/auditd.conf)"
+            )),
+        ),
+    }
+}
+
 /// The audit events about the ledger from the last 30 days, and how many
 /// appends emrac logged itself. Events come from the journal and from
 /// auditd's own log; when auditd is running the journal often gets none, and
@@ -421,25 +441,13 @@ pub fn read(trusted: &[String]) -> Result<WatchRead> {
     let (mut events, _) = parse_journal(&audit, trusted);
     let from_journal = events.len();
 
-    let mut log_unreadable = None;
-    if std::path::Path::new(AUDIT_LOG).exists() {
-        match std::fs::read_to_string(AUDIT_LOG) {
-            Ok(text) => {
-                let since = crate::history::now().saturating_sub(30 * 86_400);
-                for e in parse_audit_log(&text, since) {
-                    let dup = events
-                        .iter()
-                        .any(|x| x.time == e.time && x.key == e.key && x.action == e.action);
-                    if !dup {
-                        events.push(e);
-                    }
-                }
-            }
-            Err(e) => {
-                log_unreadable = Some(format!(
-                    "auditd's log {AUDIT_LOG} can't be read as this user ({e}); use `sudo emrac ledger events`, or let your group read it (log_group in /etc/audit/auditd.conf)"
-                ));
-            }
+    let (log_events, log_unreadable) = from_log(std::fs::read_to_string(AUDIT_LOG));
+    for e in log_events {
+        let dup = events
+            .iter()
+            .any(|x| x.time == e.time && x.key == e.key && x.action == e.action);
+        if !dup {
+            events.push(e);
         }
     }
     classify(&mut events, &witnesses, trusted);
@@ -741,6 +749,19 @@ mod tests {
         );
         // Older records are left out.
         assert_eq!(parse_audit_log(AUDIT_LOG_FIXTURE, 1_792_059_868).len(), 0);
+    }
+
+    #[test]
+    fn a_log_the_user_cannot_open_is_reported_and_a_missing_one_is_not() {
+        use std::io::{Error, ErrorKind};
+        let (events, why) = from_log(Err(Error::from(ErrorKind::PermissionDenied)));
+        assert!(events.is_empty());
+        assert!(why.unwrap().contains("sudo emrac ledger events"));
+        let (events, why) = from_log(Err(Error::from(ErrorKind::NotFound)));
+        assert!(
+            events.is_empty() && why.is_none(),
+            "no auditd, nothing to explain"
+        );
     }
 
     #[test]

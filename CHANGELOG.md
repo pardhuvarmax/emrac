@@ -20,6 +20,10 @@ emrac is now licensed under the GNU General Public License, version 3 or any lat
 
 `emrac --version` and every `--help` screen (the top one and each subcommand's) now add the line `Sic Mundus Creatus Est.` after the credit (in `--version` between `built by pardhuvarmax` and the URL; in `--help` after the `Built by …` line).
 
+## Fix (after u9), fifth — 2026-10-15
+
+Second real-machine run. Good: after five real appends `sudo emrac ledger events` listed each as `emrac` (program, and the journal line close in time), next to the seven foreign events from the manual tests. Bad: as a normal user `doctor` said the watch was "not active: emrac appended 5 times but the audit system saw nothing". It could not open auditd's log (`/var/log/audit` is root-only), and the check that decides whether the log exists used `exists()`, which says false when the directory is closed to you, so the unreadable-log warning never fired. It now tells "no such file" (no auditd) from "cannot open" (reported as: the events can't be read from here, use `sudo emrac ledger events` or `log_group`).
+
 ## Verified on a real machine (after u9) — 2026-10-15
 
 `sudo emrac ledger events` read the real audit log and listed all seven events from the ledger restore and the earlier test: the root shell\'s append (`bash`, openat), both `chattr` runs, and the `sed` rewrite (create, chown, chmod, rename), each with program, user and login user, all `FOREIGN` as they should be. Tidied from that output: the `chattr` events now show the command line that was run (`chattr +a /var/lib/emrac/ledger.jsonl`) instead of the binary and its loader, `(null)` and repeated paths are dropped, `fchown` is named, and the list says its times are UTC. Not yet seen on a real machine: emrac\'s own append classified as `emrac` (needs one transaction after the rules were installed).
