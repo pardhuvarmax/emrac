@@ -20,6 +20,10 @@ emrac is now licensed under the GNU General Public License, version 3 or any lat
 
 `emrac --version` and every `--help` screen (the top one and each subcommand's) now add the line `Sic Mundus Creatus Est.` after the credit (in `--version` between `built by pardhuvarmax` and the URL; in `--help` after the `Built by …` line).
 
+## Correction (after u9), third — 2026-10-15
+
+My hand procedure for the watch told you to run `echo x >> /var/lib/emrac/ledger.jsonl` as root and expect the append-only flag to refuse it. It does not: append-only allows appends, so the line went in. What the real run showed is useful: emrac caught it (`doctor`: PROBLEM, "the ledger's own chain is broken", line 11 named), and the helper now refuses to extend the ledger. But it also showed two gaps, both fixed in the documents: `doctor` suggested `history verify --repair`, which rebuilds the history *from* the ledger and cannot help when the ledger itself is broken (it now points to a manual restore), and there was no restore procedure (`docs/design/ledger.md` now has "What append-only does and does not stop" and "Restoring a tampered ledger"). The audit watch recorded no event for that append, which is unexplained; being looked into.
+
 ## Fix (after u9), second — 2026-10-15
 
 `doctor` said the ledger watch was "not active" because emrac had appended once and the audit system saw nothing, but that append happened before the audit rules were installed, so nothing could have seen it. The check now only counts appends made after the rules file was written. Its suggestion no longer tells you to run `augenrules --load` again (which fails with "Rule exists" when the rules are already loaded); it points to `systemctl status auditd audit-rules` and `sudo auditctl -l`. (Found on a real machine, where the real `chattr +a` worked: the ledger showed as root-owned and append-only.)

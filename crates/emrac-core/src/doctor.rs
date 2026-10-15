@@ -691,7 +691,10 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
                 )
             };
             let mut c = check("ledger", "Ledger", status, summary).detail(notes);
-            if l.chain_problem.is_some() || !l.differences.is_empty() {
+            if l.chain_problem.is_some() {
+                // --repair rebuilds the history *from* the ledger, so it cannot help here.
+                c = c.fix("restore the ledger by hand as root: docs/design/ledger.md, 'Restoring a tampered ledger'");
+            } else if !l.differences.is_empty() {
                 c = c.fix("emrac history verify --repair");
             } else if l.pending > 0 {
                 c = c.fix("emrac history sync");

@@ -15,6 +15,30 @@ for people who use emrac; the build notes are in `docs/plan/u7-history-integrity
 Beyond those, an **anchor** is a copy of the chain's head that does not live on the machine.
 It is the one thing a determined attacker on the machine cannot fix afterwards.
 
+## What append-only does and does not stop
+
+`chattr +a` stops overwriting, truncating, renaming and deleting the ledger. It does **not**
+stop appending: root can still add a line. Such a line is caught, not prevented: the
+ledger's own chain breaks at it, `doctor` reports a PROBLEM, `history verify` fails, and emrac's
+helper refuses to extend a broken ledger, so the ledger stops receiving records until it is
+restored. That is on purpose (a ledger that kept going after a foreign line would hide it),
+and it means one stray line costs a manual restore.
+
+### Restoring a tampered ledger
+
+Needs root. Look first at what is there, and keep a copy:
+
+    sudo chattr -a /var/lib/emrac/ledger.jsonl
+    sudo cp /var/lib/emrac/ledger.jsonl ~/ledger.broken     # evidence
+    sudo tail -n 3 /var/lib/emrac/ledger.jsonl               # the foreign line is where doctor says
+    sudo sed -i '$ d' /var/lib/emrac/ledger.jsonl            # if it is the last line: remove it
+    sudo chattr +a /var/lib/emrac/ledger.jsonl
+    emrac doctor                                             # Ledger: ok again
+
+If the foreign line is in the middle, everything after it has to go too (the chain cannot
+continue past it); `emrac history sync` then sends the records the ledger lacks, from your
+history. The `chattr` runs and the edit show up as events in the watch.
+
 ## Anchors
 
     $ emrac history anchor
@@ -62,9 +86,10 @@ not.
 1. `sudo emrac ledger watch install` and `sudo systemctl enable --now auditd`.
 2. Run any transaction (`emrac install <something small>`); `emrac ledger events` lists the
    append as `emrac`. `emrac doctor`: "Ledger watch" ok.
-3. As root: `echo x >> /var/lib/emrac/ledger.jsonl`, `chattr -a /var/lib/emrac/ledger.jsonl`,
-   `chattr +a …`, `cp /var/lib/emrac/ledger.jsonl /tmp/l && mv /tmp/l /tmp/m`. Each (the
-   append is refused while the flag is set; the chattr runs are logged) should appear as
-   `FOREIGN`.
+3. As root: `chattr -a /var/lib/emrac/ledger.jsonl` and `chattr +a …` (both logged), and
+   `cat /var/lib/emrac/ledger.jsonl > /tmp/copy; mv /tmp/copy /var/lib/emrac/x` (a rename
+   in the folder). Each should appear as `FOREIGN`. Do **not** try `echo x >> ledger.jsonl`
+   as a test: append-only still allows appends, so the line gets in and breaks the ledger's
+   chain (see below).
 4. `sudo augenrules --load` after deleting the rules file: `doctor` should turn to
    "not active" after the next emrac append.
