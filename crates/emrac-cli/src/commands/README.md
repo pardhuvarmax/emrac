@@ -4,7 +4,8 @@ One module per subcommand. Each exposes a thin `run()` that calls into `emrac-co
 
 **Find and inspect**
 - [`search.rs`](./search.rs), [`info.rs`](./info.rs) — official repositories plus the AUR; `--official`, `--aur`, `--offline`.
-- [`deps.rs`](./deps.rs) — `deps`, `rdeps`, `why`, `orphans`.
+- [`deps.rs`](./deps.rs) — `deps`, `rdeps`, `why`, `orphans`, `tree`, `graph`, `impact`, `cycles`.
+- [`news.rs`](./news.rs), [`report.rs`](./report.rs) — the Arch news and its gate in `upgrade`; the update risk and the report after an upgrade.
 - [`verify.rs`](./verify.rs) — `verify` (alias `check`): exits non-zero if any package has real problems.
 - [`audit.rs`](./audit.rs) — `audit` of a PKGBUILD, a folder, a built package file or an AUR package.
 - [`doctor.rs`](./doctor.rs) — `doctor`, `--online`, `--report`; the exit status is the number of problems.
@@ -13,6 +14,8 @@ One module per subcommand. Each exposes a thin `run()` that calls into `emrac-co
 - [`install.rs`](./install.rs), [`remove.rs`](./remove.rs), [`upgrade.rs`](./upgrade.rs), [`purge.rs`](./purge.rs), [`reinstall.rs`](./reinstall.rs), [`downgrade.rs`](./downgrade.rs) — plan, show, confirm, execute, then log to the history.
 - [`aur_review.rs`](./aur_review.rs), [`aur_install.rs`](./aur_install.rs), [`official_inspect.rs`](./official_inspect.rs) — shared helpers, not subcommands: the PKGBUILD review and its confirmation, the build-and-install flow (sandbox, manifest, the high-risk prompt, the retry with the network on, the dependency-conflict swap), and `--inspect` for official packages.
 - [`build.rs`](./build.rs) — `build`: an AUR package or a local PKGBUILD folder, no install.
+- [`rebuild.rs`](./rebuild.rs) — `rebuild`: installed AUR packages again from source; `--check`, `--stale`.
+- [`preflight.rs`](./preflight.rs), [`plan_check.rs`](./plan_check.rs) — shared helpers: the checks before a transaction, and `--expect-plan` with the re-check before the commit.
 - [`rollback.rs`](./rollback.rs) — `rollback [tx]`, `undo`, `redo`.
 - [`snapshot.rs`](./snapshot.rs), [`restore.rs`](./restore.rs) — package-set restore points.
 - [`pin.rs`](./pin.rs) — `pin` (no packages: list) and `unpin`.
@@ -23,4 +26,4 @@ One module per subcommand. Each exposes a thin `run()` that calls into `emrac-co
 - [`cache.rs`](./cache.rs) — `cache` list, stats, clean, trim, purge (and the `cc` / `cs` shortcuts).
 
 **Setup**
-- [`config.rs`](./config.rs), [`completion.rs`](./completion.rs) — handled before `Sources::init()`, since they need no pacman setup.
+- [`config.rs`](./config.rs), [`completion.rs`](./completion.rs), [`self_cmd.rs`](./self_cmd.rs), [`ledger.rs`](./ledger.rs), [`news.rs`](./news.rs) — handled before `Sources::init()`, since they need no pacman setup (`self check` is for the day pacman is broken).

@@ -11,6 +11,8 @@ What they cover:
 - a closed pipe (`emrac … | head`) does not panic;
 - `audit`: PKGBUILDs graded by severity and exit code, `--json`, a whole package folder, a built package file, scripts shipped in a package;
 - the build sandbox hides the network, secrets and the home directory, and resource limits stop a runaway build and name the reason;
+- `self`: `check` works without pacman and fails on a broken config, `diagnose` hides the home directory, `sync` and `news` from a file source keep the last good index, `upgrade` refuses a copy no package owns;
+- `config refresh` restyles an old file and keeps its values;
 - `doctor`: checks as JSON with the problem count as the exit status, and a markdown report without the user's identity.
 
 Tests that need bubblewrap or a systemd user session check for them first and pass without asserting when the machine has none, so they are safe to run anywhere. Commands that change the system are tested in the container instead: see [`dev/`](../../../dev).

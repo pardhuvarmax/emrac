@@ -9,7 +9,7 @@ Plans are grouped by the release cycle they belong to, because the `u` counter s
 `u1` after every release:
 
 - [`r1/`](./r1) — `u1` to `u30`, the updates between `r1` and `r2`.
-- [`r2/`](./r2) — `u6` onward after `r2` (`u1`–`u5` had no plan), the updates that go into `r3`.
+- [`r2/`](./r2) — `u6` to `u20` after `r2` (`u1`–`u5` had no plan), the updates that go into `r3`.
 - `r3/` — will hold the plans of the next cycle once `r3` is released.
 
 Naming: `<slice>-<short-name>.md`, e.g. [`r1/u1-config.md`](./r1/u1-config.md).

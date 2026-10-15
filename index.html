@@ -316,7 +316,7 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
     <li><b>Plan first.</b> Every change is previewed with sizes, time estimates, conflicts, and the reasons behind each decision.</li>
     <li><b>Reversible.</b> Builds run in a sandbox, transactions are logged, and rollback is built in.</li>
   </ul>
-  <p><b>Where it stands.</b> The core commands and everything under <a href="#built">Available now</a> work today. The source-or-binary scoring, build profiles, queue, news and terminal interface under <a href="#features">Planned features</a> are design goals, not shipped.</p>
+  <p><b>Where it stands.</b> The core commands and everything under <a href="#built">Available now</a> work today, including the twenty updates built since release r2 (not yet released as r3). The source-or-binary scoring, build profiles, queue and terminal interface under <a href="#features">Planned features</a> are design goals, not shipped.</p>
   <p><a class="btn" href="#built">What works today</a> &nbsp; <a class="btn alt" href="#changes">What changed</a></p>
 
   <h3>Try the planner</h3>
@@ -331,7 +331,7 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
   </div>
 
   <h2 id="built">Available now</h2>
-  <p>Release <b>r2</b> is out. Everything below runs today. Each command that changes the system was also tried against a real pacman in a container, and <a href="#changes">the change list</a> says what was seen for each slice.</p>
+  <p>Release <b>r2</b> is out; the sections marked <em>since r2</em> are built and tested but not yet in a release. Everything below runs today. Each command that changes the system was also tried against a real pacman in a container, and <a href="#changes">the change list</a> says what was seen for each slice.</p>
   <h3>Everyday commands</h3>
   <table class="box resp">
     <tbody>
@@ -380,15 +380,44 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
     </tbody>
   </table>
 
+  <h3>Before a change, and after <small>since r2</small></h3>
+  <table class="box resp">
+    <tbody>
+      <tr><td>Pre-flight checks</td><td>Before anything is asked or changed: free space on <code>/</code>, for the downloads, on <code>/boot</code> and the EFI partition; the battery; that a mirror answers; and for a kernel upgrade, that another kernel is installed, the fallback initramfs exists and the bootloader names the image. Removing the last kernel is refused. <code>/boot</code> is often readable by root only; those checks then say so instead of guessing.</td></tr>
+      <tr><td>Partial-upgrade gate</td><td>Installing or upgrading only some packages while others have upgrades waiting is refused, with the packages named and <code>emrac upgrade</code> as the fix; <code>--allow-partial</code> lets one run through. A plan that would install an older version than the one you have is refused too.</td></tr>
+      <tr><td>Plan ids</td><td>Every plan shows an id (<code>digest</code> in <code>--json</code>). <code>--expect-plan</code> runs only that plan, and a plan you looked at for half a minute or more is made again just before it commits and must be the same. The id is kept in your history.</td></tr>
+      <tr><td>Update risk, and the report</td><td>An upgrade plan says LOW, MEDIUM or HIGH and why (a new kernel, glibc, systemd, pacman, the bootloader, critical news&hellip;). Afterwards, and with <code>emrac report</code>: whether to reboot, services still running old files, new failed units, AUR packages the upgrade broke, new <code>.pacnew</code> files.</td></tr>
+      <tr><td>pacman&rsquo;s own database</td><td>A small backup of the local package database before each transaction, <code>pacman -Dk</code> before and after, the restore command if it came out worse, and a warning when a repository serves data older than you have seen.</td></tr>
+    </tbody>
+  </table>
+  <h3>Trust <small>since r2</small></h3>
+  <table class="box resp">
+    <tbody>
+      <tr><td>AUR trust signals</td><td>In the review and in <code>info</code>: a name one letter from a real package, orphaned or very new packages, a changed maintainer, sources or checksums that changed under the same version, a new source host, changed signing keys. The serious ones ask a default-no question.</td></tr>
+      <tr><td><code>news</code></td><td>The Arch Linux news, with what you have not seen marked, shown under every upgrade plan. A breaking change, a request for manual intervention, or news touching the kernel, bootloader, glibc, systemd, pacman or drivers stops the upgrade until you have read it (<code>news ack</code>, or <code>--ack-news</code> once); the rest only warns.</td></tr>
+    </tbody>
+  </table>
+  <h3>History you can check, and emrac itself <small>since r2</small></h3>
+  <table class="box resp">
+    <tbody>
+      <tr><td><code>history</code> &middot; <code>ledger</code></td><td>Every record is chained to the one before by a hash, so <code>history verify</code> finds an edit; old records can be archived and failures acknowledged. A second, root-owned append-only copy (the ledger) is kept through <code>sudo</code>; <code>history verify</code> compares them and can rebuild the history from it, and optional kernel audit rules report what else touched it. A short <code>history anchor</code> code kept elsewhere shows a rewrite or a cut-off tail. It does not stop root, and says so.</td></tr>
+      <tr><td>Cut-off transactions</td><td>A journal written before pacman runs and locked while it does: after a power cut or a killed terminal the next run, or <code>history recover</code>, reads pacman&rsquo;s log, says which packages were done and which were not reached, and records it.</td></tr>
+      <tr><td><code>rebuild</code></td><td>Builds installed AUR packages again from source through the same audit, after a library, Python or Qt update broke them; <code>--check</code> says which ones, and why. Binary (<code>-bin</code>) packages are named and left alone, since rebuilding them fixes nothing.</td></tr>
+      <tr><td><code>tree</code> &middot; <code>graph</code> &middot; <code>impact</code> &middot; <code>cycles</code></td><td>A package&rsquo;s dependencies as a tree or Graphviz source; what removing, installing or upgrading it would affect, with services and desktop entries; packages that require each other.</td></tr>
+      <tr><td><code>self</code></td><td><code>check</code> and <code>diagnose</code> look at emrac&rsquo;s own installation; <code>sync</code> and <code>news</code> keep a checked copy of the release index; <code>upgrade</code> and <code>downgrade</code> download a release, verify it, build a package and install it with pacman. Only a copy a pacman package owns is ever changed.</td></tr>
+      <tr><td><code>config</code></td><td>The settings file is framed and documented (what each key does, its default, what changed); <code>config refresh</code> brings an older file up to that form.</td></tr>
+    </tbody>
+  </table>
+
 
   <h2 id="features">Planned features</h2>
   <p>The design goals. Those not listed under <a href="#built">Available now</a> are not built yet.</p>
   <table class="box resp">
     <tbody>
-      <tr><td>Search and inspect</td><td>Fast local index, fuzzy and regex search, file ownership lookup, dependency and reverse-dependency trees, and <code>emrac why</code> to explain why a package is installed.</td></tr>
+      <tr><td>Search and inspect</td><td>Fast local index, fuzzy and regex search, file ownership lookup, and changelogs in <code>info</code>.</td></tr>
       <tr><td>Build profiles</td><td>Reusable profiles for compiler, linker, optimization level, LTO, PGO, and CPU tuning. Profiles can inherit from other profiles.</td></tr>
       <tr><td>Build queue</td><td>Queue, pause, and resume builds, with live progress and an ETA that refines as the build runs.</td></tr>
-      <tr><td>News and advisories</td><td>Manual intervention notices, ABI transitions, and security advisories for the packages you actually have installed.</td></tr>
+      <tr><td>News and advisories</td><td>The Arch news gate is built (see Trust above). Still to come: ABI-transition notices and security advisories for the packages you actually have installed.</td></tr>
       <tr><td>Health checks</td><td><code>emrac doctor</code> checks for broken and orphaned packages, partial upgrades, mirror health, and configuration problems.</td></tr>
       <tr><td>History and rollback</td><td>A transaction ledger with snapshots, rollback to a point in time, and per-package restore.</td></tr>
       <tr><td>Terminal interface</td><td>A full TUI with a package browser, dependency explorer, build monitor, news reader, and a built-in modal editor for PKGBUILDs. The CLI exposes the same functions.</td></tr>
@@ -478,10 +507,30 @@ use_agent = true</pre>
   <p>Backgrounds are separate from themes: <code>peaks</code>, <code>grid</code>, <code>schematic</code>, <code>scan</code>, or <code>none</code>. Choose one from the Theme menu. There are a few more that are not listed.</p>
 
   <h2 id="changes">Changes</h2>
-  <p>Emrac numbers its work in slices, not semver: <b>i</b> for incubation before a release, <b>r</b> for releases, <b>u</b> for updates within one. This is the short list, newest first. 271 tests run on every change, and each command that changes the system was also run against a real pacman in a container.</p>
+  <p>Emrac numbers its work in slices, not semver: <b>i</b> for incubation before a release, <b>r</b> for releases, <b>u</b> for updates within one. This is the short list, newest first. 440 tests run on every change, and each command that changes the system was also run against a real pacman in a container.</p>
   <table class="box resp">
     <thead><tr><th>Slice</th><th>Date</th><th>Change</th></tr></thead>
     <tbody>
+      <tr><td><b>u20</b> <small>since r2</small></td><td>2026-10-15</td><td>Trust and the safety net: AUR trust signals, the Arch news gate (critical news stops an upgrade), a backup and check of pacman&rsquo;s database, repository trust, update risk and <code>emrac report</code>.</td></tr>
+      <tr><td><b>u19</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac rebuild</code> and <code>--check</code> / <code>--stale</code>: AUR packages a library, Python or Qt update broke, built again through the audited path; binary packages named and left alone.</td></tr>
+      <tr><td><b>u18</b> <small>since r2</small></td><td>2026-10-15</td><td>Plan ids and <code>--expect-plan</code>; a plan that waited is made again before it commits and must be the same.</td></tr>
+      <tr><td><b>u17</b> <small>since r2</small></td><td>2026-10-15</td><td>Pre-flight checks (space, <code>/boot</code>, power, mirrors, the kernel safety net) and the partial-upgrade gate.</td></tr>
+      <tr><td><b>u16</b> <small>since r2</small></td><td>2026-10-15</td><td><code>tree</code>, <code>graph</code>, <code>impact</code> and <code>cycles</code>.</td></tr>
+      <tr><td><b>u15</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self downgrade</code>.</td></tr>
+      <tr><td><b>u14</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self upgrade</code>: download, verify, build a package, install it with pacman.</td></tr>
+      <tr><td><b>u13</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self diagnose</code> and the journal for emrac&rsquo;s own operations.</td></tr>
+      <tr><td><b>u12</b> <small>since r2</small></td><td>2026-10-15</td><td><code>self sync</code> and <code>self news</code>: a checked copy of the release index, optionally verified against a gpg key.</td></tr>
+      <tr><td><b>u11</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self check</code>.</td></tr>
+      <tr><td><b>u10</b> <small>since r2</small></td><td>2026-10-15</td><td>A journal for transactions: one that is cut off is found next time and recorded (<code>history recover</code>).</td></tr>
+      <tr><td><b>u9</b> <small>since r2</small></td><td>2026-10-15</td><td>The ledger watches itself: audit rules, <code>ledger events</code>, history anchors.</td></tr>
+      <tr><td><b>u8</b> <small>since r2</small></td><td>2026-10-15</td><td>A root-owned append-only ledger that the history is compared with and can be rebuilt from.</td></tr>
+      <tr><td><b>u7</b> <small>since r2</small></td><td>2026-10-15</td><td>History you can check: hash chain, <code>history verify</code>, archive and acknowledge.</td></tr>
+      <tr><td><b>u6</b> <small>since r2</small></td><td>2026-10-14</td><td>emrac&rsquo;s voice: twelve verbs that say how sure a line is and what to do.</td></tr>
+      <tr><td><b>u5</b> <small>since r2</small></td><td>2026-10-14</td><td>An install script that checks a pinned checksum and installs a pacman package.</td></tr>
+      <tr><td><b>u4</b> <small>since r2</small></td><td>2026-10-14</td><td>A sandbox-test guard that matches the real probe.</td></tr>
+      <tr><td><b>u3</b> <small>since r2</small></td><td>2026-10-14</td><td>Quieter tests.</td></tr>
+      <tr><td><b>u2</b> <small>since r2</small></td><td>2026-10-14</td><td>Licensed GPL-3.0-or-later.</td></tr>
+      <tr><td><b>u1</b> <small>since r2</small></td><td>2026-10-14</td><td>A tracked list of passing tests and a README in every folder.</td></tr>
       <tr><td><b>r2</b></td><td>2026-10-14</td><td>Second release: r1 plus the updates u1&ndash;u30. Reviewed, audited and sandboxed AUR builds, plans that match what pacman will do, undo after a real upgrade, <code>doctor</code>, <code>pacnew</code> and <code>cache</code>; checked with 271 tests and 26 end-to-end runs against a real pacman.</td></tr>
       <tr><td><b>u30</b></td><td>2026-10-14</td><td><code>pacnew</code> checks a file before applying it, records every change, can <code>revert</code> it, shows <code>status</code> and lets you edit a conflicted merge by hand.</td></tr>
       <tr><td><b>u29</b></td><td>2026-10-14</td><td><code>cache clean --lean</code> (or <code>cache.policy = "lean"</code>) keeps one rollback set: what undoing the last <code>cache.keep_days</code> days needs, AUR builds and held-back packages. Rollback now fetches current versions from the repositories.</td></tr>
@@ -577,13 +626,13 @@ use_agent = true</pre>
 
   <div class="devzone" id="planned" role="group" aria-label="Under development">
     <div class="tape" aria-hidden="true"></div>
-    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 62 items from Project Emrac, Design Documentation</span></div>
+    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 59 items from Project Emrac, Design Documentation</span></div>
     <details open><summary>Interface and setup <em>9</em></summary>
       <ul>
         <li>Terminal interface <small>(package browser, dependency explorer, build monitor, news reader, PKGBUILD editor, cache manager, command palette)</small></li>
         <li>First-run <code>setup</code> wizard</li>
         <li><code>self-test</code> and <code>sandbox shell</code></li>
-        <li>Man pages; <code>emrac self</code> <small>(update check, clean uninstall)</small></li>
+        <li>Man pages; clean uninstall</li>
         <li>Structured per-transaction logs; documented exit codes</li>
         <li>Themes, keybindings, aliases</li>
         <li>Layered config <small>(system, user, per-project)</small>; <code>config export</code>, <code>import</code>, <code>migrate</code>, <code>diff</code></li>
@@ -615,32 +664,29 @@ use_agent = true</pre>
         <li>Safe unattended updates</li>
       </ul>
     </details>
-    <details open><summary>Safety and recovery <em>13</em></summary>
+    <details open><summary>Safety and recovery <em>12</em></summary>
       <ul>
         <li>Filesystem snapshots <small>(Btrfs, ZFS, snapper)</small> and bootable snapshots</li>
         <li>Landlock layer</li>
         <li>Privilege separation <small>(unprivileged front end, small privileged helper)</small></li>
-        <li>Post-commit health check with automatic rollback</li>
-        <li>Partial-upgrade guard</li>
+        <li>Automatic rollback when a post-upgrade check fails <small>(the checks and the report are built)</small></li>
         <li>DKMS and kernel-module test; boot test in a throwaway VM</li>
-        <li>Resume an interrupted transaction</li>
+        <li>Resume an interrupted transaction <small>(it is found and recorded, not resumed)</small></li>
         <li>Timeline of transactions</li>
-        <li>Signed, tamper-evident log; SBOM and provenance per build</li>
+        <li>A signed log (it is hash-chained with a root-owned copy, not signed); SBOM and provenance per build</li>
         <li><code>/etc</code> change tracking per transaction</li>
         <li>Saved plans <small>(<code>plan</code>, <code>apply</code>, plan diff)</small>; <code>emrac.lock</code></li>
         <li>Time-travel installs <small>(resolve as of a date)</small></li>
         <li>Cleanup simulation and bloat view</li>
       </ul>
     </details>
-    <details open><summary>Packages and repositories <em>13</em></summary>
+    <details open><summary>Packages and repositories <em>11</em></summary>
       <ul>
-        <li>News and advisories <small>(an Arch news check before upgrades is the next small step)</small></li>
+        <li>Security advisories and ABI-transition notices <small>(the Arch news gate is built)</small></li>
         <li><code>locate</code>: which package owns a file or command</li>
         <li>Fuzzy and regex search; categories; popular and recent</li>
         <li>Changelogs and security advisories in <code>info</code></li>
-        <li>AUR trust signals in the preview <small>(maintainer changes, orphaned, age)</small></li>
         <li><code>lock</code> / <code>unlock</code></li>
-        <li>Dependency tree, graph, impact and cycle views; removal impact preview</li>
         <li>Repository management: custom, local and git repos; mirror ranking and health</li>
         <li>Package collections; workspace mode</li>
         <li>Declarative system profile <small>(diff against the machine)</small></li>

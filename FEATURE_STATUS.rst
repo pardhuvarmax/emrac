@@ -2,15 +2,19 @@ Feature Status
 ================
 
 Every category in ``SPEC.md`` Parts III, IV and V, checked against
-what is actually shipped as of **Slice r2** (release ``r2``, which
-includes the updates ``u1`` to ``u30`` built on ``r1``). The core CLI loop -- ``search`` / ``info`` / ``install``
-/ ``remove`` / ``upgrade``, official repos + AUR -- has been complete
-since ``r1``. Since then the work has gone into making a real upgrade
-safe and recoverable: audited and sandboxed AUR builds, plans that match
-what pacman will do, history with rollback, health checks, cache and
-config-file management. ``CHANGELOG.md`` has the detail slice by slice;
-the TUI, build profiles, build queue and news/advisory items remain
-unstarted.
+what is actually shipped as of **Slice u20 after r2** (release ``r2`` plus
+the twenty updates ``u1`` to ``u20`` built on it, not yet released as
+``r3``; ``r2`` itself included ``u1`` to ``u30`` of the cycle before). The
+core CLI loop -- ``search`` / ``info`` / ``install`` / ``remove`` /
+``upgrade``, official repos + AUR -- has been complete since ``r1``. Since
+then the work has gone into making a real upgrade safe and recoverable:
+audited and sandboxed AUR builds, plans that match what pacman will do and
+cannot change under you, checks before a transaction and a report after
+it, history that can be verified and a ledger root alone can change, a
+journal for a transaction that was cut off, trust signals for the AUR and
+the Arch news, and emrac updating itself through pacman. ``CHANGELOG.md``
+has the detail slice by slice; the TUI, build profiles, the build queue,
+and the source-or-binary recommendation engine remain unstarted.
 
 MVP Core Loop
 --------------
@@ -164,7 +168,7 @@ Complete Feature Catalog
    * - 1
      - Unified Package Management
      - Partial
-     - ``install``/``remove``/``upgrade`` with ``--dry-run``, a preview and a confirmation; every executed change is recorded (``history``) and can be reversed (``rollback``/``undo``/``redo``). The plan is built from freshly synced repositories (u22), lists what conflicts and replacements will remove and which provider pacman will pick (u24, u25), and warns when an AUR rebuild will hit a dependency conflict (u26). pacman asks its own questions unless ``--yes``; silence on stdin is never consent (u23). ``upgrade`` covers official packages and the AUR, holds back pins (``pin``/``unpin``), and can save a package-set snapshot first (``snapshot.before_upgrade``). Also ``downgrade``, ``reinstall``, ``purge`` and ``snapshot``/``restore``. No transaction queue, an interrupted transaction is recorded but not resumed, no ``lock``
+     - ``install``/``remove``/``upgrade`` with ``--dry-run``, a preview with a plan id and, for an upgrade, a risk rating, a confirmation, pre-flight checks; every executed change is recorded (``history``) and can be reversed (``rollback``/``undo``/``redo``). The plan is built from freshly synced repositories (u22), lists what conflicts and replacements will remove and which provider pacman will pick (u24, u25), and warns when an AUR rebuild will hit a dependency conflict (u26). pacman asks its own questions unless ``--yes``; silence on stdin is never consent (u23). ``upgrade`` covers official packages and the AUR, holds back pins (``pin``/``unpin``), and can save a package-set snapshot first (``snapshot.before_upgrade``). Also ``downgrade``, ``reinstall``, ``rebuild``, ``purge`` and ``snapshot``/``restore``. No transaction queue, an interrupted transaction is recorded but not resumed, no ``lock``
    * - 2
      - Source Build System
      - Partial
@@ -188,15 +192,15 @@ Complete Feature Catalog
    * - 7
      - Dependency Intelligence
      - Partial
-     - ``deps [-r]``, ``rdeps``, ``why`` and ``orphans`` (read-only, from libalpm). No tree/graph rendering, impact preview or cycle detection
+     - ``deps [-r]``, ``rdeps``, ``why`` and ``orphans``, ``tree`` and ``graph`` (text, Graphviz dot, JSON), ``impact`` (what removing, installing or upgrading a package affects) and ``cycles`` (read-only, from libalpm). No interactive explorer (that needs the TUI)
    * - 8
      - Repository Management
      - Partial
      - Official + AUR only; no local/custom/git repos, mirror management, repo health
    * - 9
      - News & Advisory System
-     - Not started
-     - --
+     - Partial
+     - ``news`` reads the Arch Linux news, marks what you have not seen, and the upgrade shows it under the plan; an item that is a breaking change, asks for manual intervention or touches the kernel, bootloader, C library, systemd, pacman, drivers or the filesystem layout stops the upgrade until acknowledged (``news ack``, ``--ack-news``). ``self news`` covers emrac's own releases. No security advisories or CVE feed, no ABI-transition notices
    * - 10
      - Build Profiles
      - Not started
@@ -220,11 +224,11 @@ Complete Feature Catalog
    * - 15
      - Security & Integrity
      - Partial
-     - emrac-level checks before anything is installed: ``audit`` (static PKGBUILD, scriptlet and shipped-file analysis with info/warning/high/critical tiers: high needs ``--accept-risks``, critical is refused), the package manifest (setuid files, hooks, sudoers, accounts, units), the build sandbox and limits, signatures verified on the host, and the untouched pacman/makepkg verification underneath. Compiled binaries inside a package are only counted. No Landlock layer, no Arch news gate, no advisory feed
+     - emrac-level checks before anything is installed: ``audit`` (static PKGBUILD, scriptlet and shipped-file analysis with info/warning/high/critical tiers: high needs ``--accept-risks``, critical is refused), the package manifest (setuid files, hooks, sudoers, accounts, units), the build sandbox and limits, signatures verified on the host, and the untouched pacman/makepkg verification underneath. Before an AUR build: trust signals (lookalike names, a changed maintainer, sources changed under the same version, changed signing keys). Before any transaction: pre-flight checks (space, ``/boot``, power, mirrors, the kernel safety net), a partial-upgrade gate, an older-version gate, a pacman database backup and check, and plan ids so that what was approved is what runs. Compiled binaries inside a package are only counted. No Landlock layer, no advisory feed
    * - 16
      - Package Health
      - Partial
-     - ``doctor [--online] [--report]``: unmet dependencies, lock and database age, pending upgrades against freshly synced repositories, kernel and modules, disk, caches, orphans, ``.pacnew`` files, failed units, pins, tools, config and sandbox, with a fix for each; ``--report`` writes a sanitized bug report. ``verify`` and ``orphans`` complement it. No mirror health or duplicate-library checks
+     - ``doctor [--online] [--report]``: unmet dependencies, lock and database age, pending upgrades against freshly synced repositories, kernel and modules, disk, caches, orphans, ``.pacnew`` files, failed units, pins, tools, config and sandbox, repository data older than one seen, the pacman database backup, an interrupted transaction, AUR packages the libraries have left behind, and the ledger and its audit watch, with a fix for each; ``--report`` writes a sanitized bug report. ``self check`` and ``self diagnose`` do the same for emrac's own installation, and ``report`` says what an upgrade left to do. ``verify`` and ``orphans`` complement it. No mirror health or duplicate-library checks
    * - 17
      - Analytics
      - Not started
@@ -264,7 +268,7 @@ here are not slippage, they are on schedule.
    * - 1
      - Install Planner
      - Partial
-     - The preview shows packages, download size and installed-size delta, what the transaction will also remove (conflicts, replacements), provider choices and warnings, computed from freshly synced repositories. No compile time, services or disk-required fields
+     - The preview shows packages, download size and installed-size delta, what the transaction will also remove (conflicts, replacements), provider choices and warnings, computed from freshly synced repositories, a plan id, an update risk (LOW/MEDIUM/HIGH with reasons) for an upgrade, and the pre-flight checks (disk space, ``/boot``, power, network, kernel safety net); ``impact`` adds the services and desktop entries a removal would take. No compile time
    * - 2
      - Explain Decisions
      - Not started
@@ -308,11 +312,11 @@ here are not slippage, they are on schedule.
    * - 12
      - Dependency Graph Explorer
      - Partial
-     - ``deps -r`` prints the transitive closure as text; no graph view (that needs the TUI)
+     - ``deps -r`` prints the transitive closure as text, ``tree`` and ``graph`` show it as a tree or Graphviz source; no interactive view (that needs the TUI)
    * - 13
      - Package Inspector
      - Partial
-     - ``info``, ``rdeps``, ``audit``/manifest and ``verify`` together; not the single aggregated view the spec describes
+     - ``info`` (with trust signals for AUR packages), ``rdeps``, ``impact``, ``audit``/manifest and ``verify`` together; not the single aggregated view the spec describes
    * - 14
      - Repository Analytics
      - Not started
@@ -324,7 +328,7 @@ here are not slippage, they are on schedule.
    * - 16
      - Health Center (doctor)
      - Partial
-     - ``emrac doctor`` (see Package Health above); not an interactive center
+     - ``emrac doctor`` and ``report`` (see Package Health above); not an interactive center
    * - 17
      - Smart Updates
      - Partial
@@ -342,7 +346,7 @@ here are not slippage, they are on schedule.
      - Not started
      - --
 
-Totals: 5 done / 23 partial / 18 not started, of 46 tracked (the five
+Totals: 5 done / 24 partial / 17 not started, of 46 tracked (the five
 MVP commands plus the 21 categories and 20 signature features above).
 Everything outside the MVP row is explicitly post-milestone per the
 spec -- not slippage.

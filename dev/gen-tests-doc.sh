@@ -74,8 +74,14 @@ fi
 
 last_run=$(sed -n 's/^# last full run: *//p' "$e2e" | head -1)
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$e2e" >"$work/e2e.txt"
+pre=dev/e2e/preflight.sh
+selfup=dev/e2e/self-upgrade.sh
+pre_run=$(sed -n 's/^# last full run: *//p' "$pre" | head -1)
+self_run=$(sed -n 's/^# last full run: *//p' "$selfup" | head -1)
+sed -n 's/^ck "\([^"]*\)".*/\1/p' "$pre" >"$work/e2e_pre.txt"
+sed -n 's/^ck "\([^"]*\)".*/\1/p' "$selfup" >"$work/e2e_self.txt"
 
-awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" '
+awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" '
     function rule(text, ch,   i, line) {
         line = ""
         for (i = 0; i < length(text); i++) line = line ch
@@ -159,13 +165,35 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" '
         close(e2e_file)
         print ""
         print "(" n " checks.)"
+        print ""
+        title("End-to-end: pre-flight, plan ids, news and trust (dev/e2e/preflight.sh)", "~")
+        print "Run as root in the container with a small local repository, so that an"
+        print "upgrade is really waiting and a kernel package exists: ``dev/e2e/run.sh"
+        print "preflight``. Last full run: " pre_run "."
+        print ""
+        n = 0
+        while ((getline t < pre_file) > 0) { n++; print "* " t }
+        close(pre_file)
+        print ""
+        print "(" n " checks.)"
+        print ""
+        title("End-to-end: emrac updating itself (dev/e2e/self-upgrade.sh)", "~")
+        print "Builds a 0.8.0 and a 0.9.0 release from the committed source and runs"
+        print "``emrac self upgrade`` and ``self downgrade`` for real: ``dev/e2e/run.sh"
+        print "self``. Last full run: " self_run "."
+        print ""
+        n = 0
+        while ((getline t < self_file) > 0) { n++; print "* " t }
+        close(self_file)
+        print ""
+        print "(" n " checks.)"
     }
 ' "$work/tests.txt" >"$work/out.rst"
 
 case "$mode" in
 write)
     cp "$work/out.rst" "$target"
-    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") end-to-end checks)"
+    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") end-to-end checks)"
     ;;
 check)
     if ! diff -u "$target" "$work/out.rst" >"$work/diff.txt"; then

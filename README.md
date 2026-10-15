@@ -6,15 +6,15 @@ A hybrid next generation package management platform for Arch Linux — an orche
 
 ---
 
-Status: **Slice r2** (released 2026-10-14; the release notes are in [`docs/releases/r2.md`](./docs/releases/r2.md)). The core loop (`search`, `info`, `install`, `remove`, `upgrade` against the official repos and the AUR) works, with a transaction preview and confirmation before every change, audited and sandboxed AUR builds, history with rollback, health checks, and tools for config files and caches (see Highlights). Still missing: the TUI, build profiles and the source-or-binary recommendation, and most of `SPEC.md` Part IV.
+Status: **Slice r2** (released 2026-10-14; the release notes are in [`docs/releases/r2.md`](./docs/releases/r2.md)), plus twenty updates since (`u1`–`u20`, not yet released; see `CHANGELOG.md`). The core loop (`search`, `info`, `install`, `remove`, `upgrade` against the official repos and the AUR) works, with a transaction preview and confirmation before every change, audited and sandboxed AUR builds, history with rollback, health checks, and tools for config files and caches (see Highlights). Still missing: the TUI, build profiles and the source-or-binary recommendation, and most of `SPEC.md` Part IV.
 
 | Area | Commands |
 |---|---|
-| Find & inspect | `search`, `info`, `deps`, `rdeps`, `why`, `orphans` |
-| Change | `install`, `remove`, `purge`, `upgrade`, `reinstall`, `downgrade`, `build` (AUR/PKGBUILD dir in the sandbox, no install) |
-| Undo | `history` (`archive`, `verify`, `ack`, `sync`, `anchor`), `ledger` (`events`, `watch install`), `rollback [tx]` / `undo`, `redo`, `snapshot`, `restore <name>` |
+| Find & inspect | `search`, `info` (with trust signals for AUR packages), `deps`, `rdeps`, `why`, `orphans`, `tree`, `graph`, `impact`, `cycles`, `news` (Arch news) |
+| Change | `install`, `remove`, `purge`, `upgrade`, `reinstall`, `rebuild` (AUR packages again from source; `--check`, `--stale`), `downgrade`, `build` (AUR/PKGBUILD dir in the sandbox, no install) |
+| Undo | `history` (`archive`, `verify`, `ack`, `sync`, `anchor`, `recover`), `report` (what the last upgrade left to do), `ledger` (`events`, `watch install`), `rollback [tx]` / `undo`, `redo`, `snapshot`, `restore <name>` |
 | Protect | `doctor` (read-only system health checks), `audit` (read a PKGBUILD or inspect a built package for risky code; runs automatically before AUR builds and again on the built package before it is installed), `pin` / `unpin` (holds with a reason and expiry), `verify` (files vs. pacman's record), `cache` (sizes of the source, build, binary and pacman caches; `clean`, `trim`, `purge` keep what `undo` needs), `pacnew` (tells your edits from upstream's in `.pacnew` files, then keeps, takes, merges or edits each after checking it; every change is recorded and revertible) |
-| Setup | `config`, `completion bash\|zsh\|fish` |
+| Setup | `config` (`show`, `get`, `set`, `unset`, `edit`, `refresh`), `completion bash\|zsh\|fish`, `self` (`check`, `diagnose`, `sync`, `news`, `upgrade`, `downgrade`: emrac's own installation and releases) |
 
 Global flags: `--dry-run`, `--yes`, `--offline`, `--json`, `--quiet`. Defaults can be set with `emrac config`.
 
@@ -26,6 +26,9 @@ emrac install ripgrep           # preview, confirm, install
 emrac snapshot                  # save the installed set as a restore point
 emrac upgrade                   # full upgrade (with `snapshot.before_upgrade`, snapshots first)
 emrac undo                      # reverse the last transaction
+emrac news                      # Arch news; critical unread news stops an upgrade
+emrac rebuild --check           # AUR packages a library update has left behind
+emrac report                    # what the last upgrade left to do (reboot, restarts)
 emrac verify ripgrep            # are its files still intact?
 ```
 

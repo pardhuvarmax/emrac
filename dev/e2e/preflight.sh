@@ -4,7 +4,7 @@
 # emrac refuses a partial upgrade, lets --allow-partial and a pin through, and
 # refuses to remove the only kernel (a fake one).
 #
-# last full run: u20, 24 of 24 passed
+# last full run: after u20, 24 of 24 passed
 set -u
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; tail -8 /tmp/ck.out | sed 's/^/        /'; fi; }

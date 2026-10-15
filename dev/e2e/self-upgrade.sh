@@ -4,7 +4,7 @@
 # to look at a release index, refuse a tampered tarball, upgrade to 0.9.0,
 # downgrade back, and find an upgrade that was killed half way.
 #
-# last full run: u15, 11 of 11 passed
+# last full run: after u20, 11 of 11 passed
 set -u
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; tail -8 /tmp/ck.out | sed 's/^/        /'; fi; }

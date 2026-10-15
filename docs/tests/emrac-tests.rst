@@ -687,7 +687,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: after u20, 50 of 50 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3, u20 adds 3) (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u20, 50 of 50 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3, u20 adds 3).
 
 * version names the builder
 * usage error exits 2
@@ -741,3 +741,58 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u20, 50 of 50 passe
 * self check reports a cut-off transaction
 
 (50 checks.)
+
+End-to-end: pre-flight, plan ids, news and trust (dev/e2e/preflight.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Run as root in the container with a small local repository, so that an
+upgrade is really waiting and a kernel package exists: ``dev/e2e/run.sh
+preflight``. Last full run: after u20, 24 of 24 passed.
+
+* the fixtures are in place: fixa 1.0 installed, 2.0 waiting
+* installing a new package while an upgrade waits is refused and names it
+* --dry-run says the same and changes nothing
+* --allow-partial lets one run through
+* a pinned package does not count
+* the setting safety.partial_upgrade=warn goes on with a warning
+* removing the only kernel is refused
+* after a full upgrade the same install passes the partial-upgrade check
+* every plan shows its id, and --json has the digest
+* --expect-plan with the right id runs the plan
+* the history record carries the plan's digest
+* --expect-plan with the old id is refused after the repository changed
+* a malformed plan id is refused
+* a plan that changed while it waited is refused at the commit, with the difference
+* an upgrade is stopped by unread critical news and nothing changes
+* --ack-news goes ahead
+* news that is not critical is shown and does not stop the upgrade
+* an upgrade shows its update risk and ends with the report
+* emrac report works on the last upgrade in the history
+* a leftover pacman lock is a pre-flight warning with the command
+* a database that already has problems is reported before a transaction, and a backup is made
+* the backup is a real archive of the database without the mtree files
+* installing an older version than the installed one is a pre-flight problem naming it
+* a repository database older than one seen is a warning
+
+(24 checks.)
+
+End-to-end: emrac updating itself (dev/e2e/self-upgrade.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Builds a 0.8.0 and a 0.9.0 release from the committed source and runs
+``emrac self upgrade`` and ``self downgrade`` for real: ``dev/e2e/run.sh
+self``. Last full run: after u20, 11 of 11 passed.
+
+* the r8 package builds and installs
+* self sync and news from a file source
+* self check sees the package that owns the binary
+* self upgrade --dry-run plans 0.9.0 and changes nothing
+* a tarball that does not match the index is refused, nothing changes
+* a killed upgrade is found by self check and diagnose
+* self upgrade to 0.9.0 (download, check, build, pacman -U, verify)
+* the upgrade left a backup, a log line and no journal
+* self upgrade now says it is the newest
+* self downgrade goes back to 0.8.0
+* self downgrade to a version that is not older is refused
+
+(11 checks.)
