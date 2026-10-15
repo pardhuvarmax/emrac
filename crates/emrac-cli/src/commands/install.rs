@@ -67,8 +67,8 @@ pub fn run(
         return Ok(());
     }
 
-    crate::commands::plan_check::verify_before_commit(&shown, &plan, &|| {
-        sources.plan_install(pkgs, offline)
+    crate::commands::plan_check::verify_before_commit(&shown, &plan, &|s| {
+        s.plan_install(pkgs, offline)
     })?;
     history::begin(&plan)?;
     let result = (|| {

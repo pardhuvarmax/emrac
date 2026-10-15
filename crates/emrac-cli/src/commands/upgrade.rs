@@ -129,8 +129,8 @@ pub fn run(
         !official_targets.is_empty()
     };
 
-    crate::commands::plan_check::verify_before_commit(&shown, &upgrade.plan, &|| {
-        sources.plan_upgrade(pkgs, offline).map(|u| u.plan)
+    crate::commands::plan_check::verify_before_commit(&shown, &upgrade.plan, &|s| {
+        s.plan_upgrade(pkgs, offline).map(|u| u.plan)
     })?;
     history::begin(&upgrade.plan)?;
     let result = (|| {

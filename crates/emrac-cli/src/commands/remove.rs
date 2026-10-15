@@ -44,8 +44,8 @@ pub fn run(
         return Ok(());
     }
 
-    crate::commands::plan_check::verify_before_commit(&shown, &plan, &|| {
-        sources.plan_remove(pkgs, cascade, recursive)
+    crate::commands::plan_check::verify_before_commit(&shown, &plan, &|s| {
+        s.plan_remove(pkgs, cascade, recursive)
     })?;
     history::begin(&plan)?;
     let result = sources.remove(pkgs, cascade, recursive);

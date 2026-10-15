@@ -62,8 +62,8 @@ pub fn run(
         }
     }
 
-    crate::commands::plan_check::verify_before_commit(&shown, &purge.plan, &|| {
-        sources.plan_purge(pkgs, cascade, recursive).map(|p| p.plan)
+    crate::commands::plan_check::verify_before_commit(&shown, &purge.plan, &|s| {
+        s.plan_purge(pkgs, cascade, recursive).map(|p| p.plan)
     })?;
     history::begin(&purge.plan)?;
     let result = sources.purge(pkgs, cascade, recursive);

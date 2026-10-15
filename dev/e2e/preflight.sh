@@ -4,7 +4,7 @@
 # emrac refuses a partial upgrade, lets --allow-partial and a pin through, and
 # refuses to remove the only kernel (a fake one).
 #
-# last full run: u17, 8 of 8 passed
+# last full run: u18, 14 of 14 passed
 set -u
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; tail -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -57,4 +57,25 @@ ck "a pinned package does not count" "as_tester $e pin fixa --reason test >/dev/
 ck "the setting safety.partial_upgrade=warn goes on with a warning" "as_tester $e config set safety.partial_upgrade warn >/dev/null && pacman -R --noconfirm fixnew2 >/dev/null && as_tester $e install fixnew2 --yes >/tmp/o 2>&1; grep -q 'warning' /tmp/o && pacman -Q fixnew2; as_tester $e config unset safety.partial_upgrade >/dev/null"
 ck "removing the only kernel is refused" "! as_tester $e remove fakekernel --yes 2>&1 | tee /tmp/o; grep -q 'only\\|every installed kernel' /tmp/o && pacman -Q fakekernel"
 ck "after a full upgrade the same install passes the partial-upgrade check" "as_tester $e upgrade --yes >/tmp/u 2>&1; pacman -Q fixa | grep -q 2.0 && pacman -R --noconfirm fixnew >/dev/null && as_tester $e install fixnew --dry-run >/tmp/o 2>&1; ! grep -q PROBLEM /tmp/o && (grep -q 'pre-flight passed.*Partial upgrade' /tmp/o || grep -q 'ok  *Partial upgrade' /tmp/o)"
+
+# plan integrity (u18): what was previewed is what runs
+newer() { # name version: put a newer version of a fixture package in the repository
+  mk $1 $2 ''
+  (cd /srv/fixrepo && rm -f $1-*-1-any.pkg.tar.zst.old; for f in $1-*-1-any.pkg.tar.zst; do case $f in $1-$2-1-any.pkg.tar.zst) ;; *) rm -f $f;; esac; done; repo-add fixrepo.db.tar.gz $1-$2-1-any.pkg.tar.zst >/dev/null 2>&1)
+  pacman -Sy --noconfirm >/dev/null 2>&1
+}
+ck "every plan shows its id, and --json has the digest" "as_tester $e install fixnew --dry-run 2>&1 | grep -q 'Plan id' && as_tester $e install fixnew --dry-run --json 2>/dev/null | grep -q '\"digest\": \"[0-9a-f]\\{64\\}\"'"
+D=$(as_tester $e install fixnew --dry-run --json 2>/dev/null | sed -n 's/.*"digest": "\([0-9a-f]*\)".*/\1/p' | head -1)
+ck "--expect-plan with the right id runs the plan" "as_tester $e install fixnew --yes --expect-plan ${D:0:12} && pacman -Q fixnew"
+ck "the history record carries the plan's digest" "as_tester $e history --json | grep -q '\"plan_digest\": \"${D}\"'"
+pacman -R --noconfirm fixnew >/dev/null 2>&1
+newer fixnew 2.0
+ck "--expect-plan with the old id is refused after the repository changed" "! as_tester $e install fixnew --yes --expect-plan ${D:0:12} >/tmp/o 2>&1; grep -q 'not the plan you expected' /tmp/o && ! pacman -Q fixnew"
+ck "a malformed plan id is refused" "! as_tester $e install fixnew --dry-run --expect-plan zz >/tmp/o 2>&1; grep -q 'not a plan id' /tmp/o"
+# the repository changes while the plan waits for an answer (more than 30 s)
+( sleep 36; echo y ) | as_tester $e install fixnew > /tmp/drift 2>&1 &
+sleep 8
+newer fixnew 3.0
+wait
+ck "a plan that changed while it waited is refused at the commit, with the difference" "cat /tmp/drift; grep -q 'changed while you were deciding' /tmp/drift && grep -q 'changed: fixnew 2.0-1 → 3.0-1' /tmp/drift && ! pacman -Q fixnew"
 echo; echo "$n checks, $bad failed"

@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use emrac_core::{Error, Plan, Result};
+use emrac_core::{Error, Plan, Result, Sources};
 
 /// A plan the user may have been looking at for a while. Below this the plan
 /// is not made a second time (a run with `--yes` goes straight through).
@@ -57,12 +57,18 @@ pub fn expect(plan: &Plan, expected: Option<&str>) -> Result<()> {
 }
 
 /// Just before the commit: if the plan was on screen for a while, make it
-/// again and refuse to go on when it is not the one that was approved.
+/// again and refuse to go on when it is not the one that was approved. The
+/// plan is made with a new `Sources`: the one the command started with has
+/// read the databases once and would give the same answer again.
 pub fn verify_before_commit(
     shown: &Shown,
     plan: &Plan,
-    again: &dyn Fn() -> Result<Plan>,
+    again: &dyn Fn(&Sources) -> Result<Plan>,
 ) -> Result<()> {
+    verify_with(shown, plan, &|| again(&Sources::init()?))
+}
+
+fn verify_with(shown: &Shown, plan: &Plan, again: &dyn Fn() -> Result<Plan>) -> Result<()> {
     if shown.at.elapsed() < RECHECK_AFTER {
         return Ok(());
     }
@@ -140,15 +146,13 @@ mod tests {
             Ok(plan("1-1"))
         };
         let fresh = Shown::new(&p);
-        verify_before_commit(&fresh, &p, &same).unwrap();
+        verify_with(&fresh, &p, &same).unwrap();
         assert_eq!(calls.get(), 0, "a quick run goes straight through");
         let old = Shown::at(&p, Instant::now() - Duration::from_secs(120));
-        verify_before_commit(&old, &p, &same).unwrap();
+        verify_with(&old, &p, &same).unwrap();
         assert_eq!(calls.get(), 1);
         let drifted = || Ok(plan("1-2"));
-        let e = verify_before_commit(&old, &p, &drifted)
-            .unwrap_err()
-            .to_string();
+        let e = verify_with(&old, &p, &drifted).unwrap_err().to_string();
         assert!(
             e.contains("changed while you were deciding") && e.contains("changed: a 1-1 → 1-2"),
             "{e}"
@@ -156,7 +160,7 @@ mod tests {
         assert!(e.contains("Nothing was changed"));
         let failing = || Err(Error::PlanChanged("boom".into()));
         assert!(
-            verify_before_commit(&old, &p, &failing).is_err(),
+            verify_with(&old, &p, &failing).is_err(),
             "a plan that can't be made again stops the run"
         );
     }
