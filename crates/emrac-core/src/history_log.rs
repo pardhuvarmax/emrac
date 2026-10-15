@@ -19,7 +19,7 @@ use crate::error::{Error, Result};
 use crate::history::TransactionRecord;
 
 /// What `prev` holds on the very first line of a log.
-const GENESIS: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+pub(crate) const GENESIS: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /// The newest records an archive never touches: the cache policy and
 /// `undo`/`redo` read this many.

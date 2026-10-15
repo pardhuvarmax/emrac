@@ -32,6 +32,10 @@ fn run(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
+    if let Commands::LedgerAppend = &cli.command {
+        return commands::ledger::append_from_stdin();
+    }
+
     if let Commands::History {
         limit,
         since,
@@ -44,7 +48,8 @@ fn run(cli: &Cli) -> Result<()> {
             Some(HistoryCommand::Archive { older_than }) => {
                 commands::history::archive(older_than, cli.dry_run, cli.json)
             }
-            Some(HistoryCommand::Verify) => commands::history::verify(cli.json),
+            Some(HistoryCommand::Verify { repair }) => commands::history::verify(*repair, cli.json),
+            Some(HistoryCommand::Sync) => commands::ledger::sync_interactive(cli.json),
             Some(HistoryCommand::Ack { ids, failed }) => {
                 commands::history::ack(ids, *failed, cli.json)
             }
@@ -257,7 +262,10 @@ fn run(cli: &Cli) -> Result<()> {
         Commands::Redo => {
             commands::rollback::run(&sources, Which::Redo, dry_run, yes, offline, json)
         }
-        Commands::Config { .. } | Commands::Completion { .. } | Commands::History { .. } => {
+        Commands::Config { .. }
+        | Commands::Completion { .. }
+        | Commands::History { .. }
+        | Commands::LedgerAppend => {
             unreachable!("handled above")
         }
     }

@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 264
+     - 275
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 19
+     - 20
    * - **Automated total**
      -
-     - **292**
+     - **304**
 
-emrac-core library (264)
+emrac-core library (275)
 ------------------------
 
 ``audit::tests`` (39)
@@ -173,7 +173,7 @@ emrac-core library (264)
 * ``why_prefers_the_shortest_chain``
 * ``why_survives_cycles``
 
-``doctor::tests`` (22)
+``doctor::tests`` (23)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_failed_online_check_says_so_instead_of_guessing``
@@ -195,6 +195,7 @@ emrac-core library (264)
 * ``problems_sort_before_warnings_before_notes_and_keep_check_order_within``
 * ``scrubbing_removes_the_home_user_and_host_names``
 * ``systemctl_and_df_output_are_parsed``
+* ``the_ledger_check_reports_each_state``
 * ``the_report_is_markdown_with_every_check_and_its_detail``
 * ``the_sandbox_check_reflects_bwrap_and_the_limits``
 * ``unmet_dependencies_are_a_problem_with_the_pairs_listed_and_capped``
@@ -240,6 +241,20 @@ emrac-core library (264)
 * ``the_archive_moves_only_old_records_and_never_the_newest_twenty``
 * ``unreadable_history_is_an_io_error_not_empty``
 * ``write_failure_is_reported``
+
+``ledger::tests`` (10)
+~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_rebuild_leaves_archived_records_in_their_archive``
+* ``a_skipped_append_is_caught_up_in_order_by_the_next``
+* ``an_edited_removed_or_forged_ledger_line_is_caught``
+* ``appending_chains_dedupes_and_wraps_the_line_unchanged``
+* ``comparing_names_missing_changed_and_pending_records``
+* ``lsattr_output_says_whether_the_file_is_append_only``
+* ``one_bad_line_means_nothing_is_written``
+* ``the_helper_takes_records_and_markers_and_nothing_else``
+* ``the_history_is_rebuilt_from_the_ledger_and_verifies``
+* ``the_ledger_notices_an_archive_file_that_changed``
 
 ``manifest::tests`` (16)
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -440,10 +455,10 @@ emrac command line, unit tests (9)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (19)
+emrac command line, integration tests (20)
 ------------------------------------------
 
-``(top level)`` (19)
+``(top level)`` (20)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -461,6 +476,7 @@ emrac command line, integration tests (19)
 * ``history_is_empty_without_a_log_and_reads_one``
 * ``pins_list_and_unpin``
 * ``snapshots_list_show_delete``
+* ``the_ledger_holds_a_second_copy_and_repairs_the_history``
 * ``the_sandbox_hides_the_network_secrets_and_home_from_a_build``
 * ``usage_errors_exit_2``
 * ``version_and_help_succeed``
@@ -471,7 +487,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed (u7 adds 4).
+them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed (u7 adds 4, u8 adds 5).
 
 * version names the builder
 * usage error exits 2
@@ -503,5 +519,10 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed (u7 a
 * history archive keeps what undo and the cache policy answer
 * history --archive still lists archived records
 * an edited history line is caught by verify and doctor
+* ledger: root-owned, written through sudo, agrees with the history
+* ledger: the user can neither rewrite, truncate nor delete it
+* ledger: the helper refuses what is not a history line
+* ledger: doctor describes its protection
+* ledger: a deleted history is rebuilt from it
 
-(30 checks.)
+(35 checks.)

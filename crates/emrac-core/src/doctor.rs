@@ -77,6 +77,22 @@ pub struct HistoryFacts {
     pub archives: usize,
 }
 
+/// What the ledger looks like, for the doctor.
+#[derive(Debug, Clone, Default)]
+pub struct LedgerFacts {
+    pub entries: usize,
+    /// The ledger's own chain, worded; a problem if set.
+    pub chain_problem: Option<String>,
+    /// Where the user's history and the ledger differ.
+    pub differences: Vec<String>,
+    /// History lines the ledger lacks.
+    pub pending: usize,
+    pub root_owned: bool,
+    pub world_writable: bool,
+    /// `None`: this system can't tell.
+    pub append_only: Option<bool>,
+}
+
 /// A tool emrac shells out to.
 #[derive(Debug, Clone)]
 pub struct ToolFact {
@@ -128,6 +144,10 @@ pub struct DoctorInputs {
     pub recent_failed_transactions: Vec<String>,
     /// `None`: there is no history yet.
     pub history: Option<HistoryFacts>,
+    /// `None`: there is no ledger file.
+    pub ledger: Option<LedgerFacts>,
+    /// The history has records (so a missing ledger is worth a word).
+    pub history_has_records: bool,
     pub config: ConfigFacts,
     pub tools: Vec<ToolFact>,
     /// `Err` carries bubblewrap's reason.
@@ -607,6 +627,73 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             c = c.detail(notes);
         }
         checks.push(c);
+    }
+
+    // The ledger.
+    match &i.ledger {
+        None if i.history_has_records => checks.push(
+            check(
+                "ledger",
+                "Ledger",
+                Status::Note,
+                "no ledger yet: nothing outside your home holds a second copy of the history"
+                    .to_string(),
+            )
+            .fix("emrac history sync"),
+        ),
+        None => {}
+        Some(l) => {
+            let mut notes = Vec::new();
+            let (status, summary) = if let Some(p) = &l.chain_problem {
+                notes.push(p.clone());
+                (
+                    Status::Problem,
+                    "the ledger's own chain is broken — it was changed after it was written"
+                        .to_string(),
+                )
+            } else if !l.differences.is_empty() {
+                notes.extend(l.differences.iter().cloned());
+                (
+                    Status::Warning,
+                    "your history and the ledger disagree".to_string(),
+                )
+            } else if !l.root_owned || l.world_writable {
+                (
+                    Status::Warning,
+                    "the ledger is not root-owned or is writable by others, so it protects nothing"
+                        .to_string(),
+                )
+            } else if l.append_only != Some(true) {
+                (
+                    Status::Note,
+                    "root-owned, but not append-only here (this filesystem has no such flag)"
+                        .to_string(),
+                )
+            } else if l.pending > 0 {
+                (
+                    Status::Note,
+                    format!(
+                        "{} not in the ledger yet",
+                        plural(l.pending, "history line is", "history lines are")
+                    ),
+                )
+            } else {
+                (
+                    Status::Ok,
+                    format!(
+                        "{}, root-owned and append-only, matching your history",
+                        plural(l.entries, "entry", "entries")
+                    ),
+                )
+            };
+            let mut c = check("ledger", "Ledger", status, summary).detail(notes);
+            if l.chain_problem.is_some() || !l.differences.is_empty() {
+                c = c.fix("emrac history verify --repair");
+            } else if l.pending > 0 {
+                c = c.fix("emrac history sync");
+            }
+            checks.push(c);
+        }
     }
 
     // emrac's own config.
@@ -1234,5 +1321,59 @@ mod tests {
         assert_eq!(c.status, Status::Warning);
         assert_eq!(c.fix.as_deref(), Some("emrac history verify"));
         assert!(c.detail[0].contains("line 4"));
+    }
+
+    #[test]
+    fn the_ledger_check_reports_each_state() {
+        let mut i = healthy();
+        assert!(
+            find(&evaluate(&i), "ledger").is_empty(),
+            "no history, no ledger: no word"
+        );
+        i.history_has_records = true;
+        assert_eq!(one(&evaluate(&i), "ledger").status, Status::Note);
+
+        let good = LedgerFacts {
+            entries: 9,
+            root_owned: true,
+            append_only: Some(true),
+            ..LedgerFacts::default()
+        };
+        i.ledger = Some(good.clone());
+        let c = one(&evaluate(&i), "ledger").clone();
+        assert_eq!(c.status, Status::Ok);
+        assert!(c.summary.contains("9 entries"), "{}", c.summary);
+
+        i.ledger = Some(LedgerFacts {
+            append_only: Some(false),
+            ..good.clone()
+        });
+        assert_eq!(one(&evaluate(&i), "ledger").status, Status::Note);
+        i.ledger = Some(LedgerFacts {
+            pending: 2,
+            ..good.clone()
+        });
+        let c = one(&evaluate(&i), "ledger").clone();
+        assert_eq!(
+            (c.status, c.fix.as_deref()),
+            (Status::Note, Some("emrac history sync"))
+        );
+        i.ledger = Some(LedgerFacts {
+            root_owned: false,
+            ..good.clone()
+        });
+        assert_eq!(one(&evaluate(&i), "ledger").status, Status::Warning);
+        i.ledger = Some(LedgerFacts {
+            differences: vec!["changed since recorded: tx-2".into()],
+            ..good.clone()
+        });
+        let c = one(&evaluate(&i), "ledger").clone();
+        assert_eq!(c.status, Status::Warning);
+        assert!(c.detail[0].contains("tx-2"));
+        i.ledger = Some(LedgerFacts {
+            chain_problem: Some("ledger.jsonl line 3".into()),
+            ..good
+        });
+        assert_eq!(one(&evaluate(&i), "ledger").status, Status::Problem);
     }
 }

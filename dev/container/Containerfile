@@ -12,7 +12,9 @@ RUN pacman -Syu --noconfirm && \
     pacman -S --noconfirm --needed sudo git base-devel bubblewrap && \
     useradd -m -G wheel tester && \
     echo 'tester ALL=(root) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/tester-pacman && \
-    chmod 0440 /etc/sudoers.d/tester-pacman
+    chmod 0440 /etc/sudoers.d/tester-pacman && \
+    echo 'tester ALL=(root) NOPASSWD: /usr/local/bin/emrac ledger-append' > /etc/sudoers.d/tester-emrac && \
+    chmod 0440 /etc/sudoers.d/tester-emrac
 
 USER tester
 WORKDIR /home/tester

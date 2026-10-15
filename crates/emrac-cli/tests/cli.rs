@@ -26,6 +26,7 @@ impl Home {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_emrac"));
         cmd.args(args)
             .env("HOME", &self.0)
+            .env("EMRAC_LEDGER", self.0.join("ledger.jsonl"))
             .env_remove("XDG_CONFIG_HOME")
             .env_remove("XDG_DATA_HOME");
         cmd
@@ -286,6 +287,90 @@ fn history_archive_verify_and_ack() {
     let out = home.run(&["history", "verify"]);
     assert_eq!(out.status.code(), Some(1));
     assert!(stderr(&out).contains("does not verify"), "{}", stderr(&out));
+}
+
+#[test]
+fn the_ledger_holds_a_second_copy_and_repairs_the_history() {
+    let home = Home::new("ledger");
+    let log = home.data().join("history.jsonl");
+    let ledger = home.0.join("ledger.jsonl");
+    let lines: Vec<String> = (1..=3)
+        .map(|n| {
+            format!(
+                r#"{{"id":"tx-{n}","timestamp":{},"action":"install","packages":[{{"name":"tree","version":"2.3.2-1","repo":"extra","explicit":true}}],"status":"committed"}}"#,
+                1_000_000_000 + n * 100
+            )
+        })
+        .collect();
+    write(&log, &(lines.join("\n") + "\n"));
+
+    let out = home.run(&["history", "verify"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(stdout(&out).contains("no ledger yet"), "{}", stdout(&out));
+
+    let out = home.run(&["history", "sync"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(stdout(&out).contains("sent 3 lines"), "{}", stdout(&out));
+    assert!(ledger.exists());
+    assert!(stdout(&home.run(&["history", "verify"])).contains("the ledger agrees"));
+    assert!(stdout(&home.run(&["history", "sync"])).contains("already holds everything"));
+
+    // doctor sees it
+    let doc = stdout(&home.run(&["doctor", "--json"]));
+    assert!(doc.contains("\"ledger\""), "{doc}");
+
+    // The helper refuses what is not a history line, and writes nothing.
+    let before = fs::read_to_string(&ledger).unwrap();
+    let out = run_answering(&home, &["ledger-append"], "{\"type\":\"shell\"}\n");
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("ledger refused"), "{}", stderr(&out));
+    assert_eq!(fs::read_to_string(&ledger).unwrap(), before);
+
+    // Edit one record: verify names it and exits 1; repair needs a real yes.
+    let broken = fs::read_to_string(&log)
+        .unwrap()
+        .replacen("install", "remove", 1);
+    write(&log, &broken);
+    let out = home.run(&["history", "verify"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stderr(&out).contains("changed since they were recorded: tx-1"),
+        "{}",
+        stderr(&out)
+    );
+    let out = home.run(&["history", "verify", "--repair", "--yes"]);
+    assert!(
+        stderr(&out).contains("emrac refuses: no answer came"),
+        "{}",
+        stderr(&out)
+    );
+    assert_eq!(
+        fs::read_to_string(&log).unwrap(),
+        broken,
+        "--yes does not answer"
+    );
+
+    let out = run_answering(&home, &["history", "verify", "--repair"], "y\n");
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(fs::read_to_string(&log).unwrap(), lines.join("\n") + "\n");
+    assert!(home.data().join("history.jsonl.broken").exists());
+    assert_eq!(home.run(&["history", "verify"]).status.code(), Some(0));
+
+    // Delete the whole history: the ledger brings it back.
+    fs::remove_file(&log).unwrap();
+    let out = home.run(&["history", "verify"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stderr(&out).contains("tx-1, tx-2, tx-3"),
+        "{}",
+        stderr(&out)
+    );
+    let out = run_answering(&home, &["history", "verify", "--repair"], "y\n");
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert_eq!(home.run(&["history", "--json"]).status.code(), Some(0));
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout(&home.run(&["history", "--json"]))).unwrap();
+    assert_eq!(json.as_array().unwrap().len(), 3);
 }
 
 fn snapshot_json(name: &str, count: usize) -> String {

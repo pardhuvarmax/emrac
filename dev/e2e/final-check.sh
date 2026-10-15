@@ -5,7 +5,7 @@
 #
 # Each `ck "title" "command"` line is one check; the titles are listed in
 # docs/tests/emrac-tests.rst. Update the next line when you run them all.
-# last full run: r2, 26 of 26 passed (u7 adds 4)
+# last full run: r2, 26 of 26 passed (u7 adds 4, u8 adds 5)
 e=/usr/local/bin/emrac
 export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 n=0; bad=0
@@ -49,4 +49,11 @@ ck "history: 22 real transactions chain and verify" "for i in \$(seq 1 11); do $
 ck "history archive keeps what undo and the cache policy answer" "$e config set cache.keep_days 0 >/dev/null; sleep 2; $e undo --dry-run > /tmp/u1 2>&1; $e cache clean --lean --dry-run > /tmp/c1 2>&1; printf y | $e history archive --older-than 1s >/dev/null && $e undo --dry-run > /tmp/u2 2>&1 && $e cache clean --lean --dry-run > /tmp/c2 2>&1 && cmp /tmp/u1 /tmp/u2 && cmp /tmp/c1 /tmp/c2 && ls \$HOME/.local/share/emrac/history-archive | grep -q jsonl && $e history verify | grep -q '1 archive file'"
 ck "history --archive still lists archived records" "[ \$($e history --archive --json | grep -c '\"id\"') -ge 22 ]"
 ck "an edited history line is caught by verify and doctor" "cp $H /tmp/h.bak; sed -i '0,/\"remove\"/s//\"install\"/' $H; ! $e history verify; $e doctor 2>&1 | grep -q 'History integrity'; cp /tmp/h.bak $H; $e history verify | grep -q verifies"
+# the ledger (u8): a root-owned second copy written through sudo
+L=/var/lib/emrac/ledger.jsonl
+ck "ledger: root-owned, written through sudo, agrees with the history" "[ \$(stat -c %U $L) = root ] && $e history verify | grep -q 'the ledger agrees'"
+ck "ledger: the user can neither rewrite, truncate nor delete it" "! (echo x > $L) 2>/dev/null; ! (: > $L) 2>/dev/null; ! rm -f $L 2>/dev/null; ! (echo x >> $L) 2>/dev/null; [ -s $L ]"
+ck "ledger: the helper refuses what is not a history line" "! (echo '{\"type\":\"shell\"}' | sudo -n $e ledger-append) 2>/dev/null"
+ck "ledger: doctor describes its protection" "$e doctor 2>&1 | grep -q 'Ledger'"
+ck "ledger: a deleted history is rebuilt from it" "rm -f \$HOME/.local/share/emrac/history.jsonl; ! $e history verify; printf y | $e history verify --repair >/dev/null && $e history verify | grep -q 'ledger agrees'"
 echo; echo "$n checks, $bad failed"

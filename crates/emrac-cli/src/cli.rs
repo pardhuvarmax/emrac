@@ -333,6 +333,11 @@ pub enum Commands {
     /// Re-apply the most recent rollback
     Redo,
 
+    /// (Internal) append history lines read from stdin to the root-owned ledger;
+    /// run through sudo by emrac itself
+    #[command(hide = true)]
+    LedgerAppend,
+
     /// Print a shell completion script to stdout
     Completion { shell: CompletionShell },
 }
@@ -456,8 +461,17 @@ pub enum HistoryCommand {
         older_than: String,
     },
 
-    /// Check that nothing in the history was edited, removed or added
-    Verify,
+    /// Check that nothing in the history was edited, removed or added, and
+    /// that it agrees with the ledger
+    Verify {
+        /// Rebuild the history from the ledger when they disagree (asks;
+        /// --yes does not answer; the old file is kept as history.jsonl.broken)
+        #[arg(long)]
+        repair: bool,
+    },
+
+    /// Send the history lines the ledger does not hold yet (asks for sudo)
+    Sync,
 
     /// Mark failed transactions as seen: they stay, and doctor stops counting them
     Ack {

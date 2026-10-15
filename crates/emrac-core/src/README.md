@@ -17,6 +17,7 @@
 **Recovery and history**
 - [`history.rs`](./history.rs) — the append-only transaction log (`~/.local/share/emrac/history.jsonl`).
 - [`history_log.rs`](./history_log.rs) — its SHA-256 chain, `verify`, the archive and the acknowledgement markers.
+- [`ledger.rs`](./ledger.rs) — the root-owned second copy: the append the helper does, reading and checking it, comparing it with the history, rebuilding the history from it.
 - [`rollback.rs`](./rollback.rs) — pure planning for `rollback` / `undo` / `redo`: the inverse of a record, the post-state check, finding package files.
 - [`downgrade.rs`](./downgrade.rs), [`reinstall.rs`](./reinstall.rs), [`purge.rs`](./purge.rs) — the version choice, the source choice, and the config-file classification behind those commands.
 - [`snapshot.rs`](./snapshot.rs) — named restore points of the installed package set.

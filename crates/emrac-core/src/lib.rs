@@ -8,6 +8,7 @@ mod downgrade;
 mod error;
 mod history;
 mod history_log;
+pub mod ledger;
 mod manifest;
 mod package;
 mod pacnew;

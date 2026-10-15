@@ -1671,6 +1671,52 @@ impl Sources {
                 chained: v.chained,
                 archives: v.archives,
             });
+        let history_has_records = History::all().is_ok_and(|r| !r.is_empty());
+        let ledger_path = crate::ledger::path(crate::ledger::running_as_root());
+        let ledger = match crate::ledger::read(&ledger_path) {
+            Ok(Some(l)) => {
+                let protection = crate::ledger::protection(&ledger_path);
+                let comparison = if l.problem.is_none() {
+                    History::path()
+                        .ok()
+                        .and_then(|p| crate::ledger::compare(&l, &p).ok())
+                } else {
+                    None
+                };
+                let differences = comparison
+                    .as_ref()
+                    .map(|c| {
+                        let mut d = Vec::new();
+                        if !c.missing.is_empty() {
+                            d.push(format!(
+                                "missing from your history: {}",
+                                c.missing.join(", ")
+                            ));
+                        }
+                        if !c.changed.is_empty() {
+                            d.push(format!("changed since recorded: {}", c.changed.join(", ")));
+                        }
+                        if !c.archives.is_empty() {
+                            d.push(format!(
+                                "archive files that differ: {}",
+                                c.archives.join(", ")
+                            ));
+                        }
+                        d
+                    })
+                    .unwrap_or_default();
+                Some(crate::doctor::LedgerFacts {
+                    entries: l.count,
+                    chain_problem: l.problem.as_ref().map(|b| b.describe()),
+                    differences,
+                    pending: comparison.as_ref().map_or(0, |c| c.pending),
+                    root_owned: protection.as_ref().is_some_and(|p| p.root_owned),
+                    world_writable: protection.as_ref().is_some_and(|p| p.world_writable),
+                    append_only: protection.and_then(|p| p.append_only),
+                })
+            }
+            _ => None,
+        };
         let recent_failed_transactions = History::all()
             .unwrap_or_default()
             .into_iter()
@@ -1722,6 +1768,8 @@ impl Sources {
             expired_pins,
             recent_failed_transactions,
             history,
+            ledger,
+            history_has_records,
             config: doctor::ConfigFacts {
                 parse_error: config_error,
                 world_writable: config_world_writable,

@@ -63,6 +63,28 @@ The package ships a `systemd-tmpfiles` entry that creates `/var/lib/emrac`; with
 install script and the README mention the ledger and how to read it: it is a plain text
 file anyone can `cat`.
 
+## What was built, and where it differs
+
+- **Line format.** A ledger line wraps one history line byte for byte:
+  `{"at","line","lprev","lseq","sha","tx"|"type"}`. `lseq`/`lprev` are the ledger's own
+  chain, `sha` is the SHA-256 of `line` (how the two copies are matched, so an archive that
+  renames nothing still matches), `at` is root's clock. The history's own `seq`/`prev` ride
+  inside `line`.
+- **sudo.** After a change emrac runs `sudo -n -- <this binary> ledger-append`: `-n` so a
+  transaction never ends with a password prompt. `emrac history sync` is the version that may
+  ask. The binary is only run as root if it is owned by root and not group/other-writable.
+- **Which lines.** Every recorded line goes (transactions, acknowledgements, archive and
+  chain-start markers). The "failed before pacman" distinction is not made: those are not
+  recorded in the history at all.
+- **`EMRAC_LEDGER`.** For anyone who is not root it points the ledger somewhere else and
+  emrac writes that file directly (tests, a copy). Root always uses `/var/lib/emrac`.
+- **Not built:** the `systemd-tmpfiles` entry (the first append creates the directory).
+- **Append-only was not exercised on a real filesystem.** `chattr +a` needs
+  CAP_LINUX_IMMUTABLE, which a rootless container (and this session) does not have: it fails
+  in the container, so the file there is root-owned but not append-only and `doctor` says so.
+  What is tested: that the helper calls `chattr` best-effort and that `lsattr` output is read
+  correctly. The flag itself should be tried once on a real machine with `sudo`.
+
 ## Not covered
 
 Signing the ledger with a key; a separate privileged daemon (the helper is one subcommand
