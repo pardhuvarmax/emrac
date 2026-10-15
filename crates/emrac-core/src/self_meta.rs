@@ -319,7 +319,10 @@ fn load_from(dir: &Path) -> Result<Stored> {
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok());
     let (index, index_problem) = match fs::read_to_string(dir.join("releases.json")) {
-        Ok(text) => match parse_index(&text, None) {
+        Ok(text) => match parse_index(
+            &text,
+            state.as_ref().and_then(|s: &SyncState| host_of(&s.source)),
+        ) {
             Ok(i) => (Some(i), None),
             // The stored copy was validated when it was kept; a failure now
             // means it was changed since (or by an older emrac).
@@ -843,6 +846,26 @@ mod tests {
         let stored = load_from(&dir).unwrap();
         assert_eq!(stored.state.unwrap().last_ok, Some(3_000));
         assert_eq!(stored.index.unwrap().releases.len(), 4);
+    }
+
+    #[test]
+    fn an_index_synced_from_a_file_with_file_tarballs_reads_back() {
+        let s = Scratch::new("filetar");
+        let src = s.0.join("src.json");
+        let text = good().replace(
+            "https://github.com/pardhuvarmax/emrac/archive/refs/tags/r1.tar.gz",
+            "file:///srv/emrac/r1.tar.gz",
+        );
+        fs::write(&src, text).unwrap();
+        let cfg = SelfConfig {
+            source: format!("file://{}", src.display()),
+            ..SelfConfig::default()
+        };
+        let dir = s.0.join("self");
+        sync_in(&dir, &cfg, 1_000).unwrap();
+        let stored = load_from(&dir).unwrap();
+        assert!(stored.index_problem.is_none(), "{:?}", stored.index_problem);
+        assert_eq!(stored.index.unwrap().releases.len(), 3);
     }
 
     #[test]
