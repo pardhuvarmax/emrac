@@ -8,6 +8,15 @@ use crate::config::Config;
 
 const WIDTH: usize = 72;
 
+/// "EMRAC" in plain ASCII, five rows.
+const LOGO: [&str; 5] = [
+    r" _____   __  __   ____       _       ____ ",
+    r"| ____| |  \/  | |  _ \     / \     / ___|",
+    r"|  _|   | |\/| | | |_) |   / _ \   | |    ",
+    r"| |___  | |  | | |  _ <   / ___ \  | |___ ",
+    r"|_____| |_|  |_| |_| \_\ /_/   \_\  \____|",
+];
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Bool,
@@ -191,11 +200,15 @@ pub fn render(config: &Config) -> String {
     out.push('\n');
     out.push_str(&line('║', "", '║'));
     out.push('\n');
-    out.push_str(&line('║', "   e m r a c   ·   configuration", '║'));
+    for row in LOGO {
+        out.push_str(&line('║', &format!("   {row}"), '║'));
+        out.push('\n');
+    }
+    out.push_str(&line('║', "", '║'));
     out.push('\n');
     out.push_str(&line(
         '║',
-        "   a hybrid package manager for Arch Linux",
+        "   configuration  ·  a hybrid package manager for Arch Linux",
         '║',
     ));
     out.push('\n');
@@ -335,6 +348,26 @@ mod tests {
     }
 
     #[test]
+    fn the_banner_spells_emrac_in_plain_ascii_inside_the_box() {
+        let text = render(&Config::default());
+        for row in LOGO {
+            assert!(row.is_ascii(), "{row:?}");
+            assert!(
+                row.chars().count() <= WIDTH - 2 - 3,
+                "fits the box: {row:?}"
+            );
+            assert!(
+                text.lines()
+                    .any(|l| l.starts_with("# ║   ") && l.contains(row.trim_end())),
+                "{row:?} is in the box"
+            );
+        }
+        let widths: std::collections::HashSet<usize> =
+            LOGO.iter().map(|r| r.chars().count()).collect();
+        assert_eq!(widths.len(), 1, "every row of the logo is the same width");
+    }
+
+    #[test]
     fn rewriting_a_rendered_file_changes_nothing() {
         let mut c = Config::default();
         c.set("cache.policy", "lean").unwrap();
@@ -359,7 +392,7 @@ mod tests {
     fn the_file_is_framed_documented_and_not_wider_than_it_should_be() {
         let text = render(&Config::default());
         assert!(text.starts_with("# ╔"));
-        assert!(text.contains("e m r a c   ·   configuration"));
+        assert!(text.contains("configuration  ·  a hybrid package manager"));
         assert!(text.contains("Sic Mundus Creatus Est"));
         for s in [
             "[flags]",
