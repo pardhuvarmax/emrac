@@ -1888,6 +1888,51 @@ impl Sources {
         out
     }
 
+    /// `emrac rebuild`: the plan for building installed AUR (foreign) packages
+    /// again from source. Everything named must be installed and foreign.
+    pub fn plan_rebuild(&self, pkgs: &[String]) -> Result<Plan> {
+        let mut problems = Vec::new();
+        let mut packages = Vec::new();
+        for name in pkgs {
+            match self.alpm.installed_source(name) {
+                None => problems.push(format!(
+                    "'{name}' isn't installed (`emrac install {name}` installs it)"
+                )),
+                Some(crate::backend::InstalledSource::Official) => problems.push(format!(
+                    "'{name}' is an official package: it is built for you already (`emrac reinstall {name}` puts it back)"
+                )),
+                Some(crate::backend::InstalledSource::Foreign) => {
+                    let (version, _, explicit) = self
+                        .alpm
+                        .package_info(name)
+                        .ok_or_else(|| Error::NotInstalled(name.clone()))?;
+                    if packages.iter().any(|p: &PlannedPackage| p.name == *name) {
+                        continue;
+                    }
+                    packages.push(PlannedPackage {
+                        name: name.clone(),
+                        version: version.clone(),
+                        repo: "aur".to_string(),
+                        explicit,
+                        previous_version: Some(version),
+                    });
+                }
+            }
+        }
+        if !problems.is_empty() {
+            return Err(Error::Rebuild(problems.join("\n")));
+        }
+        Ok(Plan {
+            action: PlanAction::Reinstall,
+            packages,
+            total_download_size: 0,
+            total_installed_size_delta: 0,
+            removals: Vec::new(),
+            provider_choices: Vec::new(),
+            warnings: Vec::new(),
+        })
+    }
+
     /// The pre-flight checks for a plan (u17). `check_partial` adds the
     /// partial-upgrade gate, which only `install` and `upgrade` use.
     pub fn preflight(

@@ -377,6 +377,34 @@ pub enum Commands {
         pkgs: Vec<String>,
     },
 
+    /// Build installed AUR packages again from source (after a library or Qt
+    /// update broke them): fetches and audits the sources like `upgrade`
+    Rebuild {
+        #[arg(required = true)]
+        pkgs: Vec<String>,
+
+        /// Never show the PKGBUILD/diff for review (the audit still runs)
+        #[arg(long)]
+        skip_pkgbuild: bool,
+
+        /// Show the full PKGBUILD instead of a diff against the last review
+        #[arg(long)]
+        skip_diff: bool,
+
+        /// Don't stop to ask when the audit finds high-risk problems
+        /// (critical ones are always refused)
+        #[arg(long)]
+        accept_risks: bool,
+
+        /// Build without the sandbox (the build then runs with your full access)
+        #[arg(long)]
+        no_sandbox: bool,
+
+        /// Let the sandboxed build use the network, without asking
+        #[arg(long)]
+        allow_network: bool,
+    },
+
     /// Put the installed version of one or more packages back (repair)
     Reinstall {
         #[arg(required = true)]

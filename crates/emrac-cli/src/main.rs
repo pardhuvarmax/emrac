@@ -334,6 +334,34 @@ fn run(cli: &Cli) -> Result<()> {
             commands::restore::run(&sources, name, *prune, dry_run, yes, offline, json)
         }
         Commands::Verify { pkgs } => commands::verify::run(&sources, pkgs, json),
+        Commands::Rebuild {
+            pkgs,
+            skip_pkgbuild,
+            skip_diff,
+            accept_risks,
+            no_sandbox,
+            allow_network,
+        } => {
+            let choice = BuildChoice {
+                accept_risks: *accept_risks,
+                no_sandbox: *no_sandbox,
+                allow_network: *allow_network,
+                interactive: !yes,
+                limits: Limits::from_config(&config.build),
+                force: true,
+            };
+            commands::rebuild::run(
+                &sources,
+                pkgs,
+                dry_run,
+                yes,
+                offline,
+                *skip_pkgbuild || config.review.skip_pkgbuild,
+                *skip_diff || config.review.skip_diff,
+                choice,
+                json,
+            )
+        }
         Commands::Reinstall {
             pkgs,
             accept_risks,
@@ -346,6 +374,7 @@ fn run(cli: &Cli) -> Result<()> {
                 allow_network: *allow_network,
                 interactive: !yes,
                 limits: Limits::from_config(&config.build),
+                force: false,
             };
             commands::reinstall::run(&sources, pkgs, dry_run, yes, offline, choice, json)
         }

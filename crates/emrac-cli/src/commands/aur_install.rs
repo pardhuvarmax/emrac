@@ -20,6 +20,8 @@ pub struct BuildChoice {
     pub allow_network: bool,
     /// Let pacman ask its own questions (no `--yes`).
     pub interactive: bool,
+    /// Build again although a package file for this version exists.
+    pub force: bool,
 }
 
 impl BuildChoice {
@@ -30,6 +32,7 @@ impl BuildChoice {
             accept_risks: flags.accept_risks,
             no_sandbox: flags.no_sandbox,
             allow_network: flags.allow_network,
+            force: false,
         }
     }
 }
@@ -53,6 +56,7 @@ pub fn build_options(
             allow_network: true,
             limits: choice.limits,
             interactive: choice.interactive,
+            force: choice.force,
         });
     }
     sources.sandbox_check()?;
@@ -66,6 +70,7 @@ pub fn build_options(
         allow_network,
         limits: choice.limits,
         interactive: choice.interactive,
+        force: choice.force,
     })
 }
 

@@ -125,6 +125,10 @@ pub enum Error {
     #[error("{0}")]
     PlanChanged(String),
 
+    /// `emrac rebuild` cannot rebuild what was named; the text says why.
+    #[error("{0}")]
+    Rebuild(String),
+
     #[error("'{0}' isn't a date I understand — use YYYY-MM-DD, like 2026-10-11")]
     InvalidDate(String),
 
@@ -360,6 +364,7 @@ impl Error {
             | Error::SelfService(_)
             | Error::Preflight(_)
             | Error::PlanChanged(_)
+            | Error::Rebuild(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

@@ -758,6 +758,26 @@ pub fn print_why(report: &WhyReport, json: bool) {
     }
 }
 
+pub fn print_rebuild(plan: &Plan, json: bool) {
+    if json {
+        let mut value = serde_json::to_value(plan).unwrap();
+        value["digest"] = serde_json::Value::String(plan.digest());
+        println!("{}", serde_json::to_string_pretty(&value).unwrap());
+        return;
+    }
+    say!(
+        Voice::Plans,
+        "rebuild {} from source\n",
+        plural(plan.packages.len(), "AUR package")
+    );
+    for p in &plan.packages {
+        println!("  aur/{} (installed: {})", p.name, p.version);
+    }
+    println!(
+        "\nThe sources are fetched again and audited like an upgrade; the build is forced even if a package file for this version exists, and the result replaces the installed package."
+    );
+}
+
 /// The pre-flight block under a plan: just a line when all is well.
 pub fn print_preflight(checks: &[emrac_core::DoctorCheck], allowed: bool) {
     use emrac_core::DoctorStatus as S;

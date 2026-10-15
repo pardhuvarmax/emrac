@@ -18,6 +18,7 @@ pub mod pin;
 pub mod plan_check;
 pub mod preflight;
 pub mod purge;
+pub mod rebuild;
 pub mod reinstall;
 pub mod remove;
 pub mod restore;

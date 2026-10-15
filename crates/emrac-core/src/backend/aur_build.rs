@@ -18,6 +18,9 @@ pub struct BuildOptions {
     /// Let pacman (through `makepkg -s`) ask its own questions when it
     /// installs build dependencies, instead of taking `--noconfirm` defaults.
     pub interactive: bool,
+    /// Build again even if a package file for this version already exists
+    /// (`emrac rebuild`): the old file was made against older libraries.
+    pub force: bool,
 }
 
 impl Default for BuildOptions {
@@ -27,6 +30,7 @@ impl Default for BuildOptions {
             allow_network: false,
             limits: Limits::default(),
             interactive: false,
+            force: false,
         }
     }
 }
@@ -193,6 +197,7 @@ impl AurBuildBackend {
         if !opts.sandbox {
             let status = Command::new("makepkg")
                 .args(["-s", "--needed"])
+                .args(opts.force.then_some("--force"))
                 .args((!opts.interactive).then_some("--noconfirm"))
                 .current_dir(dir)
                 .status()
@@ -204,7 +209,7 @@ impl AurBuildBackend {
         }
 
         sandbox::probe().map_err(Error::SandboxUnavailable)?;
-        if self.built_files_in(dir).is_ok() {
+        if !opts.force && self.built_files_in(dir).is_ok() {
             return Ok(());
         }
 
@@ -252,9 +257,13 @@ impl AurBuildBackend {
                 &["--noextract", "--nodeps", "--noconfirm"],
             ),
         ];
+        let force_arg: &[&str] = if opts.force { &["--force"] } else { &[] };
         for (phase, args) in steps {
             let mut command = vec!["makepkg".to_string()];
             command.extend(args.iter().map(|a| a.to_string()));
+            if phase == "build and package" {
+                command.extend(force_arg.iter().map(|a| a.to_string()));
+            }
             let (outcome, output) = sandbox::run(&spec, &command, &opts.limits, use_scope)
                 .map_err(|err| Error::CommandSpawn("bwrap".to_string(), err))?;
             match &outcome {
