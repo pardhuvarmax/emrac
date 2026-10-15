@@ -1833,6 +1833,18 @@ impl Sources {
                 let all = crate::pacman_db::backups();
                 (all.len(), all.first().map(|b| (b.time, b.bytes)))
             });
+        let repo_rollbacks =
+            crate::repo_trust::rollbacks(&crate::repo_trust::load(), &crate::repo_trust::current())
+                .into_iter()
+                .map(|r| {
+                    format!(
+                        "{}: now from {}, seen from {}",
+                        r.repo,
+                        crate::history::format_utc(r.now),
+                        crate::history::format_utc(r.seen)
+                    )
+                })
+                .collect();
         let stale = self.stale_builds();
         let stale_broken = stale
             .iter()
@@ -1903,6 +1915,7 @@ impl Sources {
             stale_binary,
             stale_maybe,
             db_backups,
+            repo_rollbacks,
             history,
             ledger,
             history_has_records,
@@ -2083,6 +2096,22 @@ impl Sources {
         let mut facts = crate::preflight::gather(plan, offline, aur_builds, &|n| {
             self.alpm.package_info(n).is_some()
         });
+        let marks = crate::repo_trust::load();
+        let current = crate::repo_trust::current();
+        facts.rollbacks = crate::repo_trust::rollbacks(&marks, &current);
+        crate::repo_trust::save(&crate::repo_trust::raised(&marks, &current));
+        if check_partial && matches!(plan.action, PlanAction::Install | PlanAction::Upgrade) {
+            let planned: Vec<(String, String)> = plan
+                .packages
+                .iter()
+                .map(|p| (p.name.clone(), p.version.clone()))
+                .collect();
+            facts.downgrades = crate::repo_trust::downgrades(
+                &planned,
+                &|n| self.alpm.installed_version(n),
+                &|planned, have| crate::backend::version_is_newer(planned, have),
+            );
+        }
         let from_repos = plan.packages.iter().any(|p| p.repo != "aur");
         if check_partial
             && from_repos

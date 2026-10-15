@@ -152,6 +152,8 @@ pub struct DoctorInputs {
     pub stale_maybe: Vec<String>,
     /// `None`: backups are off. Otherwise how many, and the newest.
     pub db_backups: Option<(usize, Option<(u64, u64)>)>,
+    /// Repositories whose database is older than one seen before.
+    pub repo_rollbacks: Vec<String>,
     /// `None`: there is no history yet.
     pub history: Option<HistoryFacts>,
     /// `None`: there is no ledger file.
@@ -577,6 +579,19 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             )
             .detail(listed(&i.expired_pins))
             .fix("emrac pin <pkg> --until … to renew, or emrac unpin <pkg>"),
+        );
+    }
+
+    if !i.repo_rollbacks.is_empty() {
+        checks.push(
+            check(
+                "repo-rollback",
+                "Repository data",
+                Status::Warning,
+                "a repository database is older than one you have seen: a mirror may be serving old or rolled-back data",
+            )
+            .detail(i.repo_rollbacks.clone())
+            .fix("try another mirror, then `sudo pacman -Syy`"),
         );
     }
 
@@ -1558,6 +1573,22 @@ mod tests {
             ..good
         });
         assert_eq!(one(&evaluate(&i), "ledger").status, Status::Problem);
+    }
+
+    #[test]
+    fn a_rolled_back_repository_is_a_warning_and_the_db_backup_row_tells_none_from_some() {
+        let mut i = healthy();
+        i.repo_rollbacks = vec!["core: now from 2026-10-01, seen from 2026-10-14".into()];
+        assert_eq!(one(&evaluate(&i), "repo-rollback").status, Status::Warning);
+        i.db_backups = Some((0, None));
+        assert_eq!(one(&evaluate(&i), "db-backup").status, Status::Note);
+        i.db_backups = Some((3, Some((1_790_000_000, 6 * 1_048_576))));
+        let r = evaluate(&i);
+        assert_eq!(one(&r, "db-backup").status, Status::Ok);
+        assert!(
+            one(&r, "db-backup").summary.contains("3 kept")
+                && one(&r, "db-backup").summary.contains("6 MiB")
+        );
     }
 
     #[test]

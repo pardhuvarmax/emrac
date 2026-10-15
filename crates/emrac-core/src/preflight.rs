@@ -71,6 +71,10 @@ pub struct Facts {
     pub partial: Option<Partial>,
     /// pacman's lock file and whether a pacman runs.
     pub lock: crate::pacman_db::Lock,
+    /// `(name, installed, planned)` where the plan installs an older version.
+    pub downgrades: Vec<(String, String, String)>,
+    /// Repositories whose database is older than one seen before.
+    pub rollbacks: Vec<crate::repo_trust::Rollback>,
 }
 
 impl Facts {
@@ -97,6 +101,8 @@ impl Facts {
             boot_configs: Vec::new(),
             partial: None,
             lock: crate::pacman_db::Lock::Absent,
+            downgrades: Vec::new(),
+            rollbacks: Vec::new(),
         }
     }
 
@@ -183,6 +189,55 @@ pub fn evaluate(f: &Facts) -> Vec<Check> {
             );
             out.push(c);
         }
+    }
+
+    // An older version than the installed one.
+    if !f.downgrades.is_empty() {
+        let mut c = check(
+            "downgrade",
+            "Older version",
+            Status::Problem,
+            format!(
+                "{} would be installed in an older version than the one you have",
+                if f.downgrades.len() == 1 {
+                    "a package"
+                } else {
+                    "some packages"
+                }
+            ),
+        );
+        c.detail = f
+            .downgrades
+            .iter()
+            .map(|(n, have, planned)| format!("{n}: installed {have}, this plan has {planned}"))
+            .collect();
+        c.fix = Some("emrac downgrade <pkg> for a deliberate step back; emrac rebuild <pkg> to build an AUR package again".into());
+        out.push(c);
+    }
+
+    // A repository database older than one seen before.
+    if installing && !f.rollbacks.is_empty() {
+        let mut c = check(
+            "repo-rollback",
+            "Repository data",
+            Status::Warning,
+            "a repository database is older than one you have seen: a mirror may be serving old or rolled-back data",
+        );
+        c.detail = f
+            .rollbacks
+            .iter()
+            .map(|r| {
+                format!(
+                    "{}: now from {}, seen from {}",
+                    r.repo,
+                    crate::history::format_utc(r.now),
+                    crate::history::format_utc(r.seen)
+                )
+            })
+            .collect();
+        c.fix =
+            Some("try another mirror (`sudo pacman -Syy` after changing the mirrorlist)".into());
+        out.push(c);
     }
 
     // Space on / and where the cache lives.
@@ -1042,6 +1097,31 @@ mod tests {
             "vmlinuz-linux"
         ));
         assert!(!names_image("", "vmlinuz-linux"));
+    }
+
+    #[test]
+    fn an_older_version_is_a_problem_and_a_rolled_back_repository_a_warning() {
+        let mut f = facts(PlanAction::Install, &["a"]);
+        assert!(evaluate(&f)
+            .iter()
+            .all(|c| c.id != "downgrade" && c.id != "repo-rollback"));
+        f.downgrades = vec![("a".into(), "0.3.1-1".into(), "0.3.0-1".into())];
+        f.rollbacks = vec![crate::repo_trust::Rollback {
+            repo: "core".into(),
+            seen: 2_000_000,
+            now: 1_000_000,
+        }];
+        let c = evaluate(&f);
+        assert_eq!(by(&c, "downgrade").status, Status::Problem);
+        assert!(by(&c, "downgrade").detail[0].contains("installed 0.3.1-1"));
+        assert_eq!(by(&c, "repo-rollback").status, Status::Warning);
+        assert!(by(&c, "repo-rollback").detail[0].starts_with("core:"));
+        let mut remove = facts(PlanAction::Remove, &["a"]);
+        remove.rollbacks = f.rollbacks.clone();
+        assert!(
+            evaluate(&remove).iter().all(|c| c.id != "repo-rollback"),
+            "removing takes nothing from a repository"
+        );
     }
 
     #[test]

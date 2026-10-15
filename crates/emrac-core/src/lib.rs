@@ -25,6 +25,7 @@ mod plan;
 pub mod preflight;
 mod purge;
 mod reinstall;
+pub mod repo_trust;
 mod rollback;
 mod sandbox;
 pub mod self_check;
