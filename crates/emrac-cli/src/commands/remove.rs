@@ -14,9 +14,12 @@ pub fn run(
     dry_run: bool,
     yes: bool,
     json: bool,
+    expect_plan: Option<&str>,
 ) -> Result<()> {
     let plan = sources.plan_remove(pkgs, cascade, recursive)?;
     output::print_plan(&plan, json);
+    crate::commands::plan_check::expect(&plan, expect_plan)?;
+    let shown = crate::commands::plan_check::Shown::new(&plan);
 
     if !plan.is_empty() {
         crate::commands::preflight::run(
@@ -41,6 +44,9 @@ pub fn run(
         return Ok(());
     }
 
+    crate::commands::plan_check::verify_before_commit(&shown, &plan, &|| {
+        sources.plan_remove(pkgs, cascade, recursive)
+    })?;
     history::begin(&plan)?;
     let result = sources.remove(pkgs, cascade, recursive);
     history::record(&plan, &result);

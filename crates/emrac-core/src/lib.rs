@@ -63,7 +63,7 @@ pub use pacnew::{Class as PacnewClass, Merge as PacnewMerge, Pending as PacnewFi
 pub use pacnew_log::{Record as PacnewRecord, Standing as PacnewStanding, State as PacnewState};
 pub use pacnew_ops::{Applied as PacnewApplied, PacnewAction, Reverted as PacnewReverted};
 pub use pins::{Pin, PinStore};
-pub use plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval, ProviderChoice};
+pub use plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval, ProviderChoice, SHORT_DIGEST};
 pub use purge::{ConfigFile, ConfigState, PurgePlan};
 pub use reinstall::{ReinstallItem, ReinstallPlan, ReinstallSource};
 pub use rollback::{parse_tx_id, rolled_back_by, Download, RollbackPlan, SkippedPackage};

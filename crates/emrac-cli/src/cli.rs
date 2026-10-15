@@ -141,6 +141,11 @@ pub enum Commands {
         /// (a partial upgrade, which Arch does not support); for this run only
         #[arg(long)]
         allow_partial: bool,
+
+        /// Run only the plan with this id (printed under every plan, and
+        /// `digest` in --json); refuses if the plan is anything else
+        #[arg(long, value_name = "ID")]
+        expect_plan: Option<String>,
     },
 
     /// Remove one or more installed packages
@@ -155,6 +160,11 @@ pub enum Commands {
         /// Also remove dependencies that become orphaned as a result
         #[arg(long)]
         recursive: bool,
+
+        /// Run only the plan with this id (printed under every plan, and
+        /// `digest` in --json); refuses if the plan is anything else
+        #[arg(long, value_name = "ID")]
+        expect_plan: Option<String>,
     },
 
     /// Remove packages and delete their config files instead of keeping
@@ -170,6 +180,11 @@ pub enum Commands {
         /// Also remove dependencies that become orphaned as a result
         #[arg(long)]
         recursive: bool,
+
+        /// Run only the plan with this id (printed under every plan, and
+        /// `digest` in --json); refuses if the plan is anything else
+        #[arg(long, value_name = "ID")]
+        expect_plan: Option<String>,
     },
 
     /// Upgrade installed packages, official repos and the AUR alike
@@ -184,6 +199,11 @@ pub enum Commands {
         /// (a partial upgrade, which Arch does not support); for this run only
         #[arg(long)]
         allow_partial: bool,
+
+        /// Run only the plan with this id (printed under every plan, and
+        /// `digest` in --json); refuses if the plan is anything else
+        #[arg(long, value_name = "ID")]
+        expect_plan: Option<String>,
     },
 
     /// View or change persisted defaults (~/.config/emrac/config.toml)

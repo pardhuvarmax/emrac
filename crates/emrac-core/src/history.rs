@@ -37,6 +37,10 @@ pub struct TransactionRecord {
     /// transaction it reversed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rollback_of: Option<String>,
+    /// SHA-256 of the plan that ran (`Plan::digest`); records written before
+    /// u18 have none. The ledger keeps it, so what was approved is on record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_digest: Option<String>,
 }
 
 impl TransactionRecord {
@@ -249,6 +253,7 @@ impl History {
             },
             error: outcome.as_ref().err().map(|e| e.to_string()),
             rollback_of: rollback_of.map(str::to_string),
+            plan_digest: Some(plan.digest()),
         };
         let value = serde_json::to_value(&record).expect("TransactionRecord is serializable");
         log::append(path, vec![value], timestamp)?;

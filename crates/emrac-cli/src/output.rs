@@ -78,7 +78,10 @@ pub fn print_package_details(pkg: &PackageDetails, json: bool) {
 
 pub fn print_plan(plan: &Plan, json: bool) {
     if json {
-        println!("{}", serde_json::to_string_pretty(plan).unwrap());
+        // The plan, plus its digest: `--expect-plan <digest>` runs exactly this.
+        let mut value = serde_json::to_value(plan).unwrap();
+        value["digest"] = serde_json::Value::String(plan.digest());
+        println!("{}", serde_json::to_string_pretty(&value).unwrap());
         return;
     }
 
@@ -161,6 +164,11 @@ pub fn print_plan(plan: &Plan, json: bool) {
         )
     };
     println!("{label} : {}", human_size(size));
+    println!(
+        "Plan id          : {}   (`--expect-plan {}` runs only this plan)",
+        plan.short_digest(),
+        plan.short_digest()
+    );
 }
 
 pub fn print_pkgbuild(pkg: &str, content: &str) {

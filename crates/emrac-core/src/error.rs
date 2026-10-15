@@ -121,6 +121,10 @@ pub enum Error {
     #[error("pre-flight stopped this: {0}")]
     Preflight(String),
 
+    /// The plan the user approved is not the plan that would run now (u18).
+    #[error("{0}")]
+    PlanChanged(String),
+
     #[error("'{0}' isn't a date I understand — use YYYY-MM-DD, like 2026-10-11")]
     InvalidDate(String),
 
@@ -355,6 +359,7 @@ impl Error {
             | Error::Journal(_)
             | Error::SelfService(_)
             | Error::Preflight(_)
+            | Error::PlanChanged(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

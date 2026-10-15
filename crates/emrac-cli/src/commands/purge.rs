@@ -5,6 +5,7 @@ use crate::commands::history;
 use crate::output;
 use crate::prompt::confirm;
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     sources: &Sources,
     pkgs: &[String],
@@ -13,9 +14,12 @@ pub fn run(
     dry_run: bool,
     yes: bool,
     json: bool,
+    expect_plan: Option<&str>,
 ) -> Result<()> {
     let purge = sources.plan_purge(pkgs, cascade, recursive)?;
     output::print_purge(&purge, json);
+    crate::commands::plan_check::expect(&purge.plan, expect_plan)?;
+    let shown = crate::commands::plan_check::Shown::new(&purge.plan);
 
     if !purge.plan.is_empty() {
         crate::commands::preflight::run(
@@ -58,6 +62,9 @@ pub fn run(
         }
     }
 
+    crate::commands::plan_check::verify_before_commit(&shown, &purge.plan, &|| {
+        sources.plan_purge(pkgs, cascade, recursive).map(|p| p.plan)
+    })?;
     history::begin(&purge.plan)?;
     let result = sources.purge(pkgs, cascade, recursive);
     history::record(&purge.plan, &result);

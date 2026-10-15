@@ -209,6 +209,7 @@ fn run(cli: &Cli) -> Result<()> {
             pkgs,
             review,
             allow_partial,
+            expect_plan,
         } => commands::install::run(
             &sources,
             pkgs,
@@ -221,21 +222,43 @@ fn run(cli: &Cli) -> Result<()> {
             review.inspect || config.review.inspect_official,
             json,
             *allow_partial,
+            expect_plan.as_deref(),
         ),
         Commands::Remove {
             pkgs,
             cascade,
             recursive,
-        } => commands::remove::run(&sources, pkgs, *cascade, *recursive, dry_run, yes, json),
+            expect_plan,
+        } => commands::remove::run(
+            &sources,
+            pkgs,
+            *cascade,
+            *recursive,
+            dry_run,
+            yes,
+            json,
+            expect_plan.as_deref(),
+        ),
         Commands::Purge {
             pkgs,
             cascade,
             recursive,
-        } => commands::purge::run(&sources, pkgs, *cascade, *recursive, dry_run, yes, json),
+            expect_plan,
+        } => commands::purge::run(
+            &sources,
+            pkgs,
+            *cascade,
+            *recursive,
+            dry_run,
+            yes,
+            json,
+            expect_plan.as_deref(),
+        ),
         Commands::Upgrade {
             pkgs,
             review,
             allow_partial,
+            expect_plan,
         } => commands::upgrade::run(
             &sources,
             pkgs,
@@ -250,6 +273,7 @@ fn run(cli: &Cli) -> Result<()> {
             quiet,
             config.snapshot.before_upgrade,
             *allow_partial,
+            expect_plan.as_deref(),
         ),
         Commands::Cache { command } => {
             commands::cache::run(&sources, command.as_ref(), cache_settings())

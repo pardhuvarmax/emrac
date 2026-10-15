@@ -2680,6 +2680,7 @@ mod srcinfo_tests {
             status,
             error: None,
             rollback_of: None,
+            plan_digest: None,
         }
     }
 

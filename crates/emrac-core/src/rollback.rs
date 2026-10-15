@@ -411,6 +411,7 @@ mod tests {
             status: TxStatus::Committed,
             error: None,
             rollback_of: None,
+            plan_digest: None,
         }
     }
 

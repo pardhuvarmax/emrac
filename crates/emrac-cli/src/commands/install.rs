@@ -20,9 +20,12 @@ pub fn run(
     inspect: bool,
     json: bool,
     allow_partial: bool,
+    expect_plan: Option<&str>,
 ) -> Result<()> {
     let plan = sources.plan_install(pkgs, offline)?;
     output::print_plan(&plan, json);
+    crate::commands::plan_check::expect(&plan, expect_plan)?;
+    let shown = crate::commands::plan_check::Shown::new(&plan);
 
     if !plan.is_empty() {
         crate::commands::preflight::run(
@@ -64,6 +67,9 @@ pub fn run(
         return Ok(());
     }
 
+    crate::commands::plan_check::verify_before_commit(&shown, &plan, &|| {
+        sources.plan_install(pkgs, offline)
+    })?;
     history::begin(&plan)?;
     let result = (|| {
         if !official.is_empty() {

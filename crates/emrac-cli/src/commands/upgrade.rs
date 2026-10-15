@@ -22,6 +22,7 @@ pub fn run(
     quiet: bool,
     snapshot_first: bool,
     allow_partial: bool,
+    expect_plan: Option<&str>,
 ) -> Result<()> {
     let upgrade = sources.plan_upgrade(pkgs, offline)?;
 
@@ -48,6 +49,8 @@ pub fn run(
         }
     }
     output::print_plan(&upgrade.plan, json);
+    crate::commands::plan_check::expect(&upgrade.plan, expect_plan)?;
+    let shown = crate::commands::plan_check::Shown::new(&upgrade.plan);
     output::print_pin_notes(&upgrade.held, &upgrade.expired_pins, quiet);
 
     if !upgrade.plan.is_empty() {
@@ -126,6 +129,9 @@ pub fn run(
         !official_targets.is_empty()
     };
 
+    crate::commands::plan_check::verify_before_commit(&shown, &upgrade.plan, &|| {
+        sources.plan_upgrade(pkgs, offline).map(|u| u.plan)
+    })?;
     history::begin(&upgrade.plan)?;
     let result = (|| {
         if has_official_targets {
