@@ -5,7 +5,7 @@
 #
 # Each `ck "title" "command"` line is one check; the titles are listed in
 # docs/tests/emrac-tests.rst. Update the next line when you run them all.
-# last full run: after u11, 42 of 42 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2)
+# last full run: after u16, 44 of 44 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2)
 e=/usr/local/bin/emrac
 export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 n=0; bad=0
@@ -65,6 +65,9 @@ kill_midway() { sudo pacman -Rns --noconfirm tree >/dev/null 2>&1; $e install tr
 ck "journal: a normal transaction leaves none behind" "sudo pacman -Rns --noconfirm tree >/dev/null 2>&1; $e install tree --yes >/dev/null && [ ! -e $J ]"
 ck "journal: a killed install is found by doctor, described and recorded" "kill_midway; [ -e $J ] && $e doctor 2>&1 | grep -q 'Interrupted transaction' && $e history recover --dry-run 2>&1 | grep -q 'interrupted:' && [ -e $J ] && $e history recover 2>&1 | grep -q 'recorded as tx-' && [ ! -e $J ] && $e history --json | grep -q 'interrupted:' && $e history verify | grep -q 'the history verifies'"
 ck "journal: the next transaction records a cut-off one by itself" "kill_midway; [ -e $J ] && { pacman -Q tree >/dev/null 2>&1 && $e remove tree --yes >/dev/null || $e install tree --yes >/dev/null; }; [ ! -e $J ] && [ \$($e history --json | grep -c 'interrupted:') -ge 2 ]"
+# dependency views (u16)
+ck "tree, graph (text, dot, json), impact and cycles" "$e install tree --yes >/dev/null; $e tree tree | grep -q glibc && $e graph tree | grep -q 'tree -> glibc' && $e graph tree --format dot | grep -q 'digraph' && $e graph tree --format json | grep -q '\"edges\"' && $e impact tree | grep -q 'Breaks nothing' && $e impact glibc --remove | grep -q 'Needed by' && $e cycles >/dev/null"
+ck "impact --install shows the install plan" "$e impact bc --install | grep -q 'plans: install'"
 # self check (u11)
 ck "self check runs and names how emrac was installed" "$e self check 2>&1 | grep -q 'Installation'; [ \$($e self check >/dev/null 2>&1; echo \$?) -le 1 ]"
 ck "self check reports a cut-off transaction" "kill_midway; [ -e $J ] && $e self check 2>&1 | grep -q 'cut off'; $e history recover >/dev/null"

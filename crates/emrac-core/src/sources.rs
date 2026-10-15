@@ -9,7 +9,10 @@ use crate::backend::{
 };
 use crate::cache;
 use crate::config::Config;
-use crate::deps::{self, DepsReport, Orphan, RdepsReport, WhyReport};
+use crate::deps::{
+    self, DepsReport, GraphReport, ImpactItem, Orphan, RdepsReport, RemoveImpactReport, TreeReport,
+    UnitFact, WhyReport,
+};
 use crate::doctor::{self, DiskFact, DoctorInputs, DoctorReport, ReportEnv, ToolFact};
 use crate::downgrade::{self, DowngradePlan, VersionList};
 use crate::error::{Error, Result};
@@ -1866,6 +1869,114 @@ impl Sources {
         })
     }
 
+    /// The children of a package for `tree` and `graph`: installed packages
+    /// satisfying its required dependencies and, if asked, its optional ones.
+    fn dependency_children(&self, name: &str, optional: bool) -> Vec<(String, bool)> {
+        let mut out: Vec<(String, bool)> = self
+            .alpm
+            .installed_dependency_names(name)
+            .into_iter()
+            .map(|n| (n, false))
+            .collect();
+        if optional {
+            for n in self.alpm.installed_optional_names(name) {
+                if !out.iter().any(|(m, _)| *m == n) {
+                    out.push((n, true));
+                }
+            }
+        }
+        out
+    }
+
+    /// `emrac tree`: the dependencies of an installed package, as a tree.
+    pub fn tree(&self, pkg: &str, depth: Option<usize>, optional: bool) -> Result<TreeReport> {
+        let (version, _, _) = self
+            .alpm
+            .package_info(pkg)
+            .ok_or_else(|| Error::NotInstalled(pkg.to_string()))?;
+        Ok(TreeReport {
+            name: pkg.to_string(),
+            version,
+            lines: deps::tree_lines(pkg, depth, &|n| self.dependency_children(n, optional)),
+        })
+    }
+
+    /// `emrac graph`: the same graph as `tree`, as nodes and edges.
+    pub fn graph(&self, pkg: &str, depth: Option<usize>, optional: bool) -> Result<GraphReport> {
+        self.alpm
+            .package_info(pkg)
+            .ok_or_else(|| Error::NotInstalled(pkg.to_string()))?;
+        Ok(deps::graph_of(pkg, depth, &|n| {
+            self.dependency_children(n, optional)
+        }))
+    }
+
+    /// `emrac cycles`: packages that require each other in a ring.
+    pub fn cycles(&self) -> Vec<Vec<String>> {
+        let names = self.alpm.installed_names();
+        deps::cycles(&names, &|n| self.alpm.installed_dependency_names(n))
+    }
+
+    /// `emrac impact <pkg> --remove`.
+    pub fn impact_remove(&self, pkg: &str) -> Result<RemoveImpactReport> {
+        let (version, size, explicit) = self
+            .alpm
+            .package_info(pkg)
+            .ok_or_else(|| Error::NotInstalled(pkg.to_string()))?;
+        let impact = deps::remove_impact(
+            pkg,
+            &|n| self.alpm.dependents(n).map(|d| d.0).unwrap_or_default(),
+            &|n| self.alpm.dependents(n).map(|d| d.1).unwrap_or_default(),
+            &|n| self.alpm.installed_dependency_names(n),
+            &|n| self.alpm.is_explicit(n),
+        );
+        let item = |n: &String| {
+            let (version, installed_size, _) = self.alpm.package_info(n).unwrap_or_default();
+            ImpactItem {
+                name: n.clone(),
+                version,
+                installed_size,
+            }
+        };
+        let breaks: Vec<ImpactItem> = impact.breaks.iter().map(item).collect();
+        let unneeded: Vec<ImpactItem> = impact.unneeded.iter().map(item).collect();
+        let reclaimed_bytes = size
+            + breaks.iter().map(|i| i.installed_size).sum::<u64>()
+            + unneeded.iter().map(|i| i.installed_size).sum::<u64>();
+
+        let enabled = enabled_units();
+        let mut units = Vec::new();
+        let mut desktop = Vec::new();
+        let gone = std::iter::once(pkg.to_string())
+            .chain(impact.breaks.iter().cloned())
+            .chain(impact.unneeded.iter().cloned());
+        for name in gone {
+            let files = self.alpm.package_files(&name);
+            for unit in deps::service_units(&files) {
+                units.push(UnitFact {
+                    enabled: enabled.contains(&unit),
+                    unit,
+                    package: name.clone(),
+                });
+            }
+            desktop.extend(deps::desktop_entries(&files));
+        }
+        desktop.sort();
+        desktop.dedup();
+        Ok(RemoveImpactReport {
+            name: pkg.to_string(),
+            version,
+            explicit,
+            installed_size: size,
+            breaks,
+            optional_for: impact.optional_for,
+            unneeded,
+            reclaimed_bytes,
+            units,
+            desktop_entries: desktop,
+        })
+    }
+
     /// `emrac orphans`.
     pub fn orphans(&self) -> Vec<Orphan> {
         self.alpm.orphans()
@@ -2353,6 +2464,29 @@ fn read_trimmed(path: &str) -> Option<String> {
 }
 
 /// Is `name` an executable somewhere on `$PATH`?
+/// Names of systemd units linked from a `*.wants` / `*.requires` directory
+/// under `/etc/systemd/system`, that is, enabled on this machine.
+fn enabled_units() -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    let Ok(rd) = std::fs::read_dir("/etc/systemd/system") else {
+        return out;
+    };
+    for dir in rd.flatten() {
+        let name = dir.file_name().to_string_lossy().into_owned();
+        if !(name.ends_with(".wants") || name.ends_with(".requires")) {
+            continue;
+        }
+        if let Ok(units) = std::fs::read_dir(dir.path()) {
+            out.extend(
+                units
+                    .flatten()
+                    .map(|u| u.file_name().to_string_lossy().into_owned()),
+            );
+        }
+    }
+    out
+}
+
 fn on_path(name: &str) -> bool {
     use std::os::unix::fs::PermissionsExt;
     std::env::var_os("PATH").is_some_and(|paths| {

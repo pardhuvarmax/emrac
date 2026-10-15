@@ -93,6 +93,9 @@ what was seen for each.
    * - ``deps`` / ``rdeps`` / ``why`` / ``orphans``
      - u12
      - Read-only dependency inspection
+   * - ``tree`` / ``graph`` / ``impact`` / ``cycles``
+     - u16
+     - The dependency tree and graph (text, Graphviz dot, JSON), what removing, installing or upgrading a package affects, and rings of packages that require each other; read-only
    * - ``pin`` / ``unpin``
      - u13
      - Hold a package back from ``upgrade`` with a reason and an expiry

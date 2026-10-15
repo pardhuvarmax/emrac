@@ -275,6 +275,24 @@ fn run(cli: &Cli) -> Result<()> {
         Commands::Rdeps { pkg } => commands::deps::rdeps(&sources, pkg, json),
         Commands::Why { pkg } => commands::deps::why(&sources, pkg, json),
         Commands::Orphans => commands::deps::orphans(&sources, json),
+        Commands::Tree {
+            pkg,
+            depth,
+            optional,
+        } => commands::deps::tree(&sources, pkg, *depth, *optional, json),
+        Commands::Graph {
+            pkg,
+            depth,
+            optional,
+            format,
+        } => commands::deps::graph(&sources, pkg, *depth, *optional, *format, json),
+        Commands::Impact {
+            pkg,
+            install,
+            upgrade,
+            ..
+        } => commands::deps::impact(&sources, pkg, *install, *upgrade, offline, json),
+        Commands::Cycles => commands::deps::cycles(&sources, json),
         Commands::Snapshot { command } => {
             commands::snapshot::create(&sources, command.as_ref(), json)
         }

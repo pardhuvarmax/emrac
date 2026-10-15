@@ -714,6 +714,61 @@ impl AlpmBackend {
         names
     }
 
+    /// Names of every installed package.
+    pub fn installed_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .handle
+            .localdb()
+            .pkgs()
+            .into_iter()
+            .map(|p| p.name().to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// Names of the installed packages satisfying `name`'s optional dependencies.
+    pub fn installed_optional_names(&self, name: &str) -> Vec<String> {
+        let local = self.handle.localdb();
+        let Ok(pkg) = local.pkg(name) else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = pkg
+            .optdepends()
+            .iter()
+            .filter_map(|d| local.pkgs().find_satisfier(d.name()))
+            .map(|p| p.name().to_string())
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    /// `(version, installed size, installed on purpose)` of an installed package.
+    pub fn package_info(&self, name: &str) -> Option<(String, u64, bool)> {
+        let pkg = self.handle.localdb().pkg(name).ok()?;
+        Some((
+            pkg.version().to_string(),
+            pkg.isize().max(0) as u64,
+            pkg.reason() == alpm::PackageReason::Explicit,
+        ))
+    }
+
+    /// The files an installed package owns, as pacman records them (no leading slash).
+    pub fn package_files(&self, name: &str) -> Vec<String> {
+        self.handle
+            .localdb()
+            .pkg(name)
+            .map(|p| {
+                p.files()
+                    .files()
+                    .iter()
+                    .map(|f| String::from_utf8_lossy(f.name()).into_owned())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub fn is_explicit(&self, name: &str) -> bool {
         self.handle
             .localdb()

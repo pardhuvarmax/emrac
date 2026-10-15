@@ -41,7 +41,10 @@ pub use cache::{
     Scope as CacheScope,
 };
 pub use config::{BuildConfig, Config, SelfConfig};
-pub use deps::{DepEntry, DepsReport, Orphan, RdepsReport, WhyReport};
+pub use deps::{
+    DepEntry, DepsReport, Edge, GraphReport, ImpactItem, Orphan, RdepsReport, RemoveImpactReport,
+    TreeLine, TreeReport, UnitFact, WhyReport,
+};
 pub use doctor::{DoctorReport, Status as DoctorStatus};
 pub use downgrade::{DowngradePlan, ListedVersion, VersionList};
 pub use error::{Error, Result};

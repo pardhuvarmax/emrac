@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 335
+     - 340
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
@@ -31,9 +31,9 @@ Totals
      - 27
    * - **Automated total**
      -
-     - **371**
+     - **376**
 
-emrac-core library (335)
+emrac-core library (340)
 ------------------------
 
 ``audit::tests`` (39)
@@ -165,10 +165,15 @@ emrac-core library (335)
 * ``unknown_keys_error_on_get_set_and_unset``
 * ``unset_then_save_resets_only_that_key_on_disk``
 
-``deps::tests`` (5)
-~~~~~~~~~~~~~~~~~~~
+``deps::tests`` (10)
+~~~~~~~~~~~~~~~~~~~~
 
 * ``closure_lists_each_package_once_with_its_shallowest_depth``
+* ``cycles_are_found_as_groups_and_a_plain_chain_has_none``
+* ``removal_impact_lists_who_breaks_what_becomes_unneeded_and_optional_users``
+* ``the_graph_lists_nodes_and_edges_to_a_depth_and_renders_dot``
+* ``the_tree_expands_each_package_once_and_marks_repeats_and_cuts``
+* ``units_and_desktop_entries_are_picked_from_a_file_list``
 * ``why_breaks_ties_alphabetically``
 * ``why_is_none_without_an_explicit_dependent``
 * ``why_prefers_the_shortest_chain``
@@ -578,7 +583,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: after u11, 42 of 42 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u16, 44 of 44 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2).
 
 * version names the builder
 * usage error exits 2
@@ -620,7 +625,9 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u11, 42 of 42 passe
 * journal: a normal transaction leaves none behind
 * journal: a killed install is found by doctor, described and recorded
 * journal: the next transaction records a cut-off one by itself
+* tree, graph (text, dot, json), impact and cycles
+* impact --install shows the install plan
 * self check runs and names how emrac was installed
 * self check reports a cut-off transaction
 
-(42 checks.)
+(44 checks.)

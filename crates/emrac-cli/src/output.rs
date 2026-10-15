@@ -750,6 +750,176 @@ pub fn print_why(report: &WhyReport, json: bool) {
     }
 }
 
+pub fn print_tree(report: &emrac_core::TreeReport, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(report).unwrap());
+        return;
+    }
+    println!("{} {}", report.name, report.version);
+    if report.lines.is_empty() {
+        println!("  (no dependencies)");
+        return;
+    }
+    for l in &report.lines {
+        let mut tags = Vec::new();
+        if l.optional {
+            tags.push("optional");
+        }
+        if l.repeat {
+            tags.push("shown above");
+        }
+        if l.cut {
+            tags.push("more below");
+        }
+        let tag = if tags.is_empty() {
+            String::new()
+        } else {
+            format!("  ({})", tags.join(", "))
+        };
+        println!("{}{}{tag}", "  ".repeat(l.depth), l.name);
+    }
+}
+
+pub fn print_graph(report: &emrac_core::GraphReport) {
+    println!(
+        "{} ({} packages, {} links)",
+        report.root,
+        report.nodes.len(),
+        report.edges.len()
+    );
+    let mut from: Vec<&str> = report.edges.iter().map(|e| e.from.as_str()).collect();
+    from.dedup();
+    let mut seen = std::collections::HashSet::new();
+    for name in std::iter::once(report.root.as_str()).chain(from) {
+        if !seen.insert(name) {
+            continue;
+        }
+        let kids: Vec<String> = report
+            .edges
+            .iter()
+            .filter(|e| e.from == name)
+            .map(|e| {
+                if e.optional {
+                    format!("{} (optional)", e.to)
+                } else {
+                    e.to.clone()
+                }
+            })
+            .collect();
+        if !kids.is_empty() {
+            println!("  {name} -> {}", kids.join(", "));
+        }
+    }
+}
+
+pub fn print_cycles(groups: &[Vec<String>], json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(groups).unwrap());
+        return;
+    }
+    if groups.is_empty() {
+        say!(
+            Voice::Notes,
+            "no dependency cycles among the installed packages."
+        );
+        return;
+    }
+    say!(
+        Voice::Found,
+        "{} group(s) of packages that require each other:\n",
+        groups.len()
+    );
+    for g in groups {
+        println!("  {}", g.join(" ⇄ "));
+    }
+    println!("\nA cycle is not a fault: pacman installs such a group together.");
+}
+
+pub fn print_impact_remove(r: &emrac_core::RemoveImpactReport, json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(r).unwrap());
+        return;
+    }
+    say!(
+        Voice::Found,
+        "removing {} {} ({}){}\n",
+        r.name,
+        r.version,
+        human_size(r.installed_size),
+        if r.explicit {
+            ", which you installed"
+        } else {
+            ", installed as a dependency"
+        }
+    );
+    if r.breaks.is_empty() {
+        println!("Breaks nothing: no installed package needs it.");
+    } else {
+        println!("Needed by (pacman refuses to remove it unless these go too, `--cascade`):");
+        const SHOWN: usize = 30;
+        for i in r.breaks.iter().take(SHOWN) {
+            println!(
+                "  {} {}  ({})",
+                i.name,
+                i.version,
+                human_size(i.installed_size)
+            );
+        }
+        if r.breaks.len() > SHOWN {
+            println!(
+                "  and {} more (`--json` lists all {})",
+                r.breaks.len() - SHOWN,
+                r.breaks.len()
+            );
+        }
+    }
+    if !r.optional_for.is_empty() {
+        println!(
+            "\nOptional for (they keep working, but lose a feature): {}",
+            r.optional_for.join("  ")
+        );
+    }
+    if !r.unneeded.is_empty() {
+        println!("\nDependencies nothing else would need afterwards:");
+        for i in r.unneeded.iter().take(30) {
+            println!(
+                "  {} {}  ({})",
+                i.name,
+                i.version,
+                human_size(i.installed_size)
+            );
+        }
+        if r.unneeded.len() > 30 {
+            println!(
+                "  and {} more (`--json` lists all {})",
+                r.unneeded.len() - 30,
+                r.unneeded.len()
+            );
+        }
+    }
+    if !r.units.is_empty() {
+        println!("\nServices that would go:");
+        for u in &r.units {
+            println!(
+                "  {}  ({}{})",
+                u.unit,
+                u.package,
+                if u.enabled { ", enabled" } else { "" }
+            );
+        }
+    }
+    if !r.desktop_entries.is_empty() {
+        println!(
+            "\nDesktop entries that would go: {}",
+            r.desktop_entries.join("  ")
+        );
+    }
+    println!(
+        "\nDisk space freed in all: {}",
+        human_size(r.reclaimed_bytes)
+    );
+}
+
 pub fn print_orphans(orphans: &[Orphan], json: bool) {
     if json {
         println!("{}", serde_json::to_string_pretty(orphans).unwrap());

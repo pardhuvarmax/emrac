@@ -274,6 +274,56 @@ pub enum Commands {
     /// List dependencies nothing needs any more
     Orphans,
 
+    /// Show a package's dependencies as a tree (installed packages)
+    Tree {
+        pkg: String,
+
+        /// Show only this many levels
+        #[arg(long, value_name = "N")]
+        depth: Option<usize>,
+
+        /// Include optional dependencies that are installed
+        #[arg(long)]
+        optional: bool,
+    },
+
+    /// The dependency graph of a package, as text, Graphviz `dot` or JSON
+    Graph {
+        pkg: String,
+
+        /// Show only this many levels
+        #[arg(long, value_name = "N")]
+        depth: Option<usize>,
+
+        /// Include optional dependencies that are installed
+        #[arg(long)]
+        optional: bool,
+
+        /// text (default), dot (for `dot -Tsvg`) or json
+        #[arg(long, value_enum, default_value = "text")]
+        format: GraphFormat,
+    },
+
+    /// What a change to a package would affect (default: removing it)
+    Impact {
+        pkg: String,
+
+        /// What removing it would break, leave unneeded and free (default)
+        #[arg(long, conflicts_with_all = ["install", "upgrade"])]
+        remove: bool,
+
+        /// What installing it would do (the install plan)
+        #[arg(long, conflicts_with_all = ["remove", "upgrade"])]
+        install: bool,
+
+        /// What upgrading it would do (the upgrade plan)
+        #[arg(long, conflicts_with_all = ["remove", "install"])]
+        upgrade: bool,
+    },
+
+    /// Find installed packages that require each other in a ring
+    Cycles,
+
     /// Save, list, show or delete named restore points of the installed
     /// package set (no subcommand: save a new one)
     Snapshot {
@@ -539,6 +589,13 @@ pub enum HistoryCommand {
         #[arg(long)]
         failed: bool,
     },
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum GraphFormat {
+    Text,
+    Dot,
+    Json,
 }
 
 #[derive(Subcommand)]
