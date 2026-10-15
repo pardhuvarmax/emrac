@@ -110,6 +110,7 @@ pub fn run(
         !official_targets.is_empty()
     };
 
+    history::begin(&upgrade.plan)?;
     let result = (|| {
         if has_official_targets {
             if inspect {

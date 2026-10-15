@@ -150,6 +150,8 @@ pub struct DoctorInputs {
     pub ledger: Option<LedgerFacts>,
     /// The history has records (so a missing ledger is worth a word).
     pub history_has_records: bool,
+    /// A transaction that was cut off (u10): when it started and what it was.
+    pub interrupted: Option<String>,
     /// Set when there is a ledger: what the audit watch saw.
     pub ledger_watch: Option<WatchFacts>,
     pub config: ConfigFacts,
@@ -631,6 +633,19 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             c = c.detail(notes);
         }
         checks.push(c);
+    }
+
+    // A transaction that was cut off.
+    if let Some(what) = &i.interrupted {
+        checks.push(
+            check(
+                "interrupted",
+                "Interrupted transaction",
+                Status::Warning,
+                format!("a transaction was cut off before it was recorded: {what}"),
+            )
+            .fix("emrac history recover"),
+        );
     }
 
     // The ledger.
@@ -1451,6 +1466,20 @@ mod tests {
             ..good
         });
         assert_eq!(one(&evaluate(&i), "ledger").status, Status::Problem);
+    }
+
+    #[test]
+    fn a_cut_off_transaction_is_a_warning_with_the_recover_fix() {
+        let mut i = healthy();
+        i.interrupted = Some("install of 2 packages, started 2026-10-15 10:00 UTC".into());
+        let r = evaluate(&i);
+        let c = one(&r, "interrupted");
+        assert_eq!(c.status, Status::Warning);
+        assert_eq!(c.fix.as_deref(), Some("emrac history recover"));
+        assert!(evaluate(&healthy())
+            .checks
+            .iter()
+            .all(|c| c.id != "interrupted"));
     }
 
     #[test]

@@ -44,6 +44,7 @@ pub fn run(
         }
     }
 
+    history::begin(&purge.plan)?;
     let result = sources.purge(pkgs, cascade, recursive);
     history::record(&purge.plan, &result);
     result

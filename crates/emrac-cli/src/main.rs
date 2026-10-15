@@ -79,6 +79,7 @@ fn run(cli: &Cli) -> Result<()> {
             Some(HistoryCommand::Verify { repair, against }) => {
                 commands::history::verify(*repair, against.as_deref(), cli.json)
             }
+            Some(HistoryCommand::Recover) => commands::history::recover(cli.dry_run, cli.json),
             Some(HistoryCommand::Anchor) => commands::history::anchor(cli.json),
             Some(HistoryCommand::Sync) => commands::ledger::sync_interactive(cli.json),
             Some(HistoryCommand::Ack { ids, failed }) => {

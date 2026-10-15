@@ -26,6 +26,7 @@ pub fn run(
         return Ok(());
     }
 
+    history::begin(&downgrade.plan)?;
     let result = sources.execute_downgrade(&downgrade);
     history::record(&downgrade.plan, &result);
     result?;

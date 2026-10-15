@@ -27,6 +27,7 @@ pub fn run(
         return Ok(());
     }
 
+    history::begin(&reinstall.plan)?;
     let result = sources.execute_reinstall(&reinstall).and_then(|()| {
         for name in &reinstall.rebuild {
             crate::commands::aur_install::build_and_install(sources, name, choice)?;

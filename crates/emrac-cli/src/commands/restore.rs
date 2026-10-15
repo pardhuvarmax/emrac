@@ -26,5 +26,29 @@ pub fn run(
         return Ok(());
     }
 
-    sources.execute_restore(&restore, &mut |plan, result| history::record(plan, result))
+    // One journal for the whole restore; each step is recorded as it ends.
+    let mut all = emrac_core::Plan {
+        action: emrac_core::PlanAction::Upgrade,
+        packages: Vec::new(),
+        total_download_size: 0,
+        total_installed_size_delta: 0,
+        removals: Vec::new(),
+        provider_choices: Vec::new(),
+        warnings: Vec::new(),
+    };
+    for e in &restore.entries {
+        all.packages.push(emrac_core::PlannedPackage {
+            name: e.item.name.clone(),
+            version: e.item.to.clone(),
+            repo: if e.item.foreign { "aur" } else { "restore" }.to_string(),
+            explicit: true,
+            previous_version: e.item.from.clone(),
+        });
+    }
+    history::begin(&all)?;
+    let result = sources.execute_restore(&restore, &mut |plan, result| {
+        history::record_step(plan, result)
+    });
+    emrac_core::journal::finish();
+    result
 }

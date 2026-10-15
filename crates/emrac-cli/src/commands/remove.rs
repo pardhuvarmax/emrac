@@ -27,6 +27,7 @@ pub fn run(
         return Ok(());
     }
 
+    history::begin(&plan)?;
     let result = sources.remove(pkgs, cascade, recursive);
     history::record(&plan, &result);
     result

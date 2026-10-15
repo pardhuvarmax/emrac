@@ -34,6 +34,7 @@ pub fn run(
         return Ok(());
     }
 
+    history::begin(&rollback.plan)?;
     let result = sources.execute_rollback(&rollback);
     history::record_rollback(&rollback, &result);
     result

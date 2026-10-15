@@ -513,6 +513,10 @@ pub enum HistoryCommand {
     /// Send the history lines the ledger does not hold yet (asks for sudo)
     Sync,
 
+    /// Find a transaction that was cut off (power loss, killed terminal), say
+    /// what it did from pacman's log and put it on record
+    Recover,
+
     /// Print a short code for the newest history line, to keep somewhere
     /// else (a note, a repository): `verify --against` checks it later
     Anchor,

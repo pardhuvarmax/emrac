@@ -48,6 +48,7 @@ pub fn run(
         return Ok(());
     }
 
+    history::begin(&plan)?;
     let result = (|| {
         if !official.is_empty() {
             if inspect {

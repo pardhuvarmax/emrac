@@ -8,6 +8,7 @@ mod downgrade;
 mod error;
 mod history;
 mod history_log;
+pub mod journal;
 pub mod ledger;
 pub mod ledger_watch;
 mod manifest;

@@ -14,3 +14,6 @@ again from `u1`. They go into the next release (`r3`). `u1` to `u5` had no plan 
 - [`u9-ledger-watch.md`](./u9-ledger-watch.md) — the kernel audit system watches the ledger, emrac
   reports any write that is not its own, and chain anchors catch a rewrite.
 
+- [`u10-journal.md`](./u10-journal.md) — a journal written before a transaction and a lock held
+  during it, so a transaction cut off by a crash or a power loss is found next time, described
+  from pacman's log and the installed versions, and put on record (`history recover`).

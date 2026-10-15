@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 292
+     - 300
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
@@ -31,9 +31,9 @@ Totals
      - 23
    * - **Automated total**
      -
-     - **324**
+     - **332**
 
-emrac-core library (292)
+emrac-core library (300)
 ------------------------
 
 ``audit::tests`` (39)
@@ -173,9 +173,10 @@ emrac-core library (292)
 * ``why_prefers_the_shortest_chain``
 * ``why_survives_cycles``
 
-``doctor::tests`` (24)
+``doctor::tests`` (25)
 ~~~~~~~~~~~~~~~~~~~~~~
 
+* ``a_cut_off_transaction_is_a_warning_with_the_recover_fix``
 * ``a_failed_online_check_says_so_instead_of_guessing``
 * ``a_healthy_machine_has_nothing_above_a_note``
 * ``a_kernel_whose_modules_are_gone_says_reboot``
@@ -246,6 +247,17 @@ emrac-core library (292)
 * ``the_archive_moves_only_old_records_and_never_the_newest_twenty``
 * ``unreadable_history_is_an_io_error_not_empty``
 * ``write_failure_is_reported``
+
+``journal::tests`` (7)
+~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_half_written_journal_is_still_an_interruption``
+* ``a_journal_that_can_be_locked_is_interrupted_and_one_that_cannot_is_running``
+* ``a_log_shorter_than_the_offset_is_read_from_the_start``
+* ``each_planned_package_is_done_not_reached_or_otherwise_changed``
+* ``removals_and_installs_and_reinstalls_are_told_by_what_is_installed_or_logged``
+* ``the_journal_is_private``
+* ``the_pacman_log_is_read_for_actions_and_an_unfinished_transaction``
 
 ``ledger::tests`` (10)
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -511,7 +523,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed (u7 adds 4, u8 adds 5, u9 adds 2).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u10, 40 of 40 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3).
 
 * version names the builder
 * usage error exits 2
@@ -550,5 +562,8 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: r2, 26 of 26 passed (u7 a
 * ledger: a deleted history is rebuilt from it
 * an anchor taken now still matches later, after more transactions
 * doctor reports the ledger watch (not set up here)
+* journal: a normal transaction leaves none behind
+* journal: a killed install is found by doctor, described and recorded
+* journal: the next transaction records a cut-off one by itself
 
-(37 checks.)
+(40 checks.)

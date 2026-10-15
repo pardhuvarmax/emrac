@@ -5,7 +5,7 @@
 #
 # Each `ck "title" "command"` line is one check; the titles are listed in
 # docs/tests/emrac-tests.rst. Update the next line when you run them all.
-# last full run: r2, 26 of 26 passed (u7 adds 4, u8 adds 5, u9 adds 2)
+# last full run: after u10, 40 of 40 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3)
 e=/usr/local/bin/emrac
 export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 n=0; bad=0
@@ -59,4 +59,10 @@ ck "ledger: a deleted history is rebuilt from it" "rm -f \$HOME/.local/share/emr
 # anchors and the watch (u9); the container has no audit daemon or journal, so only these
 ck "an anchor taken now still matches later, after more transactions" "A=\$($e history anchor | head -1); $e history verify --against \$A | grep -q 'still matches'"
 ck "doctor reports the ledger watch (not set up here)" "$e doctor 2>&1 | grep -q 'Ledger watch'"
+# the transaction journal (u10): an emrac killed in the middle of an install
+J=$HOME/.local/share/emrac/journal.json
+kill_midway() { sudo pacman -Rns --noconfirm tree >/dev/null 2>&1; $e install tree --yes >/dev/null 2>&1 & p=$!; for i in $(seq 1 200); do [ -e $J ] && break; sleep 0.05; done; kill -9 $p 2>/dev/null; wait $p 2>/dev/null; sleep 5; true; }
+ck "journal: a normal transaction leaves none behind" "sudo pacman -Rns --noconfirm tree >/dev/null 2>&1; $e install tree --yes >/dev/null && [ ! -e $J ]"
+ck "journal: a killed install is found by doctor, described and recorded" "kill_midway; [ -e $J ] && $e doctor 2>&1 | grep -q 'Interrupted transaction' && $e history recover --dry-run 2>&1 | grep -q 'interrupted:' && [ -e $J ] && $e history recover 2>&1 | grep -q 'recorded as tx-' && [ ! -e $J ] && $e history --json | grep -q 'interrupted:' && $e history verify | grep -q 'the history verifies'"
+ck "journal: the next transaction records a cut-off one by itself" "kill_midway; [ -e $J ] && { pacman -Q tree >/dev/null 2>&1 && $e remove tree --yes >/dev/null || $e install tree --yes >/dev/null; }; [ ! -e $J ] && [ \$($e history --json | grep -c 'interrupted:') -ge 2 ]"
 echo; echo "$n checks, $bad failed"

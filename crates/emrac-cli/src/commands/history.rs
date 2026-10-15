@@ -2,8 +2,8 @@ use emrac_core::{say, Voice};
 use std::collections::HashMap;
 
 use emrac_core::{
-    ledger, ledger_watch, parse_date, parse_duration, parse_tx_id, rolled_back_by, Config, Error,
-    History, Plan, Result, RollbackPlan, RECENT_KEPT,
+    journal, ledger, ledger_watch, parse_date, parse_duration, parse_tx_id, rolled_back_by, Config,
+    Error, History, Plan, Result, RollbackPlan, RECENT_KEPT,
 };
 
 use crate::{output, prompt};
@@ -416,9 +416,149 @@ pub fn record_rollback(rollback: &RollbackPlan, outcome: &Result<()>) {
     log(&rollback.plan, outcome, Some(&rollback.target));
 }
 
+/// One step of a longer transaction (a restore runs several plans): recorded,
+/// but the journal stays until the whole transaction ends.
+pub fn record_step(plan: &Plan, outcome: &Result<()>) {
+    log_step(plan, outcome, None);
+}
+
 fn log(plan: &Plan, outcome: &Result<()>, rollback_of: Option<&str>) {
+    log_step(plan, outcome, rollback_of);
+    journal::finish();
+}
+
+fn log_step(plan: &Plan, outcome: &Result<()>, rollback_of: Option<&str>) {
     match History::record(plan, outcome, rollback_of) {
         Ok(_) => super::ledger::sync_after(),
         Err(err) => say!(Voice::Warns, "couldn't record this in your history — {err}"),
+    }
+}
+
+/// Starts the journal for a transaction that is about to run. A cut-off
+/// transaction left by an earlier run is put on record first; another emrac
+/// changing packages right now is a refusal.
+pub fn begin(plan: &Plan) -> Result<()> {
+    match journal::state()? {
+        journal::State::Nothing => {}
+        journal::State::Running => {
+            return Err(Error::Journal(
+                "another emrac is changing packages right now: wait for it to finish".into(),
+            ))
+        }
+        journal::State::Interrupted(found) => {
+            recover_found(*found, false, false)?;
+        }
+    }
+    if let Err(err) = journal::begin(plan, journal::unix_now()) {
+        // The journal protects against a crash; failing to write it must not
+        // block the transaction, but the user is told.
+        if matches!(err, Error::Journal(ref m) if m.starts_with("another emrac")) {
+            return Err(err);
+        }
+        say!(
+            Voice::Warns,
+            "couldn't write the transaction journal ({err}); if this run is cut off, emrac won't know what it did."
+        );
+    }
+    Ok(())
+}
+
+/// `history recover`: finds a transaction that was cut off, says what is
+/// known about it, and puts it on record.
+pub fn recover(dry_run: bool, json: bool) -> Result<()> {
+    match journal::state()? {
+        journal::State::Nothing => {
+            if json {
+                println!("{}", serde_json::json!({ "interrupted": false }));
+            } else {
+                say!(
+                    Voice::Notes,
+                    "no interrupted transaction: nothing to recover."
+                );
+            }
+            Ok(())
+        }
+        journal::State::Running => {
+            say!(
+                Voice::Notes,
+                "another emrac is changing packages right now; nothing is interrupted."
+            );
+            Ok(())
+        }
+        journal::State::Interrupted(found) => recover_found(*found, dry_run, json),
+    }
+}
+
+fn recover_found(found: journal::Interrupted, dry_run: bool, json: bool) -> Result<()> {
+    let Some(entry) = found.entry.clone() else {
+        if dry_run {
+            say!(
+                Voice::Suspects,
+                "a transaction was cut off while its journal was being written, so nothing is known about it."
+            );
+            return Ok(());
+        }
+        say!(
+            Voice::Suspects,
+            "a transaction was cut off before its journal was complete: nothing is known about what it did. Run `emrac verify` on what you were changing, and check `emrac doctor`."
+        );
+        return found.clear();
+    };
+    let range = found.log_range();
+    let sources = emrac_core::Sources::init()?;
+    let assessment = journal::assess(&entry, &range, &|n| sources.installed_version(n));
+    let summary = assessment.summary(&entry);
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "interrupted": true,
+                "recorded": !dry_run,
+                "started": entry.started,
+                "action": entry.action,
+                "done": assessment.done,
+                "not_reached": assessment.not_reached,
+                "changed_otherwise": assessment.other,
+                "pacman_unfinished": assessment.pacman_unfinished,
+            })
+        );
+    } else {
+        say!(Voice::Suspects, "{summary}");
+        if assessment.pacman_unfinished {
+            say!(
+                Voice::Suggests,
+                "pacman may have stopped in the middle of a package: `emrac verify` on the packages above will tell."
+            );
+        }
+        if std::path::Path::new("/var/lib/pacman/db.lck").exists() {
+            say!(
+                Voice::Suggests,
+                "pacman's lock /var/lib/pacman/db.lck is still there; once no pacman is running, `sudo rm /var/lib/pacman/db.lck` frees it."
+            );
+        }
+    }
+    if dry_run {
+        return Ok(());
+    }
+    match History::record_interrupted(&entry, &assessment) {
+        Ok(record) => {
+            super::ledger::sync_after();
+            if !json {
+                say!(
+                    Voice::Remembers,
+                    "recorded as {} in your history (failed; `emrac history ack {}` once you have dealt with it).",
+                    record.id,
+                    record.id
+                );
+            }
+            found.clear()
+        }
+        Err(err) => {
+            say!(
+                Voice::Warns,
+                "couldn't record the interrupted transaction ({err}); the journal stays so you can try again."
+            );
+            Ok(())
+        }
     }
 }

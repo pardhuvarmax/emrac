@@ -66,6 +66,16 @@ impl History {
         Self::record_to(&Self::path()?, plan, outcome, rollback_of, now())
     }
 
+    /// Records a cut-off transaction (u10) as a failed one whose error says
+    /// what pacman's log and the installed versions show.
+    pub fn record_interrupted(
+        entry: &crate::journal::Entry,
+        assessment: &crate::journal::Assessment,
+    ) -> Result<TransactionRecord> {
+        let outcome: Result<()> = Err(Error::Journal(assessment.summary(entry)));
+        Self::record_to(&Self::path()?, &entry.plan(), &outcome, None, now())
+    }
+
     /// Every record in the live log, oldest first.
     pub fn all() -> Result<Vec<TransactionRecord>> {
         read_from(&Self::path()?)

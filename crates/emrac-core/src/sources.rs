@@ -1672,6 +1672,18 @@ impl Sources {
                 archives: v.archives,
             });
         let history_has_records = History::all().is_ok_and(|r| !r.is_empty());
+        let interrupted = match crate::journal::state() {
+            Ok(crate::journal::State::Interrupted(found)) => Some(match &found.entry {
+                Some(e) => format!(
+                    "{} of {} packages, started {} UTC",
+                    action_word(e.action),
+                    e.packages.len(),
+                    crate::history::format_utc(e.started)
+                ),
+                None => "its journal is incomplete".to_string(),
+            }),
+            _ => None,
+        };
         let ledger_path = crate::ledger::path(crate::ledger::running_as_root());
         let ledger = match crate::ledger::read(&ledger_path) {
             Ok(Some(l)) => {
@@ -1777,6 +1789,7 @@ impl Sources {
             history,
             ledger,
             history_has_records,
+            interrupted,
             ledger_watch,
             config: doctor::ConfigFacts {
                 parse_error: config_error,
