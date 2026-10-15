@@ -1507,3 +1507,43 @@ fn self_upgrade_plans_from_the_synced_index_and_refuses_a_copy_no_package_owns()
     // Nothing was started.
     assert!(!home.0.join(".local/share/emrac/self/journal.json").exists());
 }
+
+#[test]
+fn config_refresh_restyles_an_old_plain_file_and_keeps_its_values() {
+    let home = Home::new("refresh");
+    let path = home.0.join(".config/emrac/config.toml");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    write(&path, "[flags]\nyes = true\n\n[cache]\npolicy = \"lean\"\n");
+
+    let out = home.run(&["config", "refresh"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(text.starts_with("# ╔"), "{text}");
+    assert!(
+        text.contains("yes = true") && text.contains("◂ changed"),
+        "{text}"
+    );
+    assert_eq!(
+        stdout(&home.run(&["config", "get", "flags.yes"])).trim(),
+        "true"
+    );
+    assert_eq!(
+        stdout(&home.run(&["config", "get", "cache.policy"])).trim(),
+        "lean"
+    );
+
+    // Already in the current style: nothing to do, the file is untouched.
+    let out = home.run(&["config", "refresh"]);
+    assert!(
+        stdout(&out).contains("already in the current style"),
+        "{}",
+        stdout(&out)
+    );
+    assert_eq!(fs::read_to_string(&path).unwrap(), text);
+
+    // A file that does not parse is not touched.
+    write(&path, "not = = toml\n");
+    let out = home.run(&["config", "refresh"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(fs::read_to_string(&path).unwrap(), "not = = toml\n");
+}

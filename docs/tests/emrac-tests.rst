@@ -28,10 +28,10 @@ Totals
      - 9
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 27
+     - 28
    * - **Automated total**
      -
-     - **381**
+     - **382**
 
 emrac-core library (345)
 ------------------------
@@ -553,10 +553,10 @@ emrac command line, unit tests (9)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (27)
+emrac command line, integration tests (28)
 ------------------------------------------
 
-``(top level)`` (27)
+``(top level)`` (28)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -568,6 +568,7 @@ emrac command line, integration tests (27)
 * ``audit_reads_the_whole_package_directory``
 * ``closing_the_pipe_early_does_not_panic``
 * ``completion_prints_a_script_for_each_shell``
+* ``config_refresh_restyles_an_old_plain_file_and_keeps_its_values``
 * ``config_round_trip_and_errors``
 * ``doctor_report_is_markdown_without_the_users_identity``
 * ``doctor_reports_checks_as_json_and_exits_with_the_problem_count``

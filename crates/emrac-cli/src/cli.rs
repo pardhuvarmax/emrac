@@ -714,6 +714,11 @@ pub enum ConfigCommand {
     /// Reset a key to its default
     Unset { key: String },
 
+    /// Rewrite config.toml in the current style (banner, descriptions, the
+    /// changed flags), keeping every value; a file that is already in that
+    /// style is left as it is
+    Refresh,
+
     /// Open the config file in $EDITOR
     Edit,
 
