@@ -93,6 +93,9 @@ what was seen for each.
    * - ``deps`` / ``rdeps`` / ``why`` / ``orphans``
      - u12
      - Read-only dependency inspection
+   * - pre-flight checks
+     - u17
+     - Before a transaction changes anything: space on ``/``, the cache, ``/boot`` and the EFI partition, battery, mirrors, the kernel safety net (another kernel, fallback initramfs, boot entry, never removing the last kernel), and a gate against partial upgrades (``--allow-partial``); ``[safety]`` settings
    * - ``tree`` / ``graph`` / ``impact`` / ``cycles``
      - u16
      - The dependency tree and graph (text, Graphviz dot, JSON), what removing, installing or upgrading a package affects, and rings of packages that require each other; read-only

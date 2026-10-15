@@ -76,3 +76,20 @@ mode mapping. Container: install with an upgrade pending is refused, `--allow-pa
 through, a pinned package doesn't count, the same install after `upgrade` is fine; a full
 `upgrade --dry-run` prints the pre-flight; removing the only kernel is refused (a fake kernel
 package, not a real one).
+
+## What was built, and where it differs
+
+- As planned: `preflight.rs` (gather + a pure `evaluate`), `Sources::preflight`, `[safety]`
+  (`preflight`, `partial_upgrade`), `--allow-partial` on `install` and `upgrade`, `Error::Preflight`,
+  and one call in each of `install`, `upgrade`, `reinstall`, `downgrade`, `rollback`/`undo`/`redo`,
+  `restore`, `remove` and `purge`. The partial-upgrade gate runs only for `install` and `upgrade`
+  (a restore or a rollback also take repository packages but are a deliberate return to a state).
+- Found by the tests: matching a kernel image name by substring called `vmlinuz-linux-zen` a match
+  for `vmlinuz-linux`; it is now a whole-word match (`names_image`).
+- Found by the container run: the fresh image really was a partial upgrade (older than the
+  repositories), and the gate said so before the first fixture was built. The test script brings
+  the image fully up to date first.
+- On the developer's machine `/boot` is root-only; the kernel checks that need to read it
+  degrade to notes, the ones that don't (another kernel installed, free space) still run.
+- Container runs: `dev/e2e/run.sh preflight` (a local repository, a real waiting upgrade, a fake
+  kernel): 8 of 8.

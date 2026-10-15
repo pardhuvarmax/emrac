@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 346
+     - 356
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 9
@@ -31,9 +31,9 @@ Totals
      - 28
    * - **Automated total**
      -
-     - **383**
+     - **393**
 
-emrac-core library (346)
+emrac-core library (356)
 ------------------------
 
 ``audit::tests`` (39)
@@ -143,7 +143,7 @@ emrac-core library (346)
 * ``purge_ignores_the_protections_and_trim_stops_at_the_limit``
 * ``the_standard_policy_is_unchanged_by_the_lean_facts``
 
-``config::tests`` (18)
+``config::tests`` (19)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_partial_build_section_keeps_the_other_defaults``
@@ -160,6 +160,7 @@ emrac-core library (346)
 * ``search_limit_accepts_numbers_and_unset``
 * ``set_get_unset_roundtrip_for_every_bool_key``
 * ``the_cache_policy_is_standard_or_lean_and_keeps_at_least_nothing_invalid``
+* ``the_safety_keys_default_to_the_strict_settings_and_validate``
 * ``the_self_service_keys_validate_and_unset_restores_the_defaults``
 * ``toml_roundtrip_preserves_values``
 * ``unknown_keys_error_on_get_set_and_unset``
@@ -353,6 +354,19 @@ emrac-core library (346)
 * ``partition_splits_active_from_lapsed``
 * ``pin_list_unpin_round_trip_and_replace``
 * ``unpinning_an_unpinned_name_changes_nothing``
+
+``preflight::tests`` (9)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_kernel_image_is_found_as_a_whole_word_only``
+* ``a_kernel_upgrade_checks_boot_space_fallbacks_and_the_boot_entry``
+* ``a_waiting_upgrade_makes_a_partial_upgrade_a_problem_that_lists_the_packages``
+* ``an_unreadable_boot_degrades_to_notes_and_a_fixed_space_floor``
+* ``mount_tables_and_mirror_addresses_are_parsed``
+* ``power_matters_only_on_battery_and_only_for_risky_work``
+* ``removing_the_last_kernel_is_a_problem_and_removing_one_of_two_is_not``
+* ``space_on_root_and_for_downloads_is_judged_and_added_when_they_share_a_disk``
+* ``the_network_check_needs_a_download_and_distinguishes_some_from_none``
 
 ``purge::tests`` (2)
 ~~~~~~~~~~~~~~~~~~~~
@@ -594,7 +608,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: after u16, 43 of 44 passed (downgrade --list: archive.archlinux.org did not answer that day) (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u17, 44 of 44 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2).
 
 * version names the builder
 * usage error exits 2

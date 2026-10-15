@@ -15,6 +15,7 @@ podman build -t emrac-test -f dev/container/Containerfile dev/container
 
 # dev/e2e/run.sh          the end-to-end checks of the binary
 # dev/e2e/run.sh install  the checks of the root install.sh
+# dev/e2e/run.sh preflight  a pending upgrade and a fake kernel: the partial-upgrade gate and the kernel checks
 # dev/e2e/run.sh self     builds two releases and runs self upgrade / downgrade for real
 case "${1:-}" in
 self)
@@ -44,6 +45,13 @@ PY
     podman run --rm \
         -v "$fx:/fx:ro" \
         -v "$repo_root/dev/e2e/self-upgrade.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+preflight)
+    echo "==> Running the pre-flight checks (a local repository, a pending upgrade, a fake kernel)"
+    podman run --rm --user root \
+        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/preflight.sh:/t.sh:ro" \
         emrac-test bash /t.sh
     ;;
 install)

@@ -20,3 +20,4 @@ again from `u1`. They go into the next release (`r3`). `u1` to `u5` had no plan 
 - [`u11-self-check.md`](./u11-self-check.md) — `emrac self check`: a read-only look at emrac's own installation that needs no pacman, config or network.
 - [`u12-self-service.md`](./u12-self-service.md) — u12–u15: the release index, `self sync`/`news` (u12), `self diagnose` (u13), `self upgrade` (u14), `self downgrade` (u15).
 - [`u16-dependency-views.md`](./u16-dependency-views.md) — `tree`, `graph` (text, dot, json), `impact` (remove, install, upgrade) and `cycles`.
+- [`u17-preflight.md`](./u17-preflight.md) — checks before a transaction changes anything (space, `/boot`, power, network, the kernel safety net) and the partial-upgrade gate.
