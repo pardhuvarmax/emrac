@@ -25,6 +25,20 @@ pub fn run(
     };
     output::print_rollback(&rollback, json);
 
+    if !rollback.plan.is_empty() {
+        crate::commands::preflight::run(
+            sources,
+            &rollback.plan,
+            &crate::commands::preflight::Options {
+                dry_run,
+                offline,
+                json,
+                allow_partial: false,
+                check_partial: false,
+                aur_builds: false,
+            },
+        )?;
+    }
     if rollback.plan.is_empty() || dry_run {
         return Ok(());
     }

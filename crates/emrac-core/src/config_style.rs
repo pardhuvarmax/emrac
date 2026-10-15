@@ -128,6 +128,25 @@ const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        name: "safety",
+        icon: "⛨",
+        blurb: "the checks made before a transaction changes anything",
+        keys: &[
+            key(
+                "preflight",
+                Kind::Text,
+                "block stops a transaction that would run out of space, leave no way to boot, or run the battery flat; warn shows the problem and goes on; off skips the checks",
+                "\"block\" | \"warn\" | \"off\"",
+            ),
+            key(
+                "partial_upgrade",
+                Kind::Text,
+                "what to do when installing or upgrading only some packages would leave other upgrades waiting, a partial upgrade that Arch does not support; --allow-partial lets one run through",
+                "\"refuse\" | \"warn\" | \"off\"",
+            ),
+        ],
+    },
+    Section {
         name: "self",
         icon: "↻",
         blurb: "how emrac learns about its own releases (`emrac self`)",
@@ -335,6 +354,8 @@ mod tests {
             ("build.tmpfs_gib", "2"),
             ("cache.policy", "lean"),
             ("cache.keep_days", "3"),
+            ("safety.preflight", "warn"),
+            ("safety.partial_upgrade", "off"),
             ("self.source", "file:///tmp/a \"b\"\\c/releases.json"),
             ("self.channel", "prerelease"),
             ("self.require_signature", "true"),
@@ -344,7 +365,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 22, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 24, "{text}");
     }
 
     #[test]
@@ -401,6 +422,7 @@ mod tests {
             "[snapshot]",
             "[build]",
             "[cache]",
+            "[safety]",
             "[self]",
         ] {
             assert!(text.contains(&format!("\n{s}\n")), "{s}");

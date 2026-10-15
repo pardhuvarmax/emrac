@@ -136,6 +136,11 @@ pub enum Commands {
 
         #[command(flatten)]
         review: AurReviewFlags,
+
+        /// Go ahead although other installed packages have upgrades waiting
+        /// (a partial upgrade, which Arch does not support); for this run only
+        #[arg(long)]
+        allow_partial: bool,
     },
 
     /// Remove one or more installed packages
@@ -174,6 +179,11 @@ pub enum Commands {
 
         #[command(flatten)]
         review: AurReviewFlags,
+
+        /// Go ahead although other installed packages have upgrades waiting
+        /// (a partial upgrade, which Arch does not support); for this run only
+        #[arg(long)]
+        allow_partial: bool,
     },
 
     /// View or change persisted defaults (~/.config/emrac/config.toml)

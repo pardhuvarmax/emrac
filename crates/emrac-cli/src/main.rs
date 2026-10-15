@@ -205,7 +205,11 @@ fn run(cli: &Cli) -> Result<()> {
             quiet,
         ),
         Commands::Info { pkg } => commands::info::run(&sources, pkg, offline, json),
-        Commands::Install { pkgs, review } => commands::install::run(
+        Commands::Install {
+            pkgs,
+            review,
+            allow_partial,
+        } => commands::install::run(
             &sources,
             pkgs,
             dry_run,
@@ -216,6 +220,7 @@ fn run(cli: &Cli) -> Result<()> {
             BuildChoice::from_flags(review, &config.build, !yes),
             review.inspect || config.review.inspect_official,
             json,
+            *allow_partial,
         ),
         Commands::Remove {
             pkgs,
@@ -227,7 +232,11 @@ fn run(cli: &Cli) -> Result<()> {
             cascade,
             recursive,
         } => commands::purge::run(&sources, pkgs, *cascade, *recursive, dry_run, yes, json),
-        Commands::Upgrade { pkgs, review } => commands::upgrade::run(
+        Commands::Upgrade {
+            pkgs,
+            review,
+            allow_partial,
+        } => commands::upgrade::run(
             &sources,
             pkgs,
             dry_run,
@@ -240,6 +249,7 @@ fn run(cli: &Cli) -> Result<()> {
             json,
             quiet,
             config.snapshot.before_upgrade,
+            *allow_partial,
         ),
         Commands::Cache { command } => {
             commands::cache::run(&sources, command.as_ref(), cache_settings())

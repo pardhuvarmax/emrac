@@ -18,6 +18,20 @@ pub fn run(
     let plan = sources.plan_remove(pkgs, cascade, recursive)?;
     output::print_plan(&plan, json);
 
+    if !plan.is_empty() {
+        crate::commands::preflight::run(
+            sources,
+            &plan,
+            &crate::commands::preflight::Options {
+                dry_run,
+                offline: false,
+                json,
+                allow_partial: false,
+                check_partial: false,
+                aur_builds: false,
+            },
+        )?;
+    }
     if plan.is_empty() || dry_run {
         return Ok(());
     }

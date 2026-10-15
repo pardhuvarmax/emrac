@@ -1888,6 +1888,46 @@ impl Sources {
         out
     }
 
+    /// The pre-flight checks for a plan (u17). `check_partial` adds the
+    /// partial-upgrade gate, which only `install` and `upgrade` use.
+    pub fn preflight(
+        &self,
+        plan: &Plan,
+        aur_builds: bool,
+        offline: bool,
+        check_partial: bool,
+    ) -> Result<Vec<doctor::Check>> {
+        let mut facts = crate::preflight::gather(plan, offline, aur_builds, &|n| {
+            self.alpm.package_info(n).is_some()
+        });
+        let from_repos = plan.packages.iter().any(|p| p.repo != "aur");
+        if check_partial
+            && from_repos
+            && matches!(plan.action, PlanAction::Install | PlanAction::Upgrade)
+        {
+            facts.partial = Some(self.partial_upgrade_facts(plan)?);
+        }
+        Ok(crate::preflight::evaluate(&facts))
+    }
+
+    /// Upgrades the repositories have for installed packages that this plan
+    /// would leave waiting. Pins are the user's own choice and not counted.
+    fn partial_upgrade_facts(&self, plan: &Plan) -> Result<crate::preflight::Partial> {
+        let (active, _) = self.pins()?;
+        let ignore: Vec<String> = active.iter().map(|p| p.name.clone()).collect();
+        let all = self.pacman.resolve_full_upgrade(&[], None)?;
+        let kept = self.pacman.resolve_full_upgrade(&ignore, None)?;
+        let planned: std::collections::HashSet<&str> =
+            plan.packages.iter().map(|p| p.name.as_str()).collect();
+        Ok(crate::preflight::Partial {
+            pinned: all.len().saturating_sub(kept.len()),
+            pending: kept
+                .into_iter()
+                .filter(|n| !planned.contains(n.as_str()))
+                .collect(),
+        })
+    }
+
     /// `emrac tree`: the dependencies of an installed package, as a tree.
     pub fn tree(&self, pkg: &str, depth: Option<usize>, optional: bool) -> Result<TreeReport> {
         let (version, _, _) = self

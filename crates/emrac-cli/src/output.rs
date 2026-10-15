@@ -750,6 +750,51 @@ pub fn print_why(report: &WhyReport, json: bool) {
     }
 }
 
+/// The pre-flight block under a plan: just a line when all is well.
+pub fn print_preflight(checks: &[emrac_core::DoctorCheck], allowed: bool) {
+    use emrac_core::DoctorStatus as S;
+    if checks.is_empty() {
+        return;
+    }
+    if checks.iter().all(|c| c.status == S::Ok) {
+        say!(
+            Voice::Confirms,
+            "pre-flight passed: {}.",
+            checks
+                .iter()
+                .map(|c| c.title)
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        return;
+    }
+    println!("\nPre-flight");
+    for c in checks {
+        let mark = match c.status {
+            S::Ok => "  ok     ",
+            S::Note => "  note   ",
+            S::Warning => "  warning",
+            S::Problem => "  PROBLEM",
+        };
+        println!("{mark}  {}: {}", c.title, c.summary);
+        for d in &c.detail {
+            println!("            - {d}");
+        }
+        if let Some(fix) = &c.fix {
+            if c.status != S::Ok {
+                println!("            {} {fix}", Voice::Suggests.short_for(false));
+            }
+        }
+    }
+    if allowed {
+        say!(
+            Voice::Warns,
+            "--allow-partial: going on although upgrades are waiting."
+        );
+    }
+    println!();
+}
+
 pub fn print_tree(report: &emrac_core::TreeReport, json: bool) {
     if json {
         println!("{}", serde_json::to_string_pretty(report).unwrap());

@@ -17,12 +17,7 @@ pub fn run(
     let restore = sources.plan_restore(name, prune, offline)?;
     output::print_restore(&restore, json);
 
-    if restore.is_empty() || dry_run {
-        return Ok(());
-    }
-
-    if !yes && !confirm("Proceed with the restore?") {
-        say!(Voice::Notes, "okay, nothing restored.");
+    if restore.is_empty() {
         return Ok(());
     }
 
@@ -45,6 +40,28 @@ pub fn run(
             previous_version: e.item.from.clone(),
         });
     }
+    crate::commands::preflight::run(
+        sources,
+        &all,
+        &crate::commands::preflight::Options {
+            dry_run,
+            offline,
+            json,
+            allow_partial: false,
+            check_partial: false,
+            aur_builds: all.packages.iter().any(|p| p.repo == "aur"),
+        },
+    )?;
+
+    if dry_run {
+        return Ok(());
+    }
+
+    if !yes && !confirm("Proceed with the restore?") {
+        say!(Voice::Notes, "okay, nothing restored.");
+        return Ok(());
+    }
+
     history::begin(&all)?;
     let result = sources.execute_restore(&restore, &mut |plan, result| {
         history::record_step(plan, result)

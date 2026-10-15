@@ -117,6 +117,10 @@ pub enum Error {
     #[error("{0}")]
     SelfService(String),
 
+    /// The pre-flight checks stopped a transaction (u17); the text lists why.
+    #[error("pre-flight stopped this: {0}")]
+    Preflight(String),
+
     #[error("'{0}' isn't a date I understand — use YYYY-MM-DD, like 2026-10-11")]
     InvalidDate(String),
 
@@ -350,6 +354,7 @@ impl Error {
             | Error::History(_)
             | Error::Journal(_)
             | Error::SelfService(_)
+            | Error::Preflight(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

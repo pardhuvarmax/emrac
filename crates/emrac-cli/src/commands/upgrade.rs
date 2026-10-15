@@ -21,6 +21,7 @@ pub fn run(
     json: bool,
     quiet: bool,
     snapshot_first: bool,
+    allow_partial: bool,
 ) -> Result<()> {
     let upgrade = sources.plan_upgrade(pkgs, offline)?;
 
@@ -48,6 +49,21 @@ pub fn run(
     }
     output::print_plan(&upgrade.plan, json);
     output::print_pin_notes(&upgrade.held, &upgrade.expired_pins, quiet);
+
+    if !upgrade.plan.is_empty() {
+        crate::commands::preflight::run(
+            sources,
+            &upgrade.plan,
+            &crate::commands::preflight::Options {
+                dry_run,
+                offline,
+                json,
+                allow_partial,
+                check_partial: true,
+                aur_builds: upgrade.plan.packages.iter().any(|p| p.repo == "aur"),
+            },
+        )?;
+    }
 
     if upgrade.plan.is_empty() || dry_run {
         return Ok(());

@@ -17,6 +17,20 @@ pub fn run(
     let purge = sources.plan_purge(pkgs, cascade, recursive)?;
     output::print_purge(&purge, json);
 
+    if !purge.plan.is_empty() {
+        crate::commands::preflight::run(
+            sources,
+            &purge.plan,
+            &crate::commands::preflight::Options {
+                dry_run,
+                offline: false,
+                json,
+                allow_partial: false,
+                check_partial: false,
+                aur_builds: false,
+            },
+        )?;
+    }
     if purge.plan.is_empty() || dry_run {
         return Ok(());
     }

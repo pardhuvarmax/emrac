@@ -17,6 +17,20 @@ pub fn run(
     let downgrade = sources.plan_downgrade(pkg, version, offline)?;
     output::print_downgrade(&downgrade, json);
 
+    if !downgrade.plan.is_empty() {
+        crate::commands::preflight::run(
+            sources,
+            &downgrade.plan,
+            &crate::commands::preflight::Options {
+                dry_run,
+                offline,
+                json,
+                allow_partial: false,
+                check_partial: false,
+                aur_builds: false,
+            },
+        )?;
+    }
     if dry_run {
         return Ok(());
     }

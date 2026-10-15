@@ -15,6 +15,7 @@ pub mod ledger;
 pub mod official_inspect;
 pub mod pacnew;
 pub mod pin;
+pub mod preflight;
 pub mod purge;
 pub mod reinstall;
 pub mod remove;

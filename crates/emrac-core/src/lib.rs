@@ -19,6 +19,7 @@ mod pacnew_log;
 mod pacnew_ops;
 mod pins;
 mod plan;
+pub mod preflight;
 mod purge;
 mod reinstall;
 mod rollback;
@@ -41,12 +42,12 @@ pub use cache::{
     parse_duration, parse_size, Decision as CacheDecision, Op as CacheOp, Outcome as CacheOutcome,
     Scope as CacheScope,
 };
-pub use config::{BuildConfig, Config, SelfConfig};
+pub use config::{BuildConfig, Config, SafetyConfig, SelfConfig};
 pub use deps::{
     DepEntry, DepsReport, Edge, GraphReport, ImpactItem, Orphan, RdepsReport, RemoveImpactReport,
     TreeLine, TreeReport, UnitFact, WhyReport,
 };
-pub use doctor::{DoctorReport, Status as DoctorStatus};
+pub use doctor::{Check as DoctorCheck, DoctorReport, Status as DoctorStatus};
 pub use downgrade::{DowngradePlan, ListedVersion, VersionList};
 pub use error::{Error, Result};
 pub use history::{

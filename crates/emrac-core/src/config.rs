@@ -26,6 +26,36 @@ pub struct Config {
     pub cache: CacheConfig,
     #[serde(default, rename = "self")]
     pub self_service: SelfConfig,
+    #[serde(default)]
+    pub safety: SafetyConfig,
+}
+
+/// How strict the checks before a transaction are (u17).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SafetyConfig {
+    /// `"block"` stops on a problem, `"warn"` shows it and goes on, `"off"` skips the checks.
+    #[serde(default = "default_preflight")]
+    pub preflight: String,
+    /// `"refuse"`, `"warn"` or `"off"`: what to do when installing or upgrading only some
+    /// packages would leave upgrades waiting (a partial upgrade).
+    #[serde(default = "default_partial")]
+    pub partial_upgrade: String,
+}
+
+fn default_preflight() -> String {
+    "block".to_string()
+}
+fn default_partial() -> String {
+    "refuse".to_string()
+}
+
+impl Default for SafetyConfig {
+    fn default() -> Self {
+        Self {
+            preflight: default_preflight(),
+            partial_upgrade: default_partial(),
+        }
+    }
 }
 
 /// Where emrac looks for news of its own releases (`emrac self`). See
@@ -262,6 +292,8 @@ impl Config {
             "build.tmpfs_gib" => self.build.tmpfs_gib.to_string(),
             "cache.policy" => self.cache.policy.clone(),
             "cache.keep_days" => self.cache.keep_days.to_string(),
+            "safety.preflight" => self.safety.preflight.clone(),
+            "safety.partial_upgrade" => self.safety.partial_upgrade.clone(),
             "self.source" => self.self_service.source.clone(),
             "self.channel" => self.self_service.channel.clone(),
             "self.require_signature" => self.self_service.require_signature.to_string(),
@@ -326,6 +358,18 @@ impl Config {
             "cache.keep_days" => {
                 self.cache.keep_days = value.parse().map_err(|_| invalid())?;
             }
+            "safety.preflight" => {
+                if !matches!(value, "block" | "warn" | "off") {
+                    return Err(invalid());
+                }
+                self.safety.preflight = value.to_string();
+            }
+            "safety.partial_upgrade" => {
+                if !matches!(value, "refuse" | "warn" | "off") {
+                    return Err(invalid());
+                }
+                self.safety.partial_upgrade = value.to_string();
+            }
             "self.source" => {
                 if !(value.starts_with("https://") || value.starts_with("file://")) {
                     return Err(invalid());
@@ -377,6 +421,8 @@ impl Config {
             "build.tmpfs_gib" => self.build.tmpfs_gib = default_tmpfs_gib(),
             "cache.policy" => self.cache.policy = default_cache_policy(),
             "cache.keep_days" => self.cache.keep_days = default_keep_days(),
+            "safety.preflight" => self.safety.preflight = default_preflight(),
+            "safety.partial_upgrade" => self.safety.partial_upgrade = default_partial(),
             "self.source" => self.self_service.source = default_self_source(),
             "self.channel" => self.self_service.channel = default_self_channel(),
             "self.require_signature" => self.self_service.require_signature = false,
@@ -464,6 +510,27 @@ mod tests {
             "a percentage"
         );
         config.set("build.memory_percent", "100").unwrap();
+    }
+
+    #[test]
+    fn the_safety_keys_default_to_the_strict_settings_and_validate() {
+        let mut c = Config::default();
+        assert_eq!(c.get("safety.preflight").unwrap(), "block");
+        assert_eq!(c.get("safety.partial_upgrade").unwrap(), "refuse");
+        c.set("safety.preflight", "warn").unwrap();
+        c.set("safety.partial_upgrade", "off").unwrap();
+        assert_eq!(c.get("safety.preflight").unwrap(), "warn");
+        for (k, bad) in [
+            ("safety.preflight", "never"),
+            ("safety.partial_upgrade", "block"),
+            ("safety.preflight", ""),
+        ] {
+            assert!(c.set(k, bad).is_err(), "{k}={bad}");
+        }
+        c.unset("safety.preflight").unwrap();
+        c.unset("safety.partial_upgrade").unwrap();
+        assert_eq!(c.get("safety.preflight").unwrap(), "block");
+        assert_eq!(c.get("safety.partial_upgrade").unwrap(), "refuse");
     }
 
     #[test]

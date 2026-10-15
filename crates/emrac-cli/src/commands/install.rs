@@ -19,9 +19,25 @@ pub fn run(
     choice: BuildChoice,
     inspect: bool,
     json: bool,
+    allow_partial: bool,
 ) -> Result<()> {
     let plan = sources.plan_install(pkgs, offline)?;
     output::print_plan(&plan, json);
+
+    if !plan.is_empty() {
+        crate::commands::preflight::run(
+            sources,
+            &plan,
+            &crate::commands::preflight::Options {
+                dry_run,
+                offline,
+                json,
+                allow_partial,
+                check_partial: true,
+                aur_builds: plan.packages.iter().any(|p| p.repo == "aur"),
+            },
+        )?;
+    }
 
     if plan.is_empty() || dry_run {
         return Ok(());

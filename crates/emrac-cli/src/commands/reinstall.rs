@@ -18,6 +18,20 @@ pub fn run(
     let reinstall = sources.plan_reinstall(pkgs, offline)?;
     output::print_reinstall(&reinstall, json);
 
+    if !reinstall.plan.is_empty() {
+        crate::commands::preflight::run(
+            sources,
+            &reinstall.plan,
+            &crate::commands::preflight::Options {
+                dry_run,
+                offline: false,
+                json,
+                allow_partial: false,
+                check_partial: false,
+                aur_builds: !reinstall.rebuild.is_empty(),
+            },
+        )?;
+    }
     if dry_run {
         return Ok(());
     }
