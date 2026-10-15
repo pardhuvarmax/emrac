@@ -381,6 +381,28 @@ fn copy_tree(from: &Path, to: &Path, skip: &[&str]) -> Result<()> {
     Ok(())
 }
 
+/// Removes a staging folder even when a build left folders in it that its
+/// owner cannot enter (makepkg's `pkg/` under fakeroot, a test's fixture): the
+/// permissions are widened first, since a plain removal stops at the first one.
+pub fn remove_tree(dir: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    fn relax(p: &Path) {
+        let Ok(meta) = fs::symlink_metadata(p) else {
+            return;
+        };
+        if meta.is_dir() {
+            let _ = fs::set_permissions(p, fs::Permissions::from_mode(0o700));
+            if let Ok(rd) = fs::read_dir(p) {
+                for e in rd.flatten() {
+                    relax(&e.path());
+                }
+            }
+        }
+    }
+    relax(dir);
+    let _ = fs::remove_dir_all(dir);
+}
+
 /// Downloads `url` to `dest`, checking the SHA-256 as it goes. `https://` or,
 /// for a local mirror, `file://`.
 pub fn download_verified(url: &str, dest: &Path, sha256: &str) -> Result<()> {
@@ -628,7 +650,7 @@ pub fn execute(
         })
     })();
 
-    let _ = fs::remove_dir_all(&stage);
+    remove_tree(&stage);
     append_log(
         now,
         op,
@@ -970,6 +992,29 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn a_staging_folder_with_folders_nobody_can_enter_is_still_removed() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = std::env::temp_dir().join(format!("emrac-rmtree-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(d.join("build/pkg/usr/bin")).unwrap();
+        fs::write(d.join("build/pkg/usr/bin/x"), b"x").unwrap();
+        fs::write(d.join("build/pkg.tar.zst"), b"x").unwrap();
+        fs::set_permissions(
+            d.join("build/pkg/usr/bin"),
+            fs::Permissions::from_mode(0o000),
+        )
+        .unwrap();
+        fs::set_permissions(d.join("build/pkg"), fs::Permissions::from_mode(0o000)).unwrap();
+        assert!(
+            fs::remove_dir_all(&d).is_err(),
+            "a plain removal fails on this tree"
+        );
+        remove_tree(&d);
+        assert!(!d.exists());
+        remove_tree(&d); // already gone: fine
     }
 
     #[test]
