@@ -275,6 +275,14 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
   .meter{width:72px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
+/* slice kinds: i incubation (amber), u update (accent), r release (green); a quiet tint, not a badge */
+.k-i{color:color-mix(in srgb,var(--warn) 78%,var(--text))}
+.k-u{color:color-mix(in srgb,var(--link) 72%,var(--text))}
+.k-r{color:color-mix(in srgb,var(--ok) 78%,var(--text))}
+.k-r a{color:inherit;text-decoration:underline dotted}
+table.box tr:has(.k-i) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--warn) 45%,transparent)}
+table.box tr:has(.k-u) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--link) 40%,transparent)}
+table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--ok) 55%,transparent)}
 </style>
 </head>
 <body>
@@ -511,61 +519,61 @@ use_agent = true</pre>
   <table class="box resp">
     <thead><tr><th>Slice</th><th>Date</th><th>Change</th></tr></thead>
     <tbody>
-      <tr><td><b>u1</b> <small>since r3</small></td><td>2026-10-16</td><td><code>emrac self upgrade</code> and <code>self downgrade</code> also update a copy no package owns (installed with <code>cargo install</code> or put in <code>~/.local/bin</code>): in place, with the old file kept and put back if the new one fails. Releases are now published by a pipeline with a review and an approval step.</td></tr>
-      <tr><td><b><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r3">r3</a></b></td><td>2026-10-15</td><td>Third release: r2 plus the updates u1&ndash;u20. A history you can check and a ledger only root can change, a journal for cut-off transactions, pre-flight checks and plan ids, AUR trust signals and the Arch news gate, <code>rebuild</code>, and emrac updating itself through pacman; checked with 440 tests and three container suites.</td></tr>
-      <tr><td><b>u20</b> <small>since r2</small></td><td>2026-10-15</td><td>Trust and the safety net: AUR trust signals, the Arch news gate (critical news stops an upgrade), a backup and check of pacman&rsquo;s database, repository trust, update risk and <code>emrac report</code>.</td></tr>
-      <tr><td><b>u19</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac rebuild</code> and <code>--check</code> / <code>--stale</code>: AUR packages a library, Python or Qt update broke, built again through the audited path; binary packages named and left alone.</td></tr>
-      <tr><td><b>u18</b> <small>since r2</small></td><td>2026-10-15</td><td>Plan ids and <code>--expect-plan</code>; a plan that waited is made again before it commits and must be the same.</td></tr>
-      <tr><td><b>u17</b> <small>since r2</small></td><td>2026-10-15</td><td>Pre-flight checks (space, <code>/boot</code>, power, mirrors, the kernel safety net) and the partial-upgrade gate.</td></tr>
-      <tr><td><b>u16</b> <small>since r2</small></td><td>2026-10-15</td><td><code>tree</code>, <code>graph</code>, <code>impact</code> and <code>cycles</code>.</td></tr>
-      <tr><td><b>u15</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self downgrade</code>.</td></tr>
-      <tr><td><b>u14</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self upgrade</code>: download, verify, build a package, install it with pacman.</td></tr>
-      <tr><td><b>u13</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self diagnose</code> and the journal for emrac&rsquo;s own operations.</td></tr>
-      <tr><td><b>u12</b> <small>since r2</small></td><td>2026-10-15</td><td><code>self sync</code> and <code>self news</code>: a checked copy of the release index, optionally verified against a gpg key.</td></tr>
-      <tr><td><b>u11</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self check</code>.</td></tr>
-      <tr><td><b>u10</b> <small>since r2</small></td><td>2026-10-15</td><td>A journal for transactions: one that is cut off is found next time and recorded (<code>history recover</code>).</td></tr>
-      <tr><td><b>u9</b> <small>since r2</small></td><td>2026-10-15</td><td>The ledger watches itself: audit rules, <code>ledger events</code>, history anchors.</td></tr>
-      <tr><td><b>u8</b> <small>since r2</small></td><td>2026-10-15</td><td>A root-owned append-only ledger that the history is compared with and can be rebuilt from.</td></tr>
-      <tr><td><b>u7</b> <small>since r2</small></td><td>2026-10-15</td><td>History you can check: hash chain, <code>history verify</code>, archive and acknowledge.</td></tr>
-      <tr><td><b>u6</b> <small>since r2</small></td><td>2026-10-14</td><td>emrac&rsquo;s voice: twelve verbs that say how sure a line is and what to do.</td></tr>
-      <tr><td><b>u5</b> <small>since r2</small></td><td>2026-10-14</td><td>An install script that checks a pinned checksum and installs a pacman package.</td></tr>
-      <tr><td><b>u4</b> <small>since r2</small></td><td>2026-10-14</td><td>A sandbox-test guard that matches the real probe.</td></tr>
-      <tr><td><b>u3</b> <small>since r2</small></td><td>2026-10-14</td><td>Quieter tests.</td></tr>
-      <tr><td><b>u2</b> <small>since r2</small></td><td>2026-10-14</td><td>Licensed GPL-3.0-or-later.</td></tr>
-      <tr><td><b>u1</b> <small>since r2</small></td><td>2026-10-14</td><td>A tracked list of passing tests and a README in every folder.</td></tr>
-      <tr><td><b><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r2">r2</a></b></td><td>2026-10-14</td><td>Second release: r1 plus the updates u1&ndash;u30. Reviewed, audited and sandboxed AUR builds, plans that match what pacman will do, undo after a real upgrade, <code>doctor</code>, <code>pacnew</code> and <code>cache</code>; checked with 271 tests and 26 end-to-end runs against a real pacman.</td></tr>
-      <tr><td><b>u30</b> <small>since r1</small></td><td>2026-10-14</td><td><code>pacnew</code> checks a file before applying it, records every change, can <code>revert</code> it, shows <code>status</code> and lets you edit a conflicted merge by hand.</td></tr>
-      <tr><td><b>u29</b> <small>since r1</small></td><td>2026-10-14</td><td><code>cache clean --lean</code> (or <code>cache.policy = "lean"</code>) keeps one rollback set: what undoing the last <code>cache.keep_days</code> days needs, AUR builds and held-back packages. Rollback now fetches current versions from the repositories.</td></tr>
-      <tr><td><b>u28</b> <small>since r1</small></td><td>2026-10-14</td><td><code>emrac cache</code>: list, stats, clean, trim and purge over source, build, binary and pacman caches; keeps what <code>undo</code> needs; dry-run summarizes what stays.</td></tr>
-      <tr><td><b>u27</b> <small>since r1</small></td><td>2026-10-14</td><td><code>emrac pacnew</code>: a three-way comparison tells your edits from upstream&rsquo;s; keep, take or merge each file with a backup and <code>sudo</code>.</td></tr>
-      <tr><td><b>u26</b> <small>since r1</small></td><td>2026-10-14</td><td>Dependency conflicts that stop an AUR build are explained and a swap is offered; also fixed: split packages, fakeroot in the sandbox, signature check, network retry only on real network failures.</td></tr>
-      <tr><td><b>u25</b> <small>since r1</small></td><td>2026-10-14</td><td>Provider choices, replacements and conflicts of built packages appear in plans and manifests.</td></tr>
-      <tr><td><b>u24</b> <small>since r1</small></td><td>2026-10-14</td><td>Plans list the removals conflict resolution will cause.</td></tr>
-      <tr><td><b>u23</b> <small>since r1</small></td><td>2026-10-14</td><td>pacman&rsquo;s own prompts pass through; silence is never consent.</td></tr>
-      <tr><td><b>u22</b> <small>since r1</small></td><td>2026-10-14</td><td>Upgrade previews come from a freshly synced throwaway database.</td></tr>
-      <tr><td><b>u21</b> <small>since r1</small></td><td>2026-10-14</td><td><code>emrac doctor</code>, <code>--online</code> and a sanitized <code>--report</code>.</td></tr>
-      <tr><td><b>u20</b> <small>since r1</small></td><td>2026-10-14</td><td>Memory, process, size and time limits for sandboxed builds.</td></tr>
-      <tr><td><b>u19</b> <small>since r1</small></td><td>2026-10-13</td><td>bubblewrap sandbox for AUR builds; <code>emrac build</code>.</td></tr>
-      <tr><td><b>u18</b> <small>since r1</small></td><td>2026-10-13</td><td>Shipped scripts, <code>--inspect</code> for official packages, AUR RPC retries.</td></tr>
-      <tr><td><b>u17</b> <small>since r1</small></td><td>2026-10-13</td><td>Build/install split and the package manifest.</td></tr>
-      <tr><td><b>u16</b> <small>since r1</small></td><td>2026-10-13</td><td>Audit covers extra repository files, obfuscation and cross-file exfiltration.</td></tr>
-      <tr><td><b>u15</b> <small>since r1</small></td><td>2026-10-13</td><td><code>emrac audit</code>: static PKGBUILD analysis with severity tiers.</td></tr>
-      <tr><td><b><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r1">r1</a></b></td><td>2026-10-13</td><td>First release: the core loop over official repositories and the AUR.</td></tr>
-      <tr><td><b>u14</b> <small>since i1</small></td><td>2026-10-13</td><td>Hardening and CI ahead of r1.</td></tr>
-      <tr><td><b>u13</b> <small>since i1</small></td><td>2026-10-13</td><td><code>pin</code> and <code>unpin</code>.</td></tr>
-      <tr><td><b>u12</b> <small>since i1</small></td><td>2026-10-11</td><td><code>deps</code>, <code>rdeps</code>, <code>why</code>, <code>orphans</code>.</td></tr>
-      <tr><td><b>u11</b> <small>since i1</small></td><td>2026-10-11</td><td>Automatic snapshot before <code>upgrade</code>.</td></tr>
-      <tr><td><b>u10</b> <small>since i1</small></td><td>2026-10-11</td><td><code>snapshot</code> and <code>restore</code>.</td></tr>
-      <tr><td><b>u9</b> <small>since i1</small></td><td>2026-10-11</td><td><code>verify</code>.</td></tr>
-      <tr><td><b>u8</b> <small>since i1</small></td><td>2026-10-11</td><td><code>purge</code>.</td></tr>
-      <tr><td><b>u7</b> <small>since i1</small></td><td>2026-10-11</td><td><code>reinstall</code>.</td></tr>
-      <tr><td><b>u6</b> <small>since i1</small></td><td>2026-10-11</td><td><code>downgrade</code>.</td></tr>
-      <tr><td><b>u5</b> <small>since i1</small></td><td>2026-10-11</td><td>Arch Linux Archive fetch for rollback.</td></tr>
-      <tr><td><b>u4</b> <small>since i1</small></td><td>2026-10-11</td><td><code>rollback</code>, <code>undo</code> and <code>redo</code>.</td></tr>
-      <tr><td><b>u3</b> <small>since i1</small></td><td>2026-10-11</td><td>Transaction history.</td></tr>
-      <tr><td><b>u2</b> <small>since i1</small></td><td>2026-10-11</td><td>Shell completion.</td></tr>
-      <tr><td><b>u1</b> <small>since i1</small></td><td>2026-10-11</td><td>Config file.</td></tr>
-      <tr><td><b>i1</b></td><td>2026-07-17</td><td>Search and info, install and remove, AUR building, <code>upgrade</code>: the core loop.</td></tr>
+      <tr><td><b class="k-u">u1</b> <small>since r3</small></td><td>2026-10-16</td><td><code>emrac self upgrade</code> and <code>self downgrade</code> also update a copy no package owns (installed with <code>cargo install</code> or put in <code>~/.local/bin</code>): in place, with the old file kept and put back if the new one fails. Releases are now published by a pipeline with a review and an approval step.</td></tr>
+      <tr><td><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r3">r3</a></b></td><td>2026-10-15</td><td>Third release: r2 plus the updates u1&ndash;u20. A history you can check and a ledger only root can change, a journal for cut-off transactions, pre-flight checks and plan ids, AUR trust signals and the Arch news gate, <code>rebuild</code>, and emrac updating itself through pacman; checked with 440 tests and three container suites.</td></tr>
+      <tr><td><b class="k-u">u20</b> <small>since r2</small></td><td>2026-10-15</td><td>Trust and the safety net: AUR trust signals, the Arch news gate (critical news stops an upgrade), a backup and check of pacman&rsquo;s database, repository trust, update risk and <code>emrac report</code>.</td></tr>
+      <tr><td><b class="k-u">u19</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac rebuild</code> and <code>--check</code> / <code>--stale</code>: AUR packages a library, Python or Qt update broke, built again through the audited path; binary packages named and left alone.</td></tr>
+      <tr><td><b class="k-u">u18</b> <small>since r2</small></td><td>2026-10-15</td><td>Plan ids and <code>--expect-plan</code>; a plan that waited is made again before it commits and must be the same.</td></tr>
+      <tr><td><b class="k-u">u17</b> <small>since r2</small></td><td>2026-10-15</td><td>Pre-flight checks (space, <code>/boot</code>, power, mirrors, the kernel safety net) and the partial-upgrade gate.</td></tr>
+      <tr><td><b class="k-u">u16</b> <small>since r2</small></td><td>2026-10-15</td><td><code>tree</code>, <code>graph</code>, <code>impact</code> and <code>cycles</code>.</td></tr>
+      <tr><td><b class="k-u">u15</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self downgrade</code>.</td></tr>
+      <tr><td><b class="k-u">u14</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self upgrade</code>: download, verify, build a package, install it with pacman.</td></tr>
+      <tr><td><b class="k-u">u13</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self diagnose</code> and the journal for emrac&rsquo;s own operations.</td></tr>
+      <tr><td><b class="k-u">u12</b> <small>since r2</small></td><td>2026-10-15</td><td><code>self sync</code> and <code>self news</code>: a checked copy of the release index, optionally verified against a gpg key.</td></tr>
+      <tr><td><b class="k-u">u11</b> <small>since r2</small></td><td>2026-10-15</td><td><code>emrac self check</code>.</td></tr>
+      <tr><td><b class="k-u">u10</b> <small>since r2</small></td><td>2026-10-15</td><td>A journal for transactions: one that is cut off is found next time and recorded (<code>history recover</code>).</td></tr>
+      <tr><td><b class="k-u">u9</b> <small>since r2</small></td><td>2026-10-15</td><td>The ledger watches itself: audit rules, <code>ledger events</code>, history anchors.</td></tr>
+      <tr><td><b class="k-u">u8</b> <small>since r2</small></td><td>2026-10-15</td><td>A root-owned append-only ledger that the history is compared with and can be rebuilt from.</td></tr>
+      <tr><td><b class="k-u">u7</b> <small>since r2</small></td><td>2026-10-15</td><td>History you can check: hash chain, <code>history verify</code>, archive and acknowledge.</td></tr>
+      <tr><td><b class="k-u">u6</b> <small>since r2</small></td><td>2026-10-14</td><td>emrac&rsquo;s voice: twelve verbs that say how sure a line is and what to do.</td></tr>
+      <tr><td><b class="k-u">u5</b> <small>since r2</small></td><td>2026-10-14</td><td>An install script that checks a pinned checksum and installs a pacman package.</td></tr>
+      <tr><td><b class="k-u">u4</b> <small>since r2</small></td><td>2026-10-14</td><td>A sandbox-test guard that matches the real probe.</td></tr>
+      <tr><td><b class="k-u">u3</b> <small>since r2</small></td><td>2026-10-14</td><td>Quieter tests.</td></tr>
+      <tr><td><b class="k-u">u2</b> <small>since r2</small></td><td>2026-10-14</td><td>Licensed GPL-3.0-or-later.</td></tr>
+      <tr><td><b class="k-u">u1</b> <small>since r2</small></td><td>2026-10-14</td><td>A tracked list of passing tests and a README in every folder.</td></tr>
+      <tr><td><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r2">r2</a></b></td><td>2026-10-14</td><td>Second release: r1 plus the updates u1&ndash;u30. Reviewed, audited and sandboxed AUR builds, plans that match what pacman will do, undo after a real upgrade, <code>doctor</code>, <code>pacnew</code> and <code>cache</code>; checked with 271 tests and 26 end-to-end runs against a real pacman.</td></tr>
+      <tr><td><b class="k-u">u30</b> <small>since r1</small></td><td>2026-10-14</td><td><code>pacnew</code> checks a file before applying it, records every change, can <code>revert</code> it, shows <code>status</code> and lets you edit a conflicted merge by hand.</td></tr>
+      <tr><td><b class="k-u">u29</b> <small>since r1</small></td><td>2026-10-14</td><td><code>cache clean --lean</code> (or <code>cache.policy = "lean"</code>) keeps one rollback set: what undoing the last <code>cache.keep_days</code> days needs, AUR builds and held-back packages. Rollback now fetches current versions from the repositories.</td></tr>
+      <tr><td><b class="k-u">u28</b> <small>since r1</small></td><td>2026-10-14</td><td><code>emrac cache</code>: list, stats, clean, trim and purge over source, build, binary and pacman caches; keeps what <code>undo</code> needs; dry-run summarizes what stays.</td></tr>
+      <tr><td><b class="k-u">u27</b> <small>since r1</small></td><td>2026-10-14</td><td><code>emrac pacnew</code>: a three-way comparison tells your edits from upstream&rsquo;s; keep, take or merge each file with a backup and <code>sudo</code>.</td></tr>
+      <tr><td><b class="k-u">u26</b> <small>since r1</small></td><td>2026-10-14</td><td>Dependency conflicts that stop an AUR build are explained and a swap is offered; also fixed: split packages, fakeroot in the sandbox, signature check, network retry only on real network failures.</td></tr>
+      <tr><td><b class="k-u">u25</b> <small>since r1</small></td><td>2026-10-14</td><td>Provider choices, replacements and conflicts of built packages appear in plans and manifests.</td></tr>
+      <tr><td><b class="k-u">u24</b> <small>since r1</small></td><td>2026-10-14</td><td>Plans list the removals conflict resolution will cause.</td></tr>
+      <tr><td><b class="k-u">u23</b> <small>since r1</small></td><td>2026-10-14</td><td>pacman&rsquo;s own prompts pass through; silence is never consent.</td></tr>
+      <tr><td><b class="k-u">u22</b> <small>since r1</small></td><td>2026-10-14</td><td>Upgrade previews come from a freshly synced throwaway database.</td></tr>
+      <tr><td><b class="k-u">u21</b> <small>since r1</small></td><td>2026-10-14</td><td><code>emrac doctor</code>, <code>--online</code> and a sanitized <code>--report</code>.</td></tr>
+      <tr><td><b class="k-u">u20</b> <small>since r1</small></td><td>2026-10-14</td><td>Memory, process, size and time limits for sandboxed builds.</td></tr>
+      <tr><td><b class="k-u">u19</b> <small>since r1</small></td><td>2026-10-13</td><td>bubblewrap sandbox for AUR builds; <code>emrac build</code>.</td></tr>
+      <tr><td><b class="k-u">u18</b> <small>since r1</small></td><td>2026-10-13</td><td>Shipped scripts, <code>--inspect</code> for official packages, AUR RPC retries.</td></tr>
+      <tr><td><b class="k-u">u17</b> <small>since r1</small></td><td>2026-10-13</td><td>Build/install split and the package manifest.</td></tr>
+      <tr><td><b class="k-u">u16</b> <small>since r1</small></td><td>2026-10-13</td><td>Audit covers extra repository files, obfuscation and cross-file exfiltration.</td></tr>
+      <tr><td><b class="k-u">u15</b> <small>since r1</small></td><td>2026-10-13</td><td><code>emrac audit</code>: static PKGBUILD analysis with severity tiers.</td></tr>
+      <tr><td><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r1">r1</a></b></td><td>2026-10-13</td><td>First release: the core loop over official repositories and the AUR.</td></tr>
+      <tr><td><b class="k-u">u14</b> <small>since i1</small></td><td>2026-10-13</td><td>Hardening and CI ahead of r1.</td></tr>
+      <tr><td><b class="k-u">u13</b> <small>since i1</small></td><td>2026-10-13</td><td><code>pin</code> and <code>unpin</code>.</td></tr>
+      <tr><td><b class="k-u">u12</b> <small>since i1</small></td><td>2026-10-11</td><td><code>deps</code>, <code>rdeps</code>, <code>why</code>, <code>orphans</code>.</td></tr>
+      <tr><td><b class="k-u">u11</b> <small>since i1</small></td><td>2026-10-11</td><td>Automatic snapshot before <code>upgrade</code>.</td></tr>
+      <tr><td><b class="k-u">u10</b> <small>since i1</small></td><td>2026-10-11</td><td><code>snapshot</code> and <code>restore</code>.</td></tr>
+      <tr><td><b class="k-u">u9</b> <small>since i1</small></td><td>2026-10-11</td><td><code>verify</code>.</td></tr>
+      <tr><td><b class="k-u">u8</b> <small>since i1</small></td><td>2026-10-11</td><td><code>purge</code>.</td></tr>
+      <tr><td><b class="k-u">u7</b> <small>since i1</small></td><td>2026-10-11</td><td><code>reinstall</code>.</td></tr>
+      <tr><td><b class="k-u">u6</b> <small>since i1</small></td><td>2026-10-11</td><td><code>downgrade</code>.</td></tr>
+      <tr><td><b class="k-u">u5</b> <small>since i1</small></td><td>2026-10-11</td><td>Arch Linux Archive fetch for rollback.</td></tr>
+      <tr><td><b class="k-u">u4</b> <small>since i1</small></td><td>2026-10-11</td><td><code>rollback</code>, <code>undo</code> and <code>redo</code>.</td></tr>
+      <tr><td><b class="k-u">u3</b> <small>since i1</small></td><td>2026-10-11</td><td>Transaction history.</td></tr>
+      <tr><td><b class="k-u">u2</b> <small>since i1</small></td><td>2026-10-11</td><td>Shell completion.</td></tr>
+      <tr><td><b class="k-u">u1</b> <small>since i1</small></td><td>2026-10-11</td><td>Config file.</td></tr>
+      <tr><td><b class="k-i">i1</b></td><td>2026-07-17</td><td>Search and info, install and remove, AUR building, <code>upgrade</code>: the core loop.</td></tr>
     </tbody>
   </table>
 
@@ -594,12 +602,12 @@ use_agent = true</pre>
   <div class="box">
     <div class="bh">Releases</div>
     <ul>
-      <li><div class="kv"><b>i1</b><span>incubation</span></div><small>Read-only search and info against official repositories</small></li>
-      <li><div class="kv"><b><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r1">r1</a></b><span>first release</span></div><small>search, info, install, remove, upgrade; official repositories and AUR</small></li>
-      <li><div class="kv"><b>u1&ndash;u30</b><span>updates</span></div><small>History and rollback, audit and sandbox, doctor, plans that match pacman, pacnew, cache</small></li>
-      <li><div class="kv"><b><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r2">r2</a></b><span>second release</span></div><small>r1 plus u1&ndash;u30, made safe for a real machine</small></li>
-      <li><div class="kv"><b>u1&ndash;u20</b><span>updates</span></div><small>Checkable history and ledger, a journal for cut-off transactions, pre-flight checks, plan ids, AUR trust and the Arch news, rebuild, emrac updating itself</small></li>
-      <li><div class="kv"><b><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r3">r3</a></b><span>third release</span></div><small>r2 plus u1&ndash;u20; the next update is u1 against r3</small></li>
+      <li><div class="kv"><b class="k-i">i1</b><span>incubation</span></div><small>Read-only search and info against official repositories</small></li>
+      <li><div class="kv"><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r1">r1</a></b><span>first release</span></div><small>search, info, install, remove, upgrade; official repositories and AUR</small></li>
+      <li><div class="kv"><b class="k-u">u1&ndash;u30</b><span>updates</span></div><small>History and rollback, audit and sandbox, doctor, plans that match pacman, pacnew, cache</small></li>
+      <li><div class="kv"><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r2">r2</a></b><span>second release</span></div><small>r1 plus u1&ndash;u30, made safe for a real machine</small></li>
+      <li><div class="kv"><b class="k-u">u1&ndash;u20</b><span>updates</span></div><small>Checkable history and ledger, a journal for cut-off transactions, pre-flight checks, plan ids, AUR trust and the Arch news, rebuild, emrac updating itself</small></li>
+      <li><div class="kv"><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r3">r3</a></b><span>third release</span></div><small>r2 plus u1&ndash;u20; the next update is u1 against r3</small></li>
     </ul>
   </div>
 
