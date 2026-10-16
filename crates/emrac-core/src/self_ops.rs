@@ -44,7 +44,7 @@ impl OpEntry {
     pub fn consequence(&self) -> &'static str {
         match self.phase.as_str() {
             "prepare" | "stage" => "nothing on the system was changed: only copies and downloads were made",
-            "activate" => "the package may or may not have been replaced: `emrac --version` and `pacman -Q emrac` say which",
+            "activate" => "the installed copy may or may not have been replaced: `emrac --version` says which (a package: `pacman -Q emrac`; a copy replaced in place: the old file is in ~/.local/share/emrac/self/previous)",
             _ => "the new version was installed; it had not been checked yet",
         }
     }

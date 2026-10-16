@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 403
+     - 408
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 11
@@ -31,9 +31,9 @@ Totals
      - 29
    * - **Automated total**
      -
-     - **443**
+     - **448**
 
-emrac-core library (403)
+emrac-core library (408)
 ------------------------
 
 ``arch_news::tests`` (7)
@@ -520,17 +520,22 @@ emrac-core library (403)
 * ``a_running_operation_is_locked_and_a_cut_off_one_is_found_with_its_phase``
 * ``finishing_removes_the_journal_and_each_phase_has_a_consequence``
 
-``self_upgrade::tests`` (10)
+``self_upgrade::tests`` (15)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* ``a_copy_no_package_owns_is_never_replaced``
+* ``a_copy_no_package_owns_is_replaced_in_place_only_where_the_user_can_write``
+* ``a_copy_that_may_not_be_touched_is_never_replaced``
 * ``a_downgrade_needs_a_target_when_there_is_a_choice_and_never_goes_up``
 * ``a_downgrade_to_a_release_that_cannot_read_your_files_is_refused_and_ties_are_said``
 * ``a_download_is_accepted_only_if_it_matches_the_index``
+* ``a_link_or_a_folder_the_user_cannot_write_is_not_replaced``
+* ``a_new_binary_that_reports_another_version_is_refused_before_anything_changes``
 * ``a_staging_folder_with_folders_nobody_can_enter_is_still_removed``
 * ``an_upgrade_is_ready_when_a_newer_release_exists_and_the_package_owns_emrac``
 * ``every_blocker_is_listed_and_a_stale_index_or_new_schema_is_a_warning``
 * ``nothing_is_done_when_already_on_the_newest_or_no_index``
+* ``only_the_newest_three_kept_binaries_stay``
+* ``swapping_in_a_binary_keeps_the_old_one_and_leaves_nothing_behind``
 * ``the_cargo_version_is_read_and_the_backup_copies_config_and_data_but_not_self``
 * ``the_embedded_recipe_is_the_one_install_sh_uses``
 

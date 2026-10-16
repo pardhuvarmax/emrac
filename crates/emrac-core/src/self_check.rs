@@ -281,8 +281,12 @@ pub fn evaluate(f: &SelfFacts) -> DoctorReport {
                 format!("it belongs to the package '{name}': update it with pacman"),
                 None,
             ),
+            Owner::Cargo | Owner::Manual(_) => (
+                "no package owns this copy: `emrac self upgrade` replaces this one file in place and keeps the old one (`emrac self upgrade --dry-run` says whether it can here)".to_string(),
+                None,
+            ),
             _ => (
-                "no package owns this copy, so `emrac self upgrade` will not replace it; update it the way you installed it".to_string(),
+                "this copy is not one `emrac self upgrade` will replace; update it the way you installed it".to_string(),
                 None,
             ),
         };
@@ -1183,7 +1187,10 @@ mod tests {
         assert_eq!(row(&f).fix.as_deref(), Some("emrac self sync"));
         f.owner = Owner::Cargo;
         let c = row(&f);
-        assert!(c.summary.contains("will not replace it"), "{c:?}");
+        assert!(c.summary.contains("in place"), "{c:?}");
+        f.owner = Owner::Development;
+        let c = row(&f);
+        assert!(c.summary.contains("not one"), "{c:?}");
         f.owner = Owner::Package {
             name: "other".into(),
             version: "1".into(),

@@ -1,8 +1,11 @@
 //! `emrac self upgrade` and `emrac self downgrade` (u14, u15): the planning
-//! (pure, tested) and the execution (download, verify, build with `makepkg`,
-//! install with `sudo pacman -U`, check). pacman stays the authority for the
-//! files: emrac never overwrites a file a package owns. See
-//! `docs/plan/r2/u12-self-service.md`.
+//! (pure, tested) and the execution (download, verify, build, install, check).
+//! pacman stays the authority for the files: emrac never overwrites a file a
+//! package owns. A copy the `emrac` package owns is built with `makepkg` and
+//! installed with `sudo pacman -U`; a copy nobody owns (`cargo install`, put
+//! in place by hand) in a folder you can write to is replaced in place, with
+//! the old file kept and put back if the new one fails. See
+//! `docs/plan/r2/u12-self-service.md` and `docs/plan/r3/u1-in-place-update.md`.
 
 use std::fs;
 use std::io::{Read, Write};
@@ -33,6 +36,70 @@ pub fn render_recipe(r: &Release) -> String {
         .replace("@SHA256@", &r.sha256)
 }
 
+/// How the new version reaches the machine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Method {
+    /// Build a package and install it with `sudo pacman -U`.
+    Package,
+    /// Build the binary and replace this one file, keeping the old one.
+    InPlace { path: String },
+}
+
+impl Method {
+    pub fn word(&self) -> &'static str {
+        match self {
+            Method::Package => "package",
+            Method::InPlace { .. } => "in-place",
+        }
+    }
+}
+
+/// The method for a copy, `None` when emrac will not touch it.
+pub fn method_for(owner: &Owner, exe: &str) -> Option<Method> {
+    match owner {
+        Owner::Package { name, .. } if name == "emrac" => Some(Method::Package),
+        Owner::Cargo | Owner::Manual(_) => Some(Method::InPlace { path: exe.into() }),
+        _ => None,
+    }
+}
+
+/// Why `exe` cannot be replaced in place by this user, if it cannot: it must
+/// be a regular file (not a link) in a folder the user can write to.
+pub fn in_place_problem(exe: &Path) -> Option<String> {
+    let meta = match fs::symlink_metadata(exe) {
+        Ok(m) => m,
+        Err(e) => return Some(format!("{} can't be read: {e}", exe.display())),
+    };
+    if meta.file_type().is_symlink() {
+        return Some(format!(
+            "{} is a link; emrac replaces only a regular file it can see is the copy in use",
+            exe.display()
+        ));
+    }
+    if !meta.is_file() {
+        return Some(format!("{} is not a regular file", exe.display()));
+    }
+    let Some(dir) = exe.parent() else {
+        return Some(format!("{} has no folder", exe.display()));
+    };
+    let probe = dir.join(format!(".emrac-write-test-{}", std::process::id()));
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+    {
+        Ok(_) => {
+            let _ = fs::remove_file(&probe);
+            None
+        }
+        Err(e) => Some(format!(
+            "you can't write to {} ({e}); emrac does not ask for root to replace a file",
+            dir.display()
+        )),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Op {
@@ -54,6 +121,10 @@ impl Op {
 pub struct Context {
     pub installed: String,
     pub owner: Owner,
+    /// The path of the running binary.
+    pub exe: String,
+    /// Why it can't be replaced in place by this user (`None`: it can).
+    pub exe_problem: Option<String>,
     pub cfg: SelfConfig,
     pub index: Option<Index>,
     pub last_ok: Option<u64>,
@@ -88,6 +159,8 @@ pub enum Outcome {
 pub struct Plan {
     pub op: Op,
     pub installed: String,
+    /// How it would be done (a refused plan carries the method it was judged by).
+    pub method: Method,
     pub outcome: Outcome,
 }
 
@@ -99,12 +172,13 @@ fn common_refusals(ctx: &Context) -> Vec<String> {
         Owner::Package { name, .. } => why.push(format!(
             "the running binary belongs to the package '{name}', not 'emrac'; emrac does not change files another package owns"
         )),
-        Owner::Cargo => why.push(
-            "this copy was installed with `cargo install`; update it the same way (`cargo install --git https://github.com/pardhuvarmax/emrac --tag <tag>`), or install the package with install.sh".into(),
-        ),
-        Owner::Manual(p) => why.push(format!(
-            "this copy ({p}) was put there by hand; replace it by hand, or install the package with install.sh so pacman owns it"
-        )),
+        Owner::Cargo | Owner::Manual(_) => {
+            if let Some(problem) = &ctx.exe_problem {
+                why.push(format!(
+                    "emrac can't replace this copy in place: {problem}. Update it the way you installed it, or install the package with install.sh so pacman owns it"
+                ));
+            }
+        }
         Owner::Development => why.push(
             "this is a development build run from a cargo target folder; rebuild it from the source".into(),
         ),
@@ -135,8 +209,12 @@ fn common_refusals(ctx: &Context) -> Vec<String> {
     why
 }
 
+fn method_of(ctx: &Context) -> Method {
+    method_for(&ctx.owner, &ctx.exe).unwrap_or(Method::Package)
+}
+
 fn steps(op: Op, ctx: &Context, r: &Release) -> Vec<String> {
-    vec![
+    let mut v = vec![
         format!(
             "take the lock and write the journal (an interrupted {} is found next time)",
             op.word()
@@ -151,21 +229,55 @@ fn steps(op: Op, ctx: &Context, r: &Release) -> Vec<String> {
             "unpack it: the top folder must be emrac-{} and its Cargo.toml must say {}",
             r.tag, r.version
         ),
-        "build the package with makepkg from the recipe that install.sh and the AUR package use"
-            .to_string(),
-        format!(
-            "install it with `sudo pacman -U` (pacman replaces /usr/bin/emrac; installed now: {})",
-            match &ctx.owner {
-                Owner::Package { version, .. } => version.clone(),
-                _ => ctx.installed.clone(),
-            }
-        ),
-        format!(
-            "check that `emrac --version` says {} and that `emrac self check` still passes",
-            r.version
-        ),
-        "remove the journal and write one line to the self log".to_string(),
-    ]
+    ];
+    match method_of(ctx) {
+        Method::Package => {
+            v.push("build the package with makepkg from the recipe that install.sh and the AUR package use".to_string());
+            v.push(format!(
+                "install it with `sudo pacman -U` (pacman replaces /usr/bin/emrac; installed now: {})",
+                match &ctx.owner {
+                    Owner::Package { version, .. } => version.clone(),
+                    _ => ctx.installed.clone(),
+                }
+            ));
+            v.push(format!(
+                "check that `emrac --version` says {} and that `emrac self check` still passes",
+                r.version
+            ));
+        }
+        Method::InPlace { path } => {
+            v.push("build the binary with cargo in the staging folder (no root; the package tools are not needed)".to_string());
+            v.push(format!(
+                "run the new binary once from there: `--version` must say {}",
+                r.version
+            ));
+            v.push(format!(
+                "keep the current {path} in ~/.local/share/emrac/self/previous (the newest 3 are kept)"
+            ));
+            v.push(format!(
+                "copy the new binary next to it and rename it over {path} in one step; the run checks it again from there"
+            ));
+            v.push(format!(
+                "check that `{path} --version` says {} and that `emrac self check` still passes; if the version is wrong the kept copy is put back",
+                r.version
+            ));
+        }
+    }
+    v.push("remove the journal and write one line to the self log".to_string());
+    v
+}
+
+fn in_place_warnings(ctx: &Context) -> Vec<String> {
+    let Method::InPlace { path } = method_of(ctx) else {
+        return Vec::new();
+    };
+    let mut w = vec![format!(
+        "{path} is not tracked by pacman: only this one file changes (completions or docs you installed by hand are not touched), and the old file is kept"
+    )];
+    if ctx.owner == Owner::Cargo {
+        w.push("`cargo install --list` will go on showing the old version: cargo does not know this update".to_string());
+    }
+    w
 }
 
 fn stale_warning(ctx: &Context) -> Option<String> {
@@ -199,6 +311,7 @@ pub fn plan_upgrade(ctx: &Context) -> Plan {
             return Outcome::Refused { reasons };
         }
         let mut warnings: Vec<String> = stale_warning(ctx).into_iter().collect();
+        warnings.extend(in_place_warnings(ctx));
         if target.state_schema > ctx.state_schema {
             warnings.push(format!(
                 "{} keeps its files in format {}, yours are {}: it will convert them the first time it runs, and the backup keeps the old ones",
@@ -214,6 +327,7 @@ pub fn plan_upgrade(ctx: &Context) -> Plan {
     Plan {
         op: Op::Upgrade,
         installed: ctx.installed.clone(),
+        method: method_of(ctx),
         outcome,
     }
 }
@@ -300,6 +414,7 @@ pub fn plan_downgrade(ctx: &Context, version: Option<&str>, tag: Option<&str>) -
             return Outcome::Refused { reasons };
         }
         let mut warnings: Vec<String> = stale_warning(ctx).into_iter().collect();
+        warnings.extend(in_place_warnings(ctx));
         warnings.push(format!(
             "settings or data your current version added since {} may be ignored or refused by it; your files are not changed, and the backup keeps them exactly as they are now",
             target.tag
@@ -326,6 +441,7 @@ pub fn plan_downgrade(ctx: &Context, version: Option<&str>, tag: Option<&str>) -
     Plan {
         op: Op::Downgrade,
         installed: ctx.installed.clone(),
+        method: method_of(ctx),
         outcome,
     }
 }
@@ -522,6 +638,12 @@ pub struct Report {
     pub version_ok: bool,
     /// `self check` of the new binary exited with 0 (or 1 with no new problem).
     pub check_ok: bool,
+    /// `package` or `in-place`.
+    pub method: String,
+    /// In place: the kept copy of the old binary.
+    pub previous: Option<String>,
+    /// In place: the new file failed its check and the old one was put back.
+    pub rolled_back: bool,
     pub notes: Vec<String>,
 }
 
@@ -541,6 +663,7 @@ pub fn execute(
     op: Op,
     release: &Release,
     installed: &str,
+    method: &Method,
     opts: &ExecOptions,
     say: &mut dyn FnMut(&str),
 ) -> Result<Report> {
@@ -580,62 +703,104 @@ pub fn execute(
                 )))
             }
         }
-        fs::write(build.join("PKGBUILD"), render_recipe(release)).map_err(|e| io(&build, e))?;
 
         guard.phase("activate")?;
-        say("building the package with makepkg (this compiles emrac; it takes a few minutes)");
-        let mut makepkg = Command::new("makepkg");
-        makepkg
-            .args(["-f", "--noconfirm"])
-            .current_dir(&build)
-            .env("PKGDEST", &build)
-            .env("SRCDEST", &build)
-            .env(
-                "PATH",
-                format!("/usr/bin:{}", std::env::var("PATH").unwrap_or_default()),
-            );
-        if opts.skip_tests {
-            makepkg.arg("--nocheck");
-        }
-        run(&mut makepkg, "makepkg")?;
-        let package = fs::read_dir(&build)
-            .map_err(|e| io(&build, e))?
-            .flatten()
-            .map(|e| e.path())
-            .find(|p| {
-                p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
-                    n.starts_with(&format!("emrac-{}-", release.version)) && n.contains(".pkg.tar")
-                })
-            })
-            .ok_or_else(|| err("makepkg finished but left no package file"))?;
-        say(&format!("installing {} with pacman", package.display()));
-        let mut pacman = Command::new("sudo");
-        pacman.arg("pacman").arg("-U");
-        if opts.yes {
-            pacman.arg("--noconfirm");
-        }
-        pacman.arg(&package);
-        run(&mut pacman, "sudo pacman -U")?;
+        let (bin, previous): (PathBuf, Option<PathBuf>) = match method {
+            Method::Package => {
+                fs::write(build.join("PKGBUILD"), render_recipe(release))
+                    .map_err(|e| io(&build, e))?;
+                say("building the package with makepkg (this compiles emrac; it takes a few minutes)");
+                let mut makepkg = Command::new("makepkg");
+                makepkg
+                    .args(["-f", "--noconfirm"])
+                    .current_dir(&build)
+                    .env("PKGDEST", &build)
+                    .env("SRCDEST", &build)
+                    .env(
+                        "PATH",
+                        format!("/usr/bin:{}", std::env::var("PATH").unwrap_or_default()),
+                    );
+                if opts.skip_tests {
+                    makepkg.arg("--nocheck");
+                }
+                run(&mut makepkg, "makepkg")?;
+                let package = fs::read_dir(&build)
+                    .map_err(|e| io(&build, e))?
+                    .flatten()
+                    .map(|e| e.path())
+                    .find(|p| {
+                        p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                            n.starts_with(&format!("emrac-{}-", release.version))
+                                && n.contains(".pkg.tar")
+                        })
+                    })
+                    .ok_or_else(|| err("makepkg finished but left no package file"))?;
+                say(&format!("installing {} with pacman", package.display()));
+                let mut pacman = Command::new("sudo");
+                pacman.arg("pacman").arg("-U");
+                if opts.yes {
+                    pacman.arg("--noconfirm");
+                }
+                pacman.arg(&package);
+                run(&mut pacman, "sudo pacman -U")?;
+                (PathBuf::from("/usr/bin/emrac"), None)
+            }
+            Method::InPlace { path } => {
+                say("building emrac with cargo (this compiles emrac; it takes a few minutes)");
+                let built = build_in_place(&stage, &tarball, release, opts.skip_tests)?;
+                say(&format!(
+                    "the new binary reports {}; putting it in place of {path}",
+                    release.version
+                ));
+                let kept = keep_dir()?;
+                let old = swap_in(
+                    &built,
+                    Path::new(path),
+                    &kept,
+                    installed,
+                    &release.version,
+                    now,
+                )?;
+                (PathBuf::from(path), Some(old))
+            }
+        };
 
         guard.phase("verify")?;
         let mut notes = Vec::new();
-        let new = Command::new("/usr/bin/emrac").arg("--version").output();
+        let new = Command::new(&bin).arg("--version").output();
         let version_ok = new
             .as_ref()
             .map(|o| String::from_utf8_lossy(&o.stdout).contains(&release.version))
             .unwrap_or(false);
+        let mut rolled_back = false;
         if !version_ok {
             notes.push(format!(
-                "the installed /usr/bin/emrac does not report {}",
+                "{} does not report {}",
+                bin.display(),
                 release.version
             ));
+            if let Some(old) = &previous {
+                match put_back(old, &bin) {
+                    Ok(()) => {
+                        rolled_back = true;
+                        notes.push(format!(
+                            "the previous binary was put back from {}",
+                            old.display()
+                        ));
+                    }
+                    Err(e) => notes.push(format!(
+                        "putting the previous binary back failed ({e}); it is kept as {}",
+                        old.display()
+                    )),
+                }
+            }
         }
-        let check = Command::new("/usr/bin/emrac")
+        let check = Command::new(&bin)
             .args(["self", "check", "--json"])
             .stderr(Stdio::null())
             .output();
         let check_ok = check.as_ref().map(|o| o.status.success()).unwrap_or(false);
-        if !check_ok {
+        if !check_ok && !rolled_back {
             notes.push("`emrac self check` on the new version reports a problem".into());
         }
         Ok(Report {
@@ -646,6 +811,9 @@ pub fn execute(
             backup: backup.display().to_string(),
             version_ok,
             check_ok,
+            method: method.word().to_string(),
+            previous: previous.map(|p| p.display().to_string()),
+            rolled_back,
             notes,
         })
     })();
@@ -657,6 +825,7 @@ pub fn execute(
         installed,
         release,
         match &outcome {
+            Ok(r) if r.rolled_back => "rolled back",
             Ok(r) if r.version_ok && r.check_ok => "ok",
             Ok(_) => "installed, check failed",
             Err(_) => "failed",
@@ -664,6 +833,175 @@ pub fn execute(
     );
     guard.finish();
     outcome
+}
+
+// ------------------------------------------------------------- in place
+
+/// Where the replaced binaries are kept.
+pub fn keep_dir() -> Result<PathBuf> {
+    Ok(self_meta::dir()?.join("previous"))
+}
+
+/// Unpacks the tarball into the staging folder and builds the binary with
+/// cargo, with the flags of the package recipe. Returns the built file.
+fn build_in_place(
+    stage: &Path,
+    tarball: &Path,
+    release: &Release,
+    skip_tests: bool,
+) -> Result<PathBuf> {
+    let src = stage.join("src");
+    fs::create_dir_all(&src).map_err(|e| io(&src, e))?;
+    run(
+        Command::new("tar")
+            .arg("xzf")
+            .arg(tarball)
+            .arg("-C")
+            .arg(&src)
+            .arg("--no-same-owner"),
+        "tar",
+    )?;
+    let tree = src.join(format!("emrac-{}", release.tag));
+    let target = stage.join("target");
+    let home = std::env::var("HOME").unwrap_or_default();
+    let flags = format!(
+        "{} --remap-path-prefix={home}=~ --remap-path-prefix={}=.",
+        std::env::var("RUSTFLAGS").unwrap_or_default(),
+        src.display()
+    );
+    let path = format!("/usr/bin:{}", std::env::var("PATH").unwrap_or_default());
+    let cargo = |args: &[&str]| -> Command {
+        let mut c = Command::new("cargo");
+        c.args(args)
+            .current_dir(&tree)
+            .env("CARGO_TARGET_DIR", &target)
+            .env("RUSTFLAGS", &flags)
+            .env("PATH", &path);
+        c
+    };
+    run(&mut cargo(&["fetch", "--locked"]), "cargo fetch")?;
+    run(
+        &mut cargo(&["build", "--frozen", "--release"]),
+        "cargo build",
+    )?;
+    if !skip_tests {
+        run(&mut cargo(&["test", "--frozen"]), "cargo test")?;
+    }
+    let bin = target.join("release/emrac");
+    if bin.is_file() {
+        Ok(bin)
+    } else {
+        Err(err("cargo finished but left no emrac binary"))
+    }
+}
+
+fn fsync_path(path: &Path) {
+    if let Ok(f) = fs::File::open(path) {
+        let _ = f.sync_all();
+    }
+}
+
+fn copy_executable(from: &Path, to: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::copy(from, to).map_err(|e| io(to, e))?;
+    fs::set_permissions(to, fs::Permissions::from_mode(0o755)).map_err(|e| io(to, e))?;
+    fsync_path(to);
+    Ok(())
+}
+
+/// Runs `<bin> --version`; a file that was written a moment ago can still be
+/// "busy" while another process finishes forking, so that is tried again.
+fn run_version(bin: &Path) -> std::io::Result<std::process::Output> {
+    let mut tries = 0;
+    loop {
+        match Command::new(bin).arg("--version").output() {
+            Err(e) if e.raw_os_error() == Some(26) && tries < 20 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            other => return other,
+        }
+    }
+}
+
+/// Replaces `exe` with `new`: the new file is copied next to it, run once
+/// (`--version` must say `want`), the old one is kept in `keep`, and the new
+/// one is renamed over `exe` in one step. Returns the kept copy. Until the
+/// rename nothing the user runs has changed.
+pub fn swap_in(
+    new: &Path,
+    exe: &Path,
+    keep: &Path,
+    old_version: &str,
+    want: &str,
+    now: u64,
+) -> Result<PathBuf> {
+    if let Some(problem) = in_place_problem(exe) {
+        return Err(err(problem));
+    }
+    let dir = exe
+        .parent()
+        .ok_or_else(|| err(format!("{} has no folder", exe.display())))?;
+    let tmp = dir.join(format!(".emrac.new-{}", std::process::id()));
+    let result = (|| {
+        copy_executable(new, &tmp)?;
+        let out = run_version(&tmp).map_err(|e| {
+            err(format!(
+                "the new binary can't be run from {}: {e}",
+                dir.display()
+            ))
+        })?;
+        if !String::from_utf8_lossy(&out.stdout).contains(want) {
+            return Err(err(format!(
+                "the new binary does not report {want}: nothing was replaced"
+            )));
+        }
+        fs::create_dir_all(keep).map_err(|e| io(keep, e))?;
+        let previous = keep.join(format!("emrac-{old_version}-{now}"));
+        copy_executable(exe, &previous)?;
+        fs::rename(&tmp, exe).map_err(|e| io(exe, e))?;
+        fsync_path(dir);
+        prune_kept(keep, &previous);
+        Ok(previous)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result
+}
+
+/// Puts a kept binary back over `exe` (also one atomic rename).
+pub fn put_back(previous: &Path, exe: &Path) -> Result<()> {
+    let dir = exe
+        .parent()
+        .ok_or_else(|| err(format!("{} has no folder", exe.display())))?;
+    let tmp = dir.join(format!(".emrac.back-{}", std::process::id()));
+    let r = copy_executable(previous, &tmp).and_then(|()| {
+        fs::rename(&tmp, exe).map_err(|e| io(exe, e))?;
+        fsync_path(dir);
+        Ok(())
+    });
+    if r.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    r
+}
+
+/// Keeps the newest three kept binaries (always the one just made).
+fn prune_kept(keep: &Path, newest: &Path) {
+    let Ok(rd) = fs::read_dir(keep) else { return };
+    let mut files: Vec<(std::time::SystemTime, PathBuf)> = rd
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with("emrac-"))
+        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+        .collect();
+    files.sort();
+    let excess = files.len().saturating_sub(3);
+    for (_, p) in files.into_iter().take(excess) {
+        if p != newest {
+            let _ = fs::remove_file(p);
+        }
+    }
 }
 
 /// One JSON line per operation, in `~/.local/share/emrac/self/log.jsonl`.
@@ -690,14 +1028,24 @@ pub fn gather_context() -> Context {
     let facts = crate::self_check::gather();
     let deep = crate::self_check::gather_deep(false);
     let stored = self_meta::load().ok();
+    let in_place = matches!(facts.owner, Owner::Cargo | Owner::Manual(_));
+    // A package build needs the package tools; an in-place build only these.
+    let wanted = |name: &str| !in_place || matches!(name, "cargo" | "cc" | "tar" | "gpg");
     let tools_missing = deep
         .needs
         .iter()
-        .filter(|n| !n.present)
+        .filter(|n| !n.present && wanted(n.name))
         .map(|n| (n.name.to_string(), n.package.to_string()))
         .collect();
+    let exe = std::env::current_exe()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
     Context {
         installed: env!("CARGO_PKG_VERSION").to_string(),
+        exe_problem: in_place
+            .then(|| in_place_problem(Path::new(&exe)))
+            .flatten(),
+        exe,
         owner: facts.owner,
         cfg,
         last_ok: stored
@@ -748,6 +1096,8 @@ mod tests {
                 version: "0.2.0-1".into(),
                 foreign: true,
             },
+            exe: "/usr/bin/emrac".into(),
+            exe_problem: None,
             cfg: SelfConfig::default(),
             index: Some(Index {
                 schema: 1,
@@ -923,7 +1273,7 @@ mod tests {
             other => panic!("{other:?}"),
         }
         let mut c = ctx3();
-        c.owner = Owner::Cargo;
+        c.owner = Owner::Development;
         assert!(matches!(
             plan_downgrade(&c, None, None).outcome,
             Outcome::Refused { .. }
@@ -931,10 +1281,64 @@ mod tests {
     }
 
     #[test]
-    fn a_copy_no_package_owns_is_never_replaced() {
+    fn a_copy_no_package_owns_is_replaced_in_place_only_where_the_user_can_write() {
+        let mut c = ctx();
+        c.owner = Owner::Cargo;
+        c.exe = "/home/u/.cargo/bin/emrac".into();
+        let p = plan_upgrade(&c);
+        assert_eq!(
+            p.method,
+            Method::InPlace {
+                path: "/home/u/.cargo/bin/emrac".into()
+            }
+        );
+        match p.outcome {
+            Outcome::Ready {
+                steps, warnings, ..
+            } => {
+                let all = steps.join("\n");
+                assert!(
+                    all.contains("cargo") && all.contains("rename it over"),
+                    "{all}"
+                );
+                assert!(
+                    !all.contains("pacman -U") && !all.contains("makepkg"),
+                    "{all}"
+                );
+                assert!(
+                    warnings.iter().any(|w| w.contains("cargo install --list")),
+                    "{warnings:?}"
+                );
+                assert!(warnings.iter().any(|w| w.contains("not tracked by pacman")));
+            }
+            other => panic!("{other:?}"),
+        }
+        c.owner = Owner::Manual("/usr/local/bin/emrac".into());
+        c.exe = "/usr/local/bin/emrac".into();
+        c.exe_problem = Some("you can't write to /usr/local/bin".into());
+        match plan_upgrade(&c).outcome {
+            Outcome::Refused { reasons } => {
+                assert!(
+                    reasons[0].contains("can't write to /usr/local/bin"),
+                    "{reasons:?}"
+                );
+                assert!(reasons[0].contains("does not") || reasons[0].contains("install.sh"));
+            }
+            other => panic!("{other:?}"),
+        }
+        // an in-place build needs no package tools: the context leaves them out
+        let mut c = ctx();
+        c.owner = Owner::Cargo;
+        c.tools_missing = vec![("cargo".into(), "rust".into())];
+        match plan_upgrade(&c).outcome {
+            Outcome::Refused { reasons } => assert!(reasons[0].contains("cargo is missing")),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_copy_that_may_not_be_touched_is_never_replaced() {
         for owner in [
-            Owner::Cargo,
-            Owner::Manual("/usr/local/bin/emrac".into()),
             Owner::Development,
             Owner::Unknown("x".into()),
             Owner::Package {
@@ -1075,6 +1479,113 @@ mod tests {
             "s"
         );
         assert!(!dest.join("data/self").exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("emrac-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn fake_binary(path: &Path, version: &str) {
+        use std::os::unix::fs::PermissionsExt;
+        fs::write(path, format!("#!/bin/sh\necho emrac {version}\n")).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    fn says(bin: &Path) -> String {
+        String::from_utf8_lossy(&run_version(bin).unwrap().stdout).into_owned()
+    }
+
+    #[test]
+    fn swapping_in_a_binary_keeps_the_old_one_and_leaves_nothing_behind() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = scratch("swap");
+        let (bin, keep, built) = (d.join("bin"), d.join("keep"), d.join("built"));
+        fs::create_dir_all(&bin).unwrap();
+        fs::create_dir_all(&built).unwrap();
+        let exe = bin.join("emrac");
+        fake_binary(&exe, "0.8.0");
+        fake_binary(&built.join("emrac"), "0.9.0");
+        let old = swap_in(&built.join("emrac"), &exe, &keep, "0.8.0", "0.9.0", 100).unwrap();
+        assert!(says(&exe).contains("0.9.0"));
+        assert!(says(&old).contains("0.8.0"), "the old binary is kept");
+        assert_eq!(
+            fs::metadata(&exe).unwrap().permissions().mode() & 0o777,
+            0o755
+        );
+        let left: Vec<_> = fs::read_dir(&bin).unwrap().flatten().collect();
+        assert_eq!(left.len(), 1, "no temporary file stays: {left:?}");
+        put_back(&old, &exe).unwrap();
+        assert!(
+            says(&exe).contains("0.8.0"),
+            "put back restores the old file"
+        );
+        assert_eq!(fs::read_dir(&bin).unwrap().count(), 1);
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_new_binary_that_reports_another_version_is_refused_before_anything_changes() {
+        let d = scratch("swapbad");
+        let (bin, keep) = (d.join("bin"), d.join("keep"));
+        fs::create_dir_all(&bin).unwrap();
+        let exe = bin.join("emrac");
+        fake_binary(&exe, "0.8.0");
+        let wrong = d.join("wrong");
+        fake_binary(&wrong, "0.8.5");
+        let e = swap_in(&wrong, &exe, &keep, "0.8.0", "0.9.0", 1)
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("does not report 0.9.0"), "{e}");
+        assert!(says(&exe).contains("0.8.0"));
+        assert_eq!(fs::read_dir(&bin).unwrap().count(), 1, "no temporary file");
+        assert!(!keep.exists(), "nothing was kept: nothing was replaced");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_link_or_a_folder_the_user_cannot_write_is_not_replaced() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = scratch("swaplink");
+        let real = d.join("real");
+        fake_binary(&real, "0.8.0");
+        let link = d.join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert!(in_place_problem(&link).unwrap().contains("is a link"));
+        assert!(in_place_problem(&d.join("missing")).is_some());
+        assert!(in_place_problem(&real).is_none());
+        let ro = d.join("ro");
+        fs::create_dir_all(&ro).unwrap();
+        fake_binary(&ro.join("emrac"), "0.8.0");
+        fs::set_permissions(&ro, fs::Permissions::from_mode(0o555)).unwrap();
+        if fs::write(ro.join("probe"), b"x").is_err() {
+            let p = in_place_problem(&ro.join("emrac")).unwrap();
+            assert!(p.contains("can't write to"), "{p}");
+            assert!(swap_in(&real, &ro.join("emrac"), &d.join("k"), "0.8.0", "0.8.0", 1).is_err());
+        }
+        fs::set_permissions(&ro, fs::Permissions::from_mode(0o755)).unwrap();
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn only_the_newest_three_kept_binaries_stay() {
+        let d = scratch("swapkeep");
+        let (bin, keep) = (d.join("bin"), d.join("keep"));
+        fs::create_dir_all(&bin).unwrap();
+        let exe = bin.join("emrac");
+        fake_binary(&exe, "0.8.0");
+        let new = d.join("new");
+        fake_binary(&new, "0.9.0");
+        let mut last = PathBuf::new();
+        for i in 0..5 {
+            last = swap_in(&new, &exe, &keep, "0.8.0", "0.9.0", 100 + i).unwrap();
+        }
+        let names: Vec<_> = fs::read_dir(&keep).unwrap().flatten().collect();
+        assert_eq!(names.len(), 3, "{names:?}");
+        assert!(last.exists(), "the newest is always kept");
         let _ = fs::remove_dir_all(&d);
     }
 }

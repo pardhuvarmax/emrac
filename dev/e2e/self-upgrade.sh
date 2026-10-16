@@ -4,7 +4,7 @@
 # to look at a release index, refuse a tampered tarball, upgrade to 0.9.0,
 # downgrade back, and find an upgrade that was killed half way.
 #
-# last full run: after u20, 11 of 11 passed
+# last full run: after u20, 11 of 11 passed (the in-place checks were added after r3-u1)
 set -u
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; tail -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -56,4 +56,17 @@ ck "the upgrade left a backup, a log line and no journal" "ls -d \$HOME/.local/s
 ck "self upgrade now says it is the newest" "$e self up --dry-run | grep -q 'newest release'"
 ck "self downgrade goes back to 0.8.0" "$e self dn --yes --skip-tests && [ \"\$(pacman -Q emrac)\" = 'emrac 0.8.0-1' ] && $e --version | grep -q 0.8.0"
 ck "self downgrade to a version that is not older is refused" "! $e self dn --version 0.9.0 --dry-run"
+# a copy no package owns (put in ~/.local/bin by hand): updated in place, pacman untouched
+mkdir -p $HOME/.local/bin && cp /usr/bin/emrac $HOME/.local/bin/emrac
+m=$HOME/.local/bin/emrac
+ck "a copy in ~/.local/bin is planned as an in-place update" "$m self up --dry-run | grep -q 'in place' && $m self up --dry-run | grep -q '0.9.0'"
+index "$(printf '%064d' 1)"; $m self sync >/dev/null
+ck "in place: a tarball that does not match the index changes nothing" "! $m self up --yes --skip-tests; $m --version | grep -q 0.8.0 && [ ! -e \$HOME/.local/share/emrac/self/journal.json ] && [ -z \"\$(ls -A \$HOME/.local/bin | grep -v '^emrac\$')\" ]"
+index $S9; $m self sync >/dev/null
+ck "in place: self upgrade builds with cargo and replaces only that file" "$m self up --yes --skip-tests && $m --version | grep -q 0.9.0 && [ \"\$(pacman -Q emrac)\" = 'emrac 0.8.0-1' ] && /usr/bin/emrac --version | grep -q 0.8.0"
+ck "in place: the old binary is kept, nothing else is left in the folder" "ls \$HOME/.local/share/emrac/self/previous/emrac-0.8.0-* >/dev/null && \$(ls \$HOME/.local/share/emrac/self/previous/emrac-0.8.0-* | head -1) --version | grep -q 0.8.0 && [ \"\$(ls -A \$HOME/.local/bin)\" = emrac ] && grep -q '\"result\":\"ok\"' \$HOME/.local/share/emrac/self/log.jsonl"
+ck "in place: self downgrade goes back to 0.8.0" "$m self dn --yes --skip-tests && $m --version | grep -q 0.8.0"
+ln -sf $m $HOME/.local/bin/emrac-link
+ck "in place: a link is refused" "$HOME/.local/bin/emrac-link self up --dry-run 2>&1 | grep -qi 'is a link'"
+rm -f $HOME/.local/bin/emrac-link
 echo; echo "$n checks, $bad failed"

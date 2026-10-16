@@ -1,6 +1,6 @@
 use emrac_core::self_check;
 use emrac_core::self_meta;
-use emrac_core::self_upgrade::{self, ExecOptions, Outcome, Plan};
+use emrac_core::self_upgrade::{self, ExecOptions, Method, Outcome, Plan};
 use emrac_core::{say, Config, Voice};
 use emrac_core::{DoctorStatus, Error, Result};
 
@@ -230,6 +230,12 @@ pub fn print_plan(plan: &Plan, dry_run: bool, json: bool) {
                 "  Target:     {} ({}, {}, channel {})",
                 target.version, target.tag, target.date, target.channel
             );
+            match &plan.method {
+                Method::Package => println!("  Method:     build a package, install it with pacman"),
+                Method::InPlace { path } => println!(
+                    "  Method:     in place: build the binary and replace {path} (the old file is kept)"
+                ),
+            }
             println!("  Source:     {}", target.tarball);
             println!(
                 "  Verified:   SHA-256 from the release index ({})",
@@ -350,12 +356,24 @@ pub fn run_plan(plan: &Plan, dry_run: bool, yes: bool, skip_tests: bool, json: b
         plan.op,
         target,
         &plan.installed,
+        &plan.method,
         &ExecOptions { yes, skip_tests },
         &mut say_phase,
     )?;
     if json {
         println!("{}", serde_json::to_string_pretty(&report).unwrap());
+    } else if report.rolled_back {
+        say!(
+            Voice::Warns,
+            "emrac {} was built but did not run as that version, so the previous binary was put back: {}. Nothing else changed; your backup is in {}.",
+            report.to,
+            report.notes.join("; "),
+            report.backup
+        );
     } else if report.version_ok && report.check_ok {
+        if let Some(prev) = &report.previous {
+            say!(Voice::Notes, "the previous binary is kept as {prev}");
+        }
         say!(
             Voice::Confirms,
             "emrac is now {} ({}). The new version reports itself correctly and `emrac self check` passes. A copy of your configuration and data is in {}.",
