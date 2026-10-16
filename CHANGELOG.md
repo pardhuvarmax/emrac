@@ -18,7 +18,7 @@ Version `0.3.1`; tag `r3-u1`. The notes are `docs/releases/r3-u1.md` (also the t
 
 ## Small change (after u20), a review step in the release pipeline — 2026-10-16
 
-`dev/release-review.sh <tag>` reports what a release changes and what deserves a second look. The pipeline now runs `check`, then `review` (the report in the run summary), then `publish`, which belongs to the environment `release` and waits for a required reviewer to approve. `release.sh prepare --push` shows the review and asks before pushing (`--yes` skips the question); `release.sh review <tag>` runs it by hand.
+`dev/release-review.sh <tag>` reports what a release changes and what deserves a second look. The pipeline now runs `check`, then `review` (the report in the run summary), then `publish`, which belongs to the environment `release` and waits for a required reviewer to approve. `release.sh prepare --push` shows the review and asks before pushing (`--yes` skips the question); `release.sh review <tag>` runs it by hand. A git hook, `dev/hooks/pre-push` (on with `git config core.hooksPath dev/hooks`), does the same for a plain `git push origin <tag>`.
 
 ## Small change (after u20), the release pipeline — 2026-10-16
 

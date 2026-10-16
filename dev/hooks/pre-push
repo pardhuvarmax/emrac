@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Git pre-push hook: pushing a release tag (r*) first shows dev/release-review.sh
+# and asks whether to go on. Other pushes pass untouched.
+#
+# Turn it on once per clone:   git config core.hooksPath dev/hooks
+# Skip the question:           RELEASE_YES=1 git push origin <tag>
+set -u
+zero=0000000000000000000000000000000000000000
+root=$(git rev-parse --show-toplevel)
+
+tags=()
+while read -r local_ref local_sha _remote_ref _remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue
+    case $local_ref in
+    refs/tags/r*) tags+=("${local_ref#refs/tags/}") ;;
+    esac
+done
+[ ${#tags[@]} -gt 0 ] || exit 0
+[ -z "${RELEASE_YES:-}" ] || exit 0
+
+for tag in "${tags[@]}"; do
+    "$root/dev/release-review.sh" "$tag" >&2 || exit 1
+done
+echo >&2
+if ! exec 3</dev/tty 2>/dev/null; then
+    echo "pre-push: no terminal to ask on; push with RELEASE_YES=1 to go ahead" >&2
+    exit 1
+fi
+read -r -u 3 -p "Push ${tags[*]} now? This starts the release pipeline. [y/N] " ans 2>&1 || exit 1
+case $ans in
+y | Y | yes) exit 0 ;;
+*) echo "pre-push: not pushed" >&2; exit 1 ;;
+esac

@@ -185,8 +185,8 @@ PY
             read -r -p "Push $tag now (this starts the release pipeline)? [y/N] " ans
             case $ans in y | Y | yes) ;; *) say "not pushed; push when ready: git push && git push origin $tag"; return 0 ;; esac
         fi
-        git push
-        git push origin "$tag"
+        RELEASE_YES=1 git push
+        RELEASE_YES=1 git push origin "$tag"
         say "pushed; the release pipeline now publishes $tag (https://github.com/pardhuvarmax/emrac/actions)"
     else
         echo "Next: git push && git push origin $tag"

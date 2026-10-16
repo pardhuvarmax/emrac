@@ -22,6 +22,10 @@ Starts and finishes a release: `dev/release.sh prepare <tag> <version> ["summary
 
 `dev/release-review.sh <tag>` prints, as markdown, what to look at before a release goes out: versions and channel, commits and files since the previous tag, and flags for a changed state schema, `install.sh`, the build recipe, workflows, license, `Cargo.lock` crates, added `unsafe` and missing notes. The release pipeline shows it before its approval step; `release.sh prepare --push` shows it and asks before pushing.
 
+## hooks/pre-push
+
+A git hook: pushing a release tag (`r*`) shows `release-review.sh` and asks `[y/N]` before anything leaves the machine; other pushes are untouched. Turn it on once per clone with `git config core.hooksPath dev/hooks`; `RELEASE_YES=1 git push origin <tag>` skips the question.
+
 ## release-index.sh
 
 Adds a release (or a news item) to the root `releases.json`, the index `emrac self sync` reads: `dev/release-index.sh <tag> [stable|prerelease] ["summary"]` downloads the tag's tarball, computes its SHA-256, reads the version and the state schema from inside it and the date from the tag's commit. `dev/release-index.sh --news <date> <category> <title> <summary> [version]` adds a news item. Run it after pushing a tag, check the diff, commit `releases.json`. The format and publishing are in [`../docs/design/release-index.md`](../docs/design/release-index.md).
