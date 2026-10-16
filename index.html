@@ -275,12 +275,9 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
   .meter{width:72px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
-/* slice kinds: i, u and r are three hues around the theme's own accent, so they change with the theme;
-   a quiet tint, not a badge. Browsers without relative colours keep the plain status colours. */
+/* slice kinds: u follows the theme's accent; i (amber) and r (green) keep their status colours.
+   A quiet tint, not a badge. */
 :root{--k-i:var(--warn);--k-u:var(--link);--k-r:var(--ok)}
-@supports (color:oklch(from red l c h)){
-  :root{--k-i:oklch(from var(--link) l c calc(h - 125));--k-r:oklch(from var(--link) l c calc(h + 125))}
-}
 .k-i{color:color-mix(in srgb,var(--k-i) 78%,var(--text))}
 .k-u{color:color-mix(in srgb,var(--k-u) 72%,var(--text))}
 .k-r{color:color-mix(in srgb,var(--k-r) 78%,var(--text))}
