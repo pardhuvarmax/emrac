@@ -57,7 +57,7 @@
     {
       "date": "2026-10-14",
       "category": "release",
-      "title": "Emrac First AUR Release",
+      "title": "Emrac First AUR Release : R2-AUR",
       "summary": "r2 with a license and the tracked tests, packaged for the AUR.",
       "version": "0.2.0"
     },

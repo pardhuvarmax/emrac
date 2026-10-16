@@ -1,4 +1,4 @@
-# Emrac First AUR Release
+# Emrac First AUR Release : R2-AUR
 
 Tag `r2-aur`, 2026-10-14. Built by pardhuvarmax — https://github.com/pardhuvarmax/emrac
 
