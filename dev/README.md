@@ -18,6 +18,10 @@ Points the root `install.sh` at a release tag: `dev/pin-install-script.sh <tag>`
 
 Starts and finishes a release: `dev/release.sh prepare <tag> <version> ["summary"] [--channel prerelease] [--push]` checks the tree and the tests, bumps the version, writes `docs/releases/<tag>.md` and a changelog entry, commits and tags; with `--push` it pushes, and the release pipeline ([`../.github/workflows/release.yml`](../.github/workflows/release.yml)) checks the tag and runs `dev/release.sh publish <tag> --gh`, which pins `install.sh` (stable), adds the release and a news item to `releases.json`, creates the GitHub release and commits. `status` shows where things stand. See [`../docs/design/releasing.md`](../docs/design/releasing.md).
 
+## release-review.sh
+
+`dev/release-review.sh <tag>` prints, as markdown, what to look at before a release goes out: versions and channel, commits and files since the previous tag, and flags for a changed state schema, `install.sh`, the build recipe, workflows, license, `Cargo.lock` crates, added `unsafe` and missing notes. The release pipeline shows it before its approval step; `release.sh prepare --push` shows it and asks before pushing.
+
 ## release-index.sh
 
 Adds a release (or a news item) to the root `releases.json`, the index `emrac self sync` reads: `dev/release-index.sh <tag> [stable|prerelease] ["summary"]` downloads the tag's tarball, computes its SHA-256, reads the version and the state schema from inside it and the date from the tag's commit. `dev/release-index.sh --news <date> <category> <title> <summary> [version]` adds a news item. Run it after pushing a tag, check the diff, commit `releases.json`. The format and publishing are in [`../docs/design/release-index.md`](../docs/design/release-index.md).

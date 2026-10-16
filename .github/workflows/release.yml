@@ -1,7 +1,8 @@
 name: Release
 
 # Runs when a release tag is pushed (dev/release.sh prepare --push, or git push
-# origin <tag>). Checks the tag, then publishes it: the GitHub release, the
+# origin <tag>). Checks the tag, shows a review of what changed, waits for a
+# person to approve, then publishes it: the GitHub release, the
 # entry and news item in releases.json, and (stable only) the pin in install.sh.
 on:
   push:
@@ -56,9 +57,22 @@ jobs:
       - name: Test list is current
         run: sh dev/gen-tests-doc.sh --check
 
-  publish:
+  review:
     needs: check
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: What is about to go out (read this before approving)
+        run: dev/release-review.sh "$GITHUB_REF_NAME" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: review
+    runs-on: ubuntu-latest
+    # Waits here until a required reviewer approves (repository settings,
+    # Environments, "release"). Reject the run to stop the release.
+    environment: release
     steps:
       - uses: actions/checkout@v4
         with:

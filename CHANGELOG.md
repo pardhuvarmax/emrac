@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Small change (after u20), a review step in the release pipeline — 2026-10-16
+
+`dev/release-review.sh <tag>` reports what a release changes and what deserves a second look. The pipeline now runs `check`, then `review` (the report in the run summary), then `publish`, which belongs to the environment `release` and waits for a required reviewer to approve. `release.sh prepare --push` shows the review and asks before pushing (`--yes` skips the question); `release.sh review <tag>` runs it by hand.
+
 ## Small change (after u20), the release pipeline — 2026-10-16
 
 Publishing a release is now a pipeline. `dev/release.sh prepare <tag> <version> "summary" --push` checks, bumps, writes the notes, commits, tags and pushes; the new workflow `.github/workflows/release.yml` then checks the tag (annotated, on `main`, notes present, version higher than any in `releases.json`, format, clippy, tests) and runs `dev/release.sh publish <tag> --gh`: the GitHub release, the `releases.json` entry and news item, the `install.sh` pin (stable only), committed to `main` by the bot. The channel is a `Channel:` line in the notes (`--channel prerelease`). `docs/design/releasing.md`, `dev/README.md` and `.github/workflows/README.md` describe it.

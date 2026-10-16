@@ -10,6 +10,7 @@
 #                --channel C    stable (default) or prerelease; written into the notes
 #                --push         then push the commit and the tag, which starts the
 #                               release pipeline (.github/workflows/release.yml)
+#                --yes          with --push: do not ask before pushing
 #                --skip-checks  do not run fmt, clippy and the tests first
 #                --dry-run      say what would happen and change nothing
 #
@@ -23,6 +24,10 @@
 #       options: --summary TEXT  (default: the first paragraph of the notes)
 #                --gh            also run `gh release create` (needs gh login)
 #                --dry-run
+#
+#   dev/release.sh review <tag>
+#       What a person should look at before the tag goes out (the same text the
+#       pipeline shows before its approval step).
 #
 #   dev/release.sh status
 #       The version, the last tags, and what the next step is.
@@ -62,7 +67,7 @@ previous_tag() { git describe --tags --abbrev=0 2>/dev/null || true; }
 # ---------------------------------------------------------------- prepare
 
 prepare() {
-    local tag=${1:-} version=${2:-} summary="" notes="" title="" skip=0 dry=0 channel=stable push=0
+    local tag=${1:-} version=${2:-} summary="" notes="" title="" skip=0 dry=0 channel=stable push=0 yes=0
     [ -n "$tag" ] && [ -n "$version" ] || { usage; exit 2; }
     shift 2
     if [ $# -gt 0 ] && [[ $1 != --* ]]; then summary=$1; shift; fi
@@ -72,6 +77,7 @@ prepare() {
         --title) title=${2:?--title needs text}; shift 2 ;;
         --channel) channel=${2:?--channel needs stable or prerelease}; shift 2 ;;
         --push) push=1; shift ;;
+        --yes) yes=1; shift ;;
         --skip-checks) skip=1; shift ;;
         --dry-run) dry=1; shift ;;
         *) die "unknown option: $1" ;;
@@ -174,6 +180,11 @@ PY
     say "committed $(git rev-parse --short HEAD) and tagged $tag (nothing is pushed)"
     echo
     if [ "$push" = 1 ]; then
+        dev/release-review.sh "$tag"
+        if [ "$yes" = 0 ]; then
+            read -r -p "Push $tag now (this starts the release pipeline)? [y/N] " ans
+            case $ans in y | Y | yes) ;; *) say "not pushed; push when ready: git push && git push origin $tag"; return 0 ;; esac
+        fi
         git push
         git push origin "$tag"
         say "pushed; the release pipeline now publishes $tag (https://github.com/pardhuvarmax/emrac/actions)"
@@ -293,7 +304,8 @@ status() {
 case ${1:-} in
 prepare) shift; prepare "$@" ;;
 publish) shift; publish "$@" ;;
+review) shift; dev/release-review.sh "$@" ;;
 status) status ;;
 -h | --help | help | "") usage ;;
-*) die "unknown command '$1' (prepare, publish or status)" ;;
+*) die "unknown command '$1' (prepare, publish, review or status)" ;;
 esac

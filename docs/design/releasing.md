@@ -34,11 +34,22 @@ dev/release.sh prepare r3-u1 0.3.1 "one-line summary" --push       # check, bump
 The pipeline, on a pushed tag `r*`:
 
 1. **check** (Arch container): the tag is annotated and reachable from `main`; its notes exist; its version is higher than every version in `releases.json`; then format, clippy, tests and the test list. A failure stops everything; nothing is published.
-2. **publish**: `dev/release.sh publish <tag> --gh`: the tag's tarball is downloaded and its checksum taken, `releases.json` gets the release and a news item, `install.sh` is re-pinned (stable only), the GitHub release is created from the notes (marked prerelease on that channel), and the result is committed to `main` by `github-actions[bot]`.
+2. **review**: `dev/release-review.sh <tag>` writes into the run's summary the versions, the channel, the commits and files since the previous tag, and what deserves a second look: a changed state schema, `install.sh`, the build recipe, the workflows, the license, new or removed crates in `Cargo.lock`, added `unsafe`, missing notes. Run it by hand with `dev/release.sh review <tag>`.
+3. **approval**: the `publish` job belongs to the GitHub environment `release`, which holds the run until a required reviewer approves it in the Actions page (or rejects it, which stops the release). `prepare --push` also shows the review and asks `[y/N]` before it pushes (`--yes` skips the question).
+4. **publish**: `dev/release.sh publish <tag> --gh`: the tag's tarball is downloaded and its checksum taken, `releases.json` gets the release and a news item, `install.sh` is re-pinned (stable only), the GitHub release is created from the notes (marked prerelease on that channel), and the result is committed to `main` by `github-actions[bot]`.
 
 Not done by the pipeline: the AUR recipe. `publish` prints the `pkgver`, `pkgrel`, `_tag` and `sha256sums` (see the job log) for you to put into the AUR package. If the pipeline cannot run, push yourself (`git push && git push origin <tag>`) and run `dev/release.sh publish <tag>` by hand; it does the same steps, minus the commit by the bot.
 
 If `check` fails: fix, delete the tag (`git push origin :<tag>` and `git tag -d <tag>`), and `prepare` again with a new commit; the version bump from the failed attempt is then already in `Cargo.toml`, so use that same version.
+
+Set up once (a repository setting, not a file): create the environment with yourself as required reviewer. `<id>` is your numeric GitHub user id (`gh api user --jq .id`):
+
+```sh
+gh api -X PUT repos/pardhuvarmax/emrac/environments/release \
+  --input - <<< '{"reviewers":[{"type":"User","id":<id>}]}'
+```
+
+Until that is done the environment exists without a reviewer and the run does not wait.
 
 ## Checking it from outside
 
