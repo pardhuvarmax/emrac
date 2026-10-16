@@ -1,0 +1,77 @@
+name: Release
+
+# Runs when a release tag is pushed (dev/release.sh prepare --push, or git push
+# origin <tag>). Checks the tag, then publishes it: the GitHub release, the
+# entry and news item in releases.json, and (stable only) the pin in install.sh.
+on:
+  push:
+    tags: ['r*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install toolchain
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed base-devel git clang rust bubblewrap
+
+      - uses: actions/checkout@v4
+
+      - name: The tag is annotated, on main, and its version is new
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch --no-tags origin main
+          tag=${GITHUB_REF_NAME}
+          [ "$(git cat-file -t "refs/tags/$tag")" = tag ] || { echo "$tag is not an annotated tag"; exit 1; }
+          git merge-base --is-ancestor "$tag" origin/main || { echo "$tag is not on main"; exit 1; }
+          [ -f "docs/releases/$tag.md" ] || { echo "docs/releases/$tag.md is missing"; exit 1; }
+          python3 - "$tag" <<'PY'
+          import json, re, sys, subprocess
+          tag = sys.argv[1]
+          def key(v): return tuple(int(x) for x in v.split("."))
+          toml = subprocess.check_output(["git", "show", tag + ":Cargo.toml"], text=True)
+          new = re.search(r'\[workspace\.package\][^\[]*?\nversion = "([^"]+)"', toml).group(1)
+          index = json.load(open("releases.json"))
+          known = [r["version"] for r in index["releases"] if r["tag"] != tag]
+          if known and key(new) <= max(map(key, known)):
+              sys.exit(f"version {new} is not higher than the newest in releases.json ({max(known, key=key)}): emrac self upgrade would not offer it")
+          print("version", new, "is new")
+          PY
+
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --workspace
+      - name: Test list is current
+        run: sh dev/gen-tests-doc.sh --check
+
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --tags origin
+          dev/release.sh publish "$GITHUB_REF_NAME" --gh
+          git pull --rebase origin main
+          git push origin HEAD:main

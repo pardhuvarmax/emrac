@@ -7,11 +7,16 @@
 #       annotated tag locally. Pushes nothing.
 #       options: --notes FILE   use this file as the release notes
 #                --title TEXT   the notes' title (default: "emrac <tag>")
+#                --channel C    stable (default) or prerelease; written into the notes
+#                --push         then push the commit and the tag, which starts the
+#                               release pipeline (.github/workflows/release.yml)
 #                --skip-checks  do not run fmt, clippy and the tests first
 #                --dry-run      say what would happen and change nothing
 #
 #   dev/release.sh publish <tag> [stable|prerelease] [options]
-#       Run it after `git push && git push origin <tag>`. Checks that the tag is
+#       The release pipeline runs this when a tag is pushed; run it by hand only
+#       if the pipeline did not. The channel is read from the notes (a line
+#       `Channel: prerelease`; stable otherwise). Checks that the tag is
 #       public, pins install.sh to it (stable only), adds it to releases.json
 #       with a news item, commits that, and prints the values for the AUR
 #       PKGBUILD. Pushes nothing.
@@ -57,7 +62,7 @@ previous_tag() { git describe --tags --abbrev=0 2>/dev/null || true; }
 # ---------------------------------------------------------------- prepare
 
 prepare() {
-    local tag=${1:-} version=${2:-} summary="" notes="" title="" skip=0 dry=0
+    local tag=${1:-} version=${2:-} summary="" notes="" title="" skip=0 dry=0 channel=stable push=0
     [ -n "$tag" ] && [ -n "$version" ] || { usage; exit 2; }
     shift 2
     if [ $# -gt 0 ] && [[ $1 != --* ]]; then summary=$1; shift; fi
@@ -65,11 +70,14 @@ prepare() {
         case $1 in
         --notes) notes=${2:?--notes needs a file}; shift 2 ;;
         --title) title=${2:?--title needs text}; shift 2 ;;
+        --channel) channel=${2:?--channel needs stable or prerelease}; shift 2 ;;
+        --push) push=1; shift ;;
         --skip-checks) skip=1; shift ;;
         --dry-run) dry=1; shift ;;
         *) die "unknown option: $1" ;;
         esac
     done
+    case $channel in stable | prerelease) ;; *) die "the channel is stable or prerelease, not '$channel'" ;; esac
 
     valid_tag "$tag" || die "'$tag' is not a usable tag (letters, digits, . _ -, at most 40 characters)"
     valid_version "$version" || die "'$version' is not a version like 1.2.3"
@@ -132,6 +140,8 @@ PY
             echo
             echo "$summary"
             echo
+            echo "Channel: $channel"
+            echo
             echo "## What changed${prev:+ since \`$prev\`}"
             echo
             git log --no-merges --format='- %s' "${prev:+$prev..}HEAD"
@@ -163,18 +173,27 @@ PY
     git tag -a "$tag" -F "$file" --cleanup=verbatim
     say "committed $(git rev-parse --short HEAD) and tagged $tag (nothing is pushed)"
     echo
-    echo "Next:"
-    echo "  git push && git push origin $tag"
-    echo "  dev/release.sh publish $tag"
+    if [ "$push" = 1 ]; then
+        git push
+        git push origin "$tag"
+        say "pushed; the release pipeline now publishes $tag (https://github.com/pardhuvarmax/emrac/actions)"
+    else
+        echo "Next: git push && git push origin $tag"
+        echo "      the release pipeline does the rest (or, by hand: dev/release.sh publish $tag)"
+    fi
 }
 
 # ---------------------------------------------------------------- publish
 
 publish() {
-    local tag=${1:-} channel=stable summary="" gh=0 dry=0
+    local tag=${1:-} channel="" summary="" gh=0 dry=0
     [ -n "$tag" ] || { usage; exit 2; }
     shift
     if [ $# -gt 0 ] && [[ $1 != --* ]]; then channel=$1; shift; fi
+    if [ -z "$channel" ]; then
+        channel=$(git show "$tag:docs/releases/$tag.md" 2>/dev/null | sed -n 's/^Channel: *//p' | head -n 1)
+        channel=${channel:-stable}
+    fi
     while [ $# -gt 0 ]; do
         case $1 in
         --summary) summary=${2:?--summary needs text}; shift 2 ;;

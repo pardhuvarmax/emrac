@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Small change (after u20), the release pipeline — 2026-10-16
+
+Publishing a release is now a pipeline. `dev/release.sh prepare <tag> <version> "summary" --push` checks, bumps, writes the notes, commits, tags and pushes; the new workflow `.github/workflows/release.yml` then checks the tag (annotated, on `main`, notes present, version higher than any in `releases.json`, format, clippy, tests) and runs `dev/release.sh publish <tag> --gh`: the GitHub release, the `releases.json` entry and news item, the `install.sh` pin (stable only), committed to `main` by the bot. The channel is a `Channel:` line in the notes (`--channel prerelease`). `docs/design/releasing.md`, `dev/README.md` and `.github/workflows/README.md` describe it.
+
 ## Small change (after u20), dev/release.sh and docs/design/releasing.md — 2026-10-16
 
 `dev/release.sh prepare|publish|status` does the repeated parts of a release: checks, version bump (`Cargo.toml`, `Cargo.lock`), release notes, changelog entry, local tag; then, after the push, the pin of `install.sh`, the `releases.json` entry and news item, and the values for the AUR recipe. It never pushes. `docs/design/releasing.md` describes how a small update is published and how it is received with `emrac self sync`, `self news` and `self upgrade`, including that only a higher version number counts as an update.

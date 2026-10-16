@@ -16,7 +16,7 @@ Points the root `install.sh` at a release tag: `dev/pin-install-script.sh <tag>`
 
 ## release.sh
 
-Publishes a release in two phases: `dev/release.sh prepare <tag> <version> ["summary"]` checks the tree and the tests, bumps the version, writes `docs/releases/<tag>.md` and a changelog entry, commits and tags locally; after you push, `dev/release.sh publish <tag> [stable|prerelease]` pins `install.sh` (stable), adds the release and a news item to `releases.json`, commits, and prints the values for the AUR recipe. `status` shows where things stand. It never pushes. See [`../docs/design/releasing.md`](../docs/design/releasing.md).
+Starts and finishes a release: `dev/release.sh prepare <tag> <version> ["summary"] [--channel prerelease] [--push]` checks the tree and the tests, bumps the version, writes `docs/releases/<tag>.md` and a changelog entry, commits and tags; with `--push` it pushes, and the release pipeline ([`../.github/workflows/release.yml`](../.github/workflows/release.yml)) checks the tag and runs `dev/release.sh publish <tag> --gh`, which pins `install.sh` (stable), adds the release and a news item to `releases.json`, creates the GitHub release and commits. `status` shows where things stand. See [`../docs/design/releasing.md`](../docs/design/releasing.md).
 
 ## release-index.sh
 
