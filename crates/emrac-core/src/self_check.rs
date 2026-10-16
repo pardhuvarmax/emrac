@@ -261,20 +261,34 @@ pub fn evaluate(f: &SelfFacts) -> DoctorReport {
     });
 
     // Updating.
-    checks.push(match &f.owner {
-        Owner::Package { foreign: true, .. } => check(
-            "update",
-            "Updating",
-            Status::Note,
-            "it comes through your AUR helper or a rebuild of the package; emrac does not update itself yet",
-        ),
-        Owner::Package { .. } => check("update", "Updating", Status::Note, "through `pacman -Syu`; emrac does not update itself yet"),
-        _ => check(
-            "update",
-            "Updating",
-            Status::Note,
-            "no package manager owns this copy, so it has to be replaced by hand; emrac does not update itself yet",
-        ),
+    checks.push({
+        let (summary, fix): (String, Option<&str>) = match &f.owner {
+            Owner::Package { name, .. } if name == "emrac" => match (&f.release.newer, f.release.last_ok) {
+                (Some(newer), _) => (
+                    format!("a newer release is out: {newer}"),
+                    Some("emrac self upgrade"),
+                ),
+                (None, None) => (
+                    "`emrac self upgrade` updates it through pacman; `emrac self sync` first tells it what is out".to_string(),
+                    Some("emrac self sync"),
+                ),
+                (None, Some(_)) => (
+                    "`emrac self upgrade` updates it through pacman; you are on the newest release the channel offers".to_string(),
+                    None,
+                ),
+            },
+            Owner::Package { name, .. } => (
+                format!("it belongs to the package '{name}': update it with pacman"),
+                None,
+            ),
+            _ => (
+                "no package owns this copy, so `emrac self upgrade` will not replace it; update it the way you installed it".to_string(),
+                None,
+            ),
+        };
+        let mut c = check("update", "Updating", Status::Note, summary);
+        c.fix = fix.map(str::to_string);
+        c
     });
 
     // Where releases are announced, and how much of it emrac knows.
@@ -1140,6 +1154,42 @@ mod tests {
         let c = r.checks.iter().find(|c| c.id == "owner").unwrap();
         assert!(c.summary.starts_with("UNKNOWN"));
         assert_eq!(c.status, Status::Note);
+    }
+
+    #[test]
+    fn the_updating_row_points_at_self_upgrade_and_says_when_a_newer_release_is_out() {
+        let row = |f: &SelfFacts| {
+            evaluate(f)
+                .checks
+                .into_iter()
+                .find(|c| c.id == "update")
+                .unwrap()
+        };
+        let mut f = healthy();
+        let c = row(&f);
+        assert!(
+            c.summary.contains("newest release") && c.fix.is_none(),
+            "{c:?}"
+        );
+        assert!(!c.summary.contains("does not update itself"));
+        f.release.newer = Some("r4 (0.4.0)".into());
+        let c = row(&f);
+        assert!(
+            c.summary.contains("newer release is out: r4")
+                && c.fix.as_deref() == Some("emrac self upgrade")
+        );
+        f.release.newer = None;
+        f.release.last_ok = None;
+        assert_eq!(row(&f).fix.as_deref(), Some("emrac self sync"));
+        f.owner = Owner::Cargo;
+        let c = row(&f);
+        assert!(c.summary.contains("will not replace it"), "{c:?}");
+        f.owner = Owner::Package {
+            name: "other".into(),
+            version: "1".into(),
+            foreign: false,
+        };
+        assert!(row(&f).summary.contains("update it with pacman"));
     }
 
     #[test]

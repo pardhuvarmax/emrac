@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 402
+     - 403
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 11
@@ -31,9 +31,9 @@ Totals
      - 29
    * - **Automated total**
      -
-     - **442**
+     - **443**
 
-emrac-core library (402)
+emrac-core library (403)
 ------------------------
 
 ``arch_news::tests`` (7)
@@ -482,7 +482,7 @@ emrac-core library (402)
 * ``the_timeout_kills_a_run_on_time_and_a_normal_exit_is_reported``
 * ``tmpfs_mounts_get_a_size_cap_when_one_is_set``
 
-``self_check::tests`` (11)
+``self_check::tests`` (12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_cut_off_self_operation_is_a_warning_that_says_what_it_means``
@@ -494,6 +494,7 @@ emrac-core library (402)
 * ``each_failure_is_reported_with_its_own_status_and_fix``
 * ``the_home_directory_is_removed_from_a_shared_report``
 * ``the_release_metadata_row_tells_never_stale_failed_and_newer_apart``
+* ``the_updating_row_points_at_self_upgrade_and_says_when_a_newer_release_is_out``
 * ``version_strings_are_validated``
 * ``where_the_binary_lives_decides_the_owner_and_unknown_stays_unknown``
 

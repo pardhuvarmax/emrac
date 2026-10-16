@@ -20,7 +20,7 @@ emrac itself is wrong, which may be the day pacman or the config is broken. So i
 | Executable | the running binary can be identified and opened; a ` (deleted)` mark means it was replaced while running |
 | Version | the build's version is `x.y.z` |
 | Installation | `pacman -Qo` names the owning package (and whether it is foreign: AUR or built locally); otherwise the place decides: `target/` is a development build, `~/.cargo/bin` is cargo, `/usr/local` or `~/.local/bin` is by hand; anything else is **UNKNOWN**, never guessed |
-| Updating | what follows from the owner; always says emrac does not update itself yet |
+| Updating | what follows from the owner; at u11 it said emrac did not update itself yet, since `self upgrade` came in u14 it points at `emrac self upgrade` and says when a newer release is out |
 | Configuration | `config.toml` parses, is not world-writable |
 | Local state | the history reads and its chain verifies |
 | Data folder | `~/.local/share/emrac` can be written |
