@@ -278,6 +278,10 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
 /* slice kinds: u follows the theme's accent; i (amber) and r (green) keep their status colours.
    A quiet tint, not a badge. */
 :root{--k-i:var(--warn);--k-u:var(--link);--k-r:var(--ok)}
+/* where the accent is the same hue as i or r, u or i moves so that the three stay apart */
+:root[data-theme="amber"]{--k-i:#b794f6}
+:root[data-theme="phosphor"]{--k-u:#5aa9e6}
+:root[data-theme="crimson"]{--k-i:#e0c040}
 .k-i{color:color-mix(in srgb,var(--k-i) 78%,var(--text))}
 .k-u{color:color-mix(in srgb,var(--k-u) 72%,var(--text))}
 .k-r{color:color-mix(in srgb,var(--k-r) 78%,var(--text))}
