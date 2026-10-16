@@ -275,14 +275,19 @@ aside .dl p{margin:8px 0 0;color:var(--muted);font-size:12px}
   .meter{width:72px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
-/* slice kinds: i incubation (amber), u update (accent), r release (green); a quiet tint, not a badge */
-.k-i{color:color-mix(in srgb,var(--warn) 78%,var(--text))}
-.k-u{color:color-mix(in srgb,var(--link) 72%,var(--text))}
-.k-r{color:color-mix(in srgb,var(--ok) 78%,var(--text))}
+/* slice kinds: i, u and r are three hues around the theme's own accent, so they change with the theme;
+   a quiet tint, not a badge. Browsers without relative colours keep the plain status colours. */
+:root{--k-i:var(--warn);--k-u:var(--link);--k-r:var(--ok)}
+@supports (color:oklch(from red l c h)){
+  :root{--k-i:oklch(from var(--link) l c calc(h - 125));--k-r:oklch(from var(--link) l c calc(h + 125))}
+}
+.k-i{color:color-mix(in srgb,var(--k-i) 78%,var(--text))}
+.k-u{color:color-mix(in srgb,var(--k-u) 72%,var(--text))}
+.k-r{color:color-mix(in srgb,var(--k-r) 78%,var(--text))}
 .k-r a{color:inherit;text-decoration:underline dotted}
-table.box tr:has(.k-i) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--warn) 45%,transparent)}
-table.box tr:has(.k-u) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--link) 40%,transparent)}
-table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--ok) 55%,transparent)}
+table.box tr:has(.k-i) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--k-i) 45%,transparent)}
+table.box tr:has(.k-u) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--k-u) 40%,transparent)}
+table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--k-r) 55%,transparent)}
 </style>
 </head>
 <body>
