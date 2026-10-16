@@ -24,6 +24,7 @@ mod pins;
 mod plan;
 pub mod preflight;
 mod purge;
+pub mod recommend;
 mod reinstall;
 pub mod repo_trust;
 mod rollback;

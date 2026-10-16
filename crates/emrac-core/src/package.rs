@@ -33,4 +33,7 @@ pub struct PackageDetails {
     pub last_modified: Option<i64>,
     pub conflicts: Vec<String>,
     pub replaces: Vec<String>,
+    /// AUR only: what building it needs (the sync database has none).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub make_depends: Vec<String>,
 }

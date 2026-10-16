@@ -45,6 +45,12 @@ printf 'pkgbase = pfetch\n\tpkgdesc = fixture\n\tpkgver = 9.9\n\tpkgrel = 1\n\ta
 (cd /tmp/w && git init -q -b master && git add -A && git commit -q -m x) && git clone -q --bare /tmp/w /tmp/up.git && git clone -q /tmp/up.git $B/pfetch
 ck "AUR install: audit, sandbox build, manifest, pacman -U" "$e install pfetch --yes --skip-pkgbuild </dev/null && pacman -Q pfetch"
 ck "build without installing"         "$e build pfetch --skip-pkgbuild </dev/null | grep -q 'emrac confirms: built'"
+# recommend (u2)
+ck "recommend: an official package, both sides, and --json" "$e recommend tree | grep -q 'Recommendation for tree' && $e recommend source tree | grep -q 'source side' && $e recommend binary tree | grep -q 'binary side' && $e recommend tree --json | grep -q '\"verdict\"'"
+ck "recommend: with Arch's default flags the binary wins and the flags are the reason" "rm -f \$HOME/.makepkg.conf; $e recommend tree | grep -q 'Recommendation for tree: binary' && $e recommend tree | grep -q 'defaults'"
+ck "recommend: -march=native in ~/.makepkg.conf is read and counts as a gain" "echo 'CFLAGS=\"-march=native -O2 -pipe\"' > \$HOME/.makepkg.conf; $e recommend tree | grep -q 'flags target native'; rc=\$?; rm -f \$HOME/.makepkg.conf; [ \$rc -eq 0 ]"
+ck "recommend: an architecture-independent package has nothing to compile" "$e recommend ttf-dejavu | grep -q 'nothing is compiled'"
+ck "recommend: a build is timed and the next recommend uses the measurement" "grep -q '\"name\":\"pfetch\"' \$HOME/.local/share/emrac/build-times.jsonl && $e recommend pfetch --json | grep -q '\"build_basis\": \"measured\"'"
 ck "rebuild builds an installed AUR package again" "b1=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p'); sleep 2; $e rebuild pfetch --yes --skip-pkgbuild </dev/null >/tmp/rb 2>&1; rc=\$?; tail -6 /tmp/rb; [ \$rc -eq 0 ] && b2=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p') && [ \"\$b1\" != \"\$b2\" ] && $e history | grep -q pfetch"
 ck "a backup of pacman's local database is made before a transaction" "ls \$HOME/.local/share/emrac/pacman-db/local-*.tar.gz >/dev/null && $e doctor 2>&1 | grep -q 'pacman database backup'"
 # AUR trust signals (u20): the sources change under the same version

@@ -133,6 +133,10 @@ pub enum Error {
     #[error("{0}")]
     News(String),
 
+    /// `emrac recommend` or `explain` was asked something it cannot answer.
+    #[error("{0}")]
+    Recommend(String),
+
     /// The backup or check of pacman's own database failed.
     #[error("{0}")]
     PacmanDb(String),
@@ -373,6 +377,7 @@ impl Error {
             | Error::Preflight(_)
             | Error::PlanChanged(_)
             | Error::Rebuild(_)
+            | Error::Recommend(_)
             | Error::News(_)
             | Error::PacmanDb(_)
             | Error::NoTransactionToRollBack

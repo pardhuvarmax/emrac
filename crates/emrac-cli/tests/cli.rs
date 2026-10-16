@@ -1570,3 +1570,14 @@ fn the_test_helper_does_not_pass_makepkgs_folders_on_to_emrac() {
         assert!(removed.iter().any(|r| r == var), "{var} is passed through");
     }
 }
+
+#[test]
+fn recommend_needs_a_package_and_only_source_or_binary_may_precede_it() {
+    let home = Home::new("recommend");
+    let out = home.run(&["recommend"]);
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    let out = home.run(&["recommend", "fast", "ripgrep"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("source"), "{}", stderr(&out));
+    assert!(stdout(&home.run(&["--help"])).contains("recommend"));
+}

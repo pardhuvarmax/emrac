@@ -464,7 +464,10 @@ impl Sources {
     /// returns the package files. Prompts interactively (build output,
     /// dependency sync, sudo password) like a real `makepkg` session.
     pub fn build_aur_package(&self, name: &str, opts: BuildOptions) -> Result<Vec<PathBuf>> {
-        match self.aur_build.build(name, opts) {
+        let started = std::time::Instant::now();
+        let built = self.aur_build.build(name, opts);
+        self.note_build(name, started.elapsed().as_secs(), built.is_ok());
+        match built {
             Ok(()) => {}
             // The dependency step is pacman's, which says only that it
             // failed; if a conflict is why, say what it is.
@@ -498,8 +501,80 @@ impl Sources {
         dir: &std::path::Path,
         opts: BuildOptions,
     ) -> Result<Vec<PathBuf>> {
-        self.aur_build.build_in(dir, opts)?;
+        let started = std::time::Instant::now();
+        let built = self.aur_build.build_in(dir, opts);
+        let name = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        self.note_build(&name, started.elapsed().as_secs(), built.is_ok());
+        built?;
         self.aur_build.built_files_in(dir)
+    }
+
+    /// Notes how long a build took, for `recommend` (never fails the build).
+    fn note_build(&self, name: &str, secs: u64, ok: bool) {
+        crate::recommend::record_build(name, "", secs, ok);
+    }
+
+    /// What `recommend` weighs for `name`: the package's shape, the
+    /// toolchain it needs, what emrac measured and recorded here, and this
+    /// machine. Reads only; the AUR is asked unless `offline`.
+    pub fn recommend_facts(&self, name: &str, offline: bool) -> Result<crate::recommend::Facts> {
+        use crate::recommend::{self as rec, Class, Facts, Origin};
+        const MIB: f64 = 1_048_576.0;
+        let details = self.info(name, offline)?;
+        let (machine, flags) = rec::gather_machine();
+        let history = History::all().unwrap_or_default();
+        let aur = details.repo == "aur";
+        let mut f = Facts {
+            name: details.name.clone(),
+            origin: Origin {
+                repo: details.repo.clone(),
+            },
+            binary: None,
+            arch_any: false,
+            installed_mib: None,
+            download_mib: None,
+            deps_direct: details.depends.len(),
+            deps_total: None,
+            class: Class::Unknown,
+            class_from: String::new(),
+            measured: rec::measured_builds(&details.name, machine.cores),
+            updates_90d: rec::updates_in_window(&history, &details.name, now()),
+            flags,
+            machine,
+        };
+        if aur {
+            let (class, why) = if details.name.ends_with("-bin") {
+                (
+                    Class::NoCompile,
+                    "its name ends in -bin: it repackages upstream's binary".to_string(),
+                )
+            } else {
+                rec::class_from_makedepends(&details.make_depends)
+            };
+            f.class = class;
+            f.class_from = why;
+            if !details.name.ends_with("-bin") && !offline {
+                let sibling = format!("{}-bin", details.name);
+                if let Ok(Some(_)) = self.aur.info(&sibling) {
+                    f.binary = Some(sibling);
+                }
+            }
+        } else if let Some(shape) = self.alpm.repo_shape(&details.name) {
+            f.binary = Some(details.name.clone());
+            f.arch_any = shape.arch_any;
+            f.installed_mib = Some(shape.installed as f64 / MIB);
+            f.download_mib = Some(shape.download as f64 / MIB);
+            f.deps_direct = shape.depends.len();
+            let (class, why) = rec::class_from_depends(shape.arch_any, &shape.depends);
+            f.class = class;
+            f.class_from = why;
+            f.deps_total =
+                Some(deps::closure(&details.name, &|n| self.alpm.sync_dependency_names(n)).len());
+        }
+        Ok(f)
     }
 
     /// Is a build sandbox usable here? The error says what to do.

@@ -20,6 +20,7 @@ pub mod plan_check;
 pub mod preflight;
 pub mod purge;
 pub mod rebuild;
+pub mod recommend;
 pub mod reinstall;
 pub mod remove;
 pub mod report;

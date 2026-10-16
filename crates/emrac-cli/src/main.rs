@@ -341,6 +341,7 @@ fn run(cli: &Cli) -> Result<()> {
             ..
         } => commands::deps::impact(&sources, pkg, *install, *upgrade, offline, json),
         Commands::Cycles => commands::deps::cycles(&sources, json),
+        Commands::Recommend { args } => commands::recommend::run(&sources, args, offline, json),
         Commands::Report => commands::report::run(&sources, json),
         Commands::Snapshot { command } => {
             commands::snapshot::create(&sources, command.as_ref(), json)

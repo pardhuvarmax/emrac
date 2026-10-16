@@ -81,6 +81,7 @@ impl AurBackend {
                 last_modified: r.last_modified,
                 conflicts: r.conflicts,
                 replaces: r.replaces,
+                make_depends: r.make_depends,
             })
             .collect())
     }
@@ -215,6 +216,8 @@ struct AurInfoResult {
     conflicts: Vec<String>,
     #[serde(rename = "Replaces", default)]
     replaces: Vec<String>,
+    #[serde(rename = "MakeDepends", default)]
+    make_depends: Vec<String>,
 }
 
 #[cfg(test)]

@@ -339,6 +339,14 @@ pub enum Commands {
         format: GraphFormat,
     },
 
+    /// Source or binary? A recommendation from stated rules, with the reasons
+    Recommend {
+        /// The package; or `source` / `binary` and then the package, to see
+        /// that side only
+        #[arg(required = true, num_args = 1..=2, value_name = "[source|binary] PKG")]
+        args: Vec<String>,
+    },
+
     /// What a change to a package would affect (default: removing it)
     Impact {
         pkg: String,

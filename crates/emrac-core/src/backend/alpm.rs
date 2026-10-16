@@ -478,6 +478,7 @@ impl AlpmBackend {
                     last_modified: None,
                     conflicts: pkg.conflicts().into_iter().map(|d| d.to_string()).collect(),
                     replaces: pkg.replaces().into_iter().map(|d| d.to_string()).collect(),
+                    make_depends: Vec::new(),
                 });
             }
         }
@@ -700,6 +701,41 @@ impl AlpmBackend {
         Some((pkg.version().to_string(), installed, depends, optional))
     }
 
+    /// What `recommend` needs of an official package: sizes, whether it is
+    /// architecture-independent, and its dependencies.
+    pub fn repo_shape(&self, name: &str) -> Option<RepoShape> {
+        self.handle.syncdbs().into_iter().find_map(|db| {
+            let pkg = db.pkg(name).ok()?;
+            Some(RepoShape {
+                download: pkg.size().max(0) as u64,
+                installed: pkg.isize().max(0) as u64,
+                arch_any: pkg.arch() == Some("any"),
+                depends: pkg.depends().iter().map(|d| d.to_string()).collect(),
+            })
+        })
+    }
+
+    /// Names of the sync-database packages satisfying `name`'s required
+    /// dependencies, installed or not.
+    pub fn sync_dependency_names(&self, name: &str) -> Vec<String> {
+        let dbs = self.handle.syncdbs();
+        let Some(pkg) = dbs.iter().find_map(|db| db.pkg(name).ok()) else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = pkg
+            .depends()
+            .iter()
+            .filter_map(|d| {
+                dbs.iter()
+                    .find_map(|db| db.pkgs().find_satisfier(d.to_string()))
+            })
+            .map(|p| p.name().to_string())
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    }
+
     /// Names of the installed packages satisfying `name`'s required
     /// dependencies (duplicates removed, unsatisfied ones skipped).
     pub fn installed_dependency_names(&self, name: &str) -> Vec<String> {
@@ -910,6 +946,14 @@ pub(crate) fn observe(root: &str, rel: &str) -> Observed {
         Ok(hash) => Observed::Hash(hash),
         Err(_) => Observed::Unreadable,
     }
+}
+
+/// An official package as `recommend` sees it.
+pub struct RepoShape {
+    pub download: u64,
+    pub installed: u64,
+    pub arch_any: bool,
+    pub depends: Vec<String>,
 }
 
 pub struct ResolvedPackage {
