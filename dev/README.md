@@ -14,6 +14,10 @@ End-to-end checks of the release binary against a real pacman, run in the contai
 
 Points the root `install.sh` at a release tag: `dev/pin-install-script.sh <tag>` downloads the tag's tarball, computes its SHA-256, reads the version and rewrites the three pinned values at the top of the script. Run it after pushing a new tag and commit the result.
 
+## ci.sh
+
+The checks CI runs: format, clippy, tests, that the scripts parse, that the test list is current. Run it as an ordinary user (it refuses root): `dev/ci.sh`. CI makes such a user in its container and runs this through `su`.
+
 ## release.sh
 
 Starts and finishes a release: `dev/release.sh prepare <tag> <version> ["summary"] [--channel prerelease] [--push]` checks the tree and the tests, bumps the version, writes `docs/releases/<tag>.md` and a changelog entry, commits and tags; with `--push` it pushes, and the release pipeline ([`../.github/workflows/release.yml`](../.github/workflows/release.yml)) checks the tag and runs `dev/release.sh publish <tag> --gh`, which pins `install.sh` (stable), adds the release and a news item to `releases.json`, creates the GitHub release and commits. `status` shows where things stand. See [`../docs/design/releasing.md`](../docs/design/releasing.md).

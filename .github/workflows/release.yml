@@ -48,14 +48,13 @@ jobs:
           print("version", new, "is new")
           PY
 
-      - name: Format
-        run: cargo fmt --all -- --check
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Test
-        run: cargo test --workspace
-      - name: Test list is current
-        run: sh dev/gen-tests-doc.sh --check
+      - name: Make an ordinary user (the tests expect one)
+        run: |
+          useradd -m ci
+          chown -R ci:ci "$GITHUB_WORKSPACE"
+
+      - name: Format, lints, tests, scripts, test list
+        run: su ci -s /bin/sh -c "cd '$GITHUB_WORKSPACE' && git config --global --add safe.directory '$GITHUB_WORKSPACE' && sh dev/ci.sh"
 
   review:
     needs: check

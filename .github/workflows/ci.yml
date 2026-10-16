@@ -18,19 +18,12 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Format
-        run: cargo fmt --all -- --check
-
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: Test
-        run: cargo test --workspace
-
-      - name: Shell scripts parse
+      # The tests expect an ordinary user (emrac warns when run as root and some
+      # checks need root to fail), so everything below runs as one.
+      - name: Make an ordinary user
         run: |
-          sh -n install.sh
-          for f in dev/*.sh; do sh -n "$f"; done
+          useradd -m ci
+          chown -R ci:ci "$GITHUB_WORKSPACE"
 
-      - name: Test list is current
-        run: sh dev/gen-tests-doc.sh --check
+      - name: Format, lints, tests, scripts, test list
+        run: su ci -s /bin/sh -c "cd '$GITHUB_WORKSPACE' && git config --global --add safe.directory '$GITHUB_WORKSPACE' && sh dev/ci.sh"

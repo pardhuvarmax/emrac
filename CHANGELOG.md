@@ -12,13 +12,13 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Fix (after u1), CI runs the checks as an ordinary user — 2026-10-16
+
+Six command-line tests failed on GitHub (`audit_grades_pkgbuilds_by_severity_and_exit_code`, `an_anchor_taken_earlier_catches_a_cut_off_tail`, `config_round_trip_and_errors`, `history_archive_verify_and_ack`, `the_ledger_holds_a_second_copy_and_repairs_the_history`, `the_watch_install_asks_for_root_and_the_helper_stays_hidden`) because the workflow's container ran them as root: emrac prints its "don't run as root" warning first, the ledger is written differently, and the check that the ledger helper asks for root passes. They assume an ordinary user, as on a real machine. The checks are now in `dev/ci.sh`, which refuses root, and the workflows (`ci.yml` and `release.yml`) make an ordinary user and run it through `su`. The site's change list marks every slice with the release it came after (`since i1`, `since r1`, `since r2`, `since r3`). No release was cut for u1: `r3-u1` was prepared and withdrawn (version back to 0.3.0); the next release is r4.
+
 ## Slice u1 (after r3) — 2026-10-16 — self upgrade for copies no package owns
 
 `emrac self upgrade` and `self downgrade` no longer refuse a copy installed with `cargo install` or put in `~/.local/bin` or `/usr/local/bin` by hand, when its folder is writable by you: they update it **in place**. The release is downloaded and checked as before, built with `cargo` (no `makepkg`, `pacman`, `sudo` or `fakeroot`), the new binary is run from its staging folder and again from the folder it is going to, the old file is kept in `~/.local/share/emrac/self/previous/` (newest 3), and the new file is renamed over the old one in one step. A new binary that does not report the target version is refused before anything changes, or, after the rename, replaced by the kept file automatically. The packaged copy is updated through pacman exactly as before; another package's file, a `target/` build, a link, an unknown owner and a folder you can't write to are still refused, and emrac never asks for root to do this. `--dry-run` shows the `Method:`; the plan is `docs/plan/r3/u1-in-place-update.md`, the page `docs/design/self-upgrade.md`.
-
-## Release r3-u1 — 2026-10-16 — emrac updates a copy no package owns in place (self upgrade and downgrade), the tests ignore makepkg's folder variables, and releases are published by a pipeline with a review and an approval step
-
-Version `0.3.1`; tag `r3-u1`. The notes are `docs/releases/r3-u1.md` (also the text of the annotated tag). Published with `dev/release.sh`; `emrac self upgrade` finds it once `releases.json` lists it.
 
 ## Small change (after u20), a review step in the release pipeline — 2026-10-16
 
