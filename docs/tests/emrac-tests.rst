@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 408
+     - 426
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 11
+     - 13
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 29
+     - 30
    * - **Automated total**
      -
-     - **448**
+     - **469**
 
-emrac-core library (408)
+emrac-core library (426)
 ------------------------
 
 ``arch_news::tests`` (7)
@@ -415,6 +415,28 @@ emrac-core library (408)
 * ``classification``
 * ``only_modified_and_unknown_are_at_risk``
 
+``recommend::tests`` (18)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_flag_the_cpu_cannot_run_does_not_count``
+* ``a_long_build_outweighs_the_gain``
+* ``a_tuned_build_of_something_quick_is_worth_it``
+* ``a_tuned_repository_makes_v3_flags_no_gain_but_native_still_is_one``
+* ``a_verdict_that_flips_inside_the_estimates_range_has_low_confidence``
+* ``an_architecture_independent_package_has_nothing_to_compile``
+* ``cost_bands_and_churn_bands_follow_the_plan``
+* ``machine_facts_come_from_the_proc_text``
+* ``makepkg_conf_text_is_read_last_assignment_wins``
+* ``measured_builds_replace_the_estimate_and_raise_the_confidence``
+* ``no_binary_means_source_is_the_only_option_and_nothing_is_scored``
+* ``short_memory_or_disk_costs_points_and_names_what_is_short``
+* ``the_build_times_file_is_written_capped_and_read_back_by_package_and_cores``
+* ``the_cpu_level_follows_the_flags``
+* ``the_repositorys_own_flags_cap_the_score_and_say_why``
+* ``the_toolchain_is_guessed_from_makedepends_and_from_dependencies``
+* ``updates_count_only_committed_installs_and_upgrades_in_90_days``
+* ``verdict_boundaries``
+
 ``reinstall::tests`` (6)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -624,7 +646,7 @@ emrac-core library (408)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (11)
+emrac command line, unit tests (13)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -637,6 +659,12 @@ emrac command line, unit tests (11)
 
 * ``a_plan_that_was_just_shown_is_not_made_again_and_an_old_one_is``
 * ``an_expected_plan_id_must_match_by_prefix_and_look_like_one``
+
+``commands::recommend::tests`` (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``the_reasons_that_weigh_most_come_first_and_a_side_shows_only_its_own``
+* ``the_side_comes_before_the_package_and_only_two_words_are_sides``
 
 ``output::tests`` (3)
 ~~~~~~~~~~~~~~~~~~~~~
@@ -654,10 +682,10 @@ emrac command line, unit tests (11)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (29)
+emrac command line, integration tests (30)
 ------------------------------------------
 
-``(top level)`` (29)
+``(top level)`` (30)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -677,6 +705,7 @@ emrac command line, integration tests (29)
 * ``history_archive_verify_and_ack``
 * ``history_is_empty_without_a_log_and_reads_one``
 * ``pins_list_and_unpin``
+* ``recommend_needs_a_package_and_only_source_or_binary_may_precede_it``
 * ``self_check_works_without_pacman_and_fails_on_a_broken_config``
 * ``self_diagnose_extends_check_hides_the_home_directory_and_refuses_online_offline``
 * ``self_sync_and_news_use_the_configured_source_and_keep_the_last_good_index``
@@ -695,7 +724,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: after u20, 50 of 50 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3, u20 adds 3).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u2 (after r3), 55 of 55 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3, u20 adds 3, u2-after-r3 adds 5).
 
 * version names the builder
 * usage error exits 2
@@ -722,6 +751,11 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u20, 50 of 50 passe
 * audit flags curl | sh
 * AUR install: audit, sandbox build, manifest, pacman -U
 * build without installing
+* recommend: an official package, both sides, and --json
+* recommend: with Arch's default flags the binary wins and the flags are the reason
+* recommend: -march=native in ~/.makepkg.conf is read and counts as a gain
+* recommend: an architecture-independent package has nothing to compile
+* recommend: a build is timed and the next recommend uses the measurement
 * rebuild builds an installed AUR package again
 * a backup of pacman's local database is made before a transaction
 * trust signals: changed sources under the same version are HIGH and a closed stdin declines
@@ -748,7 +782,7 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u20, 50 of 50 passe
 * self check runs and names how emrac was installed
 * self check reports a cut-off transaction
 
-(50 checks.)
+(55 checks.)
 
 End-to-end: pre-flight, plan ids, news and trust (dev/e2e/preflight.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

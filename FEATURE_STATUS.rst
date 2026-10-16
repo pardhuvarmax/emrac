@@ -182,8 +182,8 @@ Complete Feature Catalog
      - AUR packages are fetched (a split package from its base's repo), reviewed (PKGBUILD or diff), audited, then built in two steps: dependencies and sources on the host (signatures verified with your keyring), the rest in a bubblewrap sandbox (read-only root, empty home, cleared environment, no network unless allowed, memory/process/size/time limits); the built package is inspected (manifest) before ``pacman -U``. ``emrac build <pkg|dir>`` builds without installing. A failure that looks like a blocked download offers a retry with the network on. No build queue, background/pause/cancel, log replay or PKGBUILD editing, no Landlock or throwaway root
    * - 3
      - Intelligent Recommendation Engine
-     - Not started
-     - --
+     - Partial
+     - ``recommend [source|binary] <pkg>`` (u2 after r3): a Source Suitability Score from stated rules (makepkg flags against the repository's, CPU level, build time measured here or estimated, update rate from your history, memory and disk), a verdict (binary, source, either, or source as the only option), a confidence and the reasons; builds are timed from now on. Advisory only: ``install`` and ``upgrade`` do not use it yet; no ``explain`` (u3), ``score`` (u4), ETA (u5) or ``benchmark`` (u6)
    * - 4
      - ETA Prediction Engine
      - Not started
