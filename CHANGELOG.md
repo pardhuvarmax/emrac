@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Release r3-u1 — 2026-10-16 — Makepkg's folder variables no longer break the tests, self upgrade cleans its staging folder, self check points at self upgrade, and a release pipeline
+
+Version `0.3.1`; tag `r3-u1`. The notes are `docs/releases/r3-u1.md` (also the text of the annotated tag). Published with `dev/release.sh`; `emrac self upgrade` finds it once `releases.json` lists it.
+
 ## Small change (after u20), a review step in the release pipeline — 2026-10-16
 
 `dev/release-review.sh <tag>` reports what a release changes and what deserves a second look. The pipeline now runs `check`, then `review` (the report in the run summary), then `publish`, which belongs to the environment `release` and waits for a required reviewer to approve. `release.sh prepare --push` shows the review and asks before pushing (`--yes` skips the question); `release.sh review <tag>` runs it by hand.
