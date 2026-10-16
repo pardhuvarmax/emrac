@@ -7,3 +7,4 @@ Design documents that settle how a part of emrac works before or while it is bui
 - [`release-index.md`](./release-index.md) — how emrac learns about its own releases: the index, its checks, signatures, publishing.
 - [`self-upgrade.md`](./self-upgrade.md) — `emrac self upgrade` and `self downgrade`: what they do, what they refuse, what a cut-off leaves.
 - [`trust.md`](./trust.md) — AUR trust signals, the Arch news gate, update risk and the after-upgrade report, pacman database backups, repository trust.
+- [`releasing.md`](./releasing.md) — how a small update is published (`dev/release.sh`) and received (`self sync`, `self news`, `self upgrade`), what makes a release an update, the limits.

@@ -14,6 +14,10 @@ End-to-end checks of the release binary against a real pacman, run in the contai
 
 Points the root `install.sh` at a release tag: `dev/pin-install-script.sh <tag>` downloads the tag's tarball, computes its SHA-256, reads the version and rewrites the three pinned values at the top of the script. Run it after pushing a new tag and commit the result.
 
+## release.sh
+
+Publishes a release in two phases: `dev/release.sh prepare <tag> <version> ["summary"]` checks the tree and the tests, bumps the version, writes `docs/releases/<tag>.md` and a changelog entry, commits and tags locally; after you push, `dev/release.sh publish <tag> [stable|prerelease]` pins `install.sh` (stable), adds the release and a news item to `releases.json`, commits, and prints the values for the AUR recipe. `status` shows where things stand. It never pushes. See [`../docs/design/releasing.md`](../docs/design/releasing.md).
+
 ## release-index.sh
 
 Adds a release (or a news item) to the root `releases.json`, the index `emrac self sync` reads: `dev/release-index.sh <tag> [stable|prerelease] ["summary"]` downloads the tag's tarball, computes its SHA-256, reads the version and the state schema from inside it and the date from the tag's commit. `dev/release-index.sh --news <date> <category> <title> <summary> [version]` adds a news item. Run it after pushing a tag, check the diff, commit `releases.json`. The format and publishing are in [`../docs/design/release-index.md`](../docs/design/release-index.md).

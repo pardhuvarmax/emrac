@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Small change (after u20), dev/release.sh and docs/design/releasing.md — 2026-10-16
+
+`dev/release.sh prepare|publish|status` does the repeated parts of a release: checks, version bump (`Cargo.toml`, `Cargo.lock`), release notes, changelog entry, local tag; then, after the push, the pin of `install.sh`, the `releases.json` entry and news item, and the values for the AUR recipe. It never pushes. `docs/design/releasing.md` describes how a small update is published and how it is received with `emrac self sync`, `self news` and `self upgrade`, including that only a higher version number counts as an update.
+
 ## Slice u2 (after r2) — 2026-10-14 — license: GPL-3.0-or-later
 
 emrac is now licensed under the GNU General Public License, version 3 or any later version. The choice follows from the dependencies: the `alpm` and `alpm-sys` crates are GPL-3.0 and libalpm is GPL-2.0-or-later, so the program as distributed has to be GPL-compatible, and the other 136 dependencies (MIT, Apache-2.0, ISC, BSD, Unicode, CDLA-Permissive-2.0 and similar) are permissive licenses that can be combined with GPL-3 code (a reading of the license names, not a legal review). `LICENSE` holds the standard text from gnu.org (checked against its published SHA-256), the workspace `Cargo.toml` sets `license = "GPL-3.0-or-later"` for both crates so `cargo metadata` and the packages carry it, and the README and the project page say so. The `r2` tag was made before this and does not contain the license; a package built from that tag would have none, so the source for the first AUR package is tagged `r2-aur` ("Emrac First AUR Release"), cut from a commit that includes it. The program's behaviour is identical to `r2` and the version stays `0.2.0`; the Rust code differs only in tests (see the next two entries) and the license lines in the `Cargo.toml` files. The notes are `docs/releases/r2-aur.md`, which is also the text of the tag.
