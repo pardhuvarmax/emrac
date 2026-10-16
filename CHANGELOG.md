@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u1 (after r3) — 2026-10-16 — self upgrade for copies no package owns
+
+`emrac self upgrade` and `self downgrade` no longer refuse a copy installed with `cargo install` or put in `~/.local/bin` or `/usr/local/bin` by hand, when its folder is writable by you: they update it **in place**. The release is downloaded and checked as before, built with `cargo` (no `makepkg`, `pacman`, `sudo` or `fakeroot`), the new binary is run from its staging folder and again from the folder it is going to, the old file is kept in `~/.local/share/emrac/self/previous/` (newest 3), and the new file is renamed over the old one in one step. A new binary that does not report the target version is refused before anything changes, or, after the rename, replaced by the kept file automatically. The packaged copy is updated through pacman exactly as before; another package's file, a `target/` build, a link, an unknown owner and a folder you can't write to are still refused, and emrac never asks for root to do this. `--dry-run` shows the `Method:`; the plan is `docs/plan/r3/u1-in-place-update.md`, the page `docs/design/self-upgrade.md`.
+
 ## Release r3-u1 — 2026-10-16 — Makepkg's folder variables no longer break the tests, self upgrade cleans its staging folder, self check points at self upgrade, and a release pipeline
 
 Version `0.3.1`; tag `r3-u1`. The notes are `docs/releases/r3-u1.md` (also the text of the annotated tag). Published with `dev/release.sh`; `emrac self upgrade` finds it once `releases.json` lists it.

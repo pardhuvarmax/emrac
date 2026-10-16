@@ -789,7 +789,7 @@ End-to-end: emrac updating itself (dev/e2e/self-upgrade.sh)
 
 Builds a 0.8.0 and a 0.9.0 release from the committed source and runs
 ``emrac self upgrade`` and ``self downgrade`` for real: ``dev/e2e/run.sh
-self``. Last full run: after u20, 11 of 11 passed.
+self``. Last full run: after u1 (after r3), 16 of 16 passed (the in-place checks included).
 
 * the r8 package builds and installs
 * self sync and news from a file source
@@ -802,5 +802,10 @@ self``. Last full run: after u20, 11 of 11 passed.
 * self upgrade now says it is the newest
 * self downgrade goes back to 0.8.0
 * self downgrade to a version that is not older is refused
+* a copy in ~/.local/bin is planned as an in-place update
+* in place: a tarball that does not match the index changes nothing
+* in place: self upgrade builds with cargo and replaces only that file
+* in place: the old binary is kept, nothing else is left in the folder
+* in place: self downgrade goes back to 0.8.0
 
-(11 checks.)
+(16 checks.)

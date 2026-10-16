@@ -42,7 +42,7 @@
 - [`self_check.rs`](./self_check.rs) — `self check` and `self diagnose`: one engine, a fast and a deep set of checks.
 - [`self_meta.rs`](./self_meta.rs) — the release index: validation, staging, the gpg check, sync, news.
 - [`self_ops.rs`](./self_ops.rs) — the journal of emrac's operations on itself.
-- [`self_upgrade.rs`](./self_upgrade.rs) — planning and doing `self upgrade` and `self downgrade` through `makepkg` and `pacman -U`.
+- [`self_upgrade.rs`](./self_upgrade.rs) — planning and doing `self upgrade` and `self downgrade`: through `makepkg` and `pacman -U` for the packaged copy, in place (cargo build, the old file kept, put back on failure) for a copy nobody owns.
 
 **Housekeeping**
 - [`doctor.rs`](./doctor.rs) — the health checks, each with a fix, and the sanitized report.

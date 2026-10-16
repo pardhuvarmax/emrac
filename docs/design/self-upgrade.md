@@ -3,10 +3,18 @@
 How `emrac self upgrade` and `emrac self downgrade` work, for people who use emrac.
 
 **The rule.** pacman owns `/usr/bin/emrac` when emrac was installed as a package, and emrac never
-overwrites a file a package owns. So the commands work only for such a copy, and they do the
-change the way you would: build a package from the release and install it with `sudo pacman -U`.
-A copy installed with `cargo install`, put in place by hand, run from a cargo `target/` folder, or
-whose owner can't be told is refused with what to do instead. emrac never guesses.
+overwrites a file a package owns. The method follows who owns the copy:
+
+- **The `emrac` package owns it:** build a package from the release and install it with
+  `sudo pacman -U`.
+- **Nobody owns it** (`cargo install`, or a copy put in `~/.local/bin` or `/usr/local/bin` by hand)
+  **and you can write to its folder:** update it **in place** (below): no root, no pacman, the old
+  file kept.
+- **Anything else** (another package's file, a cargo `target/` build, a copy whose owner can't be
+  told, a link, a folder you can't write to) is refused with what to do instead. emrac never
+  guesses and never asks for root to replace a file.
+
+`--dry-run` names the method (`Method:` line) and the file it would replace.
 
 **What `self upgrade` does** (`--dry-run` prints this and does nothing; `--yes` is passed to pacman as
 `--noconfirm`; `--skip-tests` leaves out the package's test run):
@@ -27,9 +35,28 @@ whose owner can't be told is refused with what to do instead. emrac never guesse
 A failure before step 6 changes nothing on the system. If the new version installed but did not pass
 the checks of step 7, emrac says so and points to `self downgrade` and the backup.
 
-**Checks before anything starts:** the copy is owned by the `emrac` package; a required signature was
-verified when the index was synced; `makepkg`, `pacman`, `sudo`, `cargo`, a C compiler, `fakeroot` and
-`tar` are installed; about 2 GiB are free where the build runs; no other self operation is running.
+**What an in-place update does differently** (steps 1 to 5 above are the same; no `makepkg`,
+`pacman`, `sudo` or `fakeroot` is used or needed):
+
+6. Builds the binary with `cargo` in `~/.cache/emrac/self/` with the package recipe's flags (the test
+   run is left out by `--skip-tests`).
+7. Runs the new binary from there: `--version` must say the target version.
+8. Copies it next to the old file (same folder, so the last step is one rename), runs it once more
+   from there, and keeps the old file in `~/.local/share/emrac/self/previous/` (the newest 3).
+9. Renames the new file over the old one: one atomic step, never a half-written emrac; a running
+   emrac keeps working.
+10. Checks `<path> --version` and `self check`. If the new file does not report the target version,
+    the kept file is **put back automatically** and the run says so. If only `self check` reports a
+    problem nothing is rolled back (it may be an old problem).
+
+Before step 9 nothing outside `~/.cache/emrac` and the backup has changed. Only that one file is
+replaced: completions or docs you installed by hand are not touched, and for a `cargo install` copy
+`cargo install --list` goes on showing the old version, because cargo does not know about the
+update. `self downgrade` takes the same path with an older release.
+
+**Checks before anything starts:** the copy is owned by the `emrac` package, or is a regular file nobody owns in a folder you can write to; a required signature was
+verified when the index was synced; for a package: `makepkg`, `pacman`, `sudo`, `cargo`, a C compiler,
+`fakeroot` and `tar` are installed (for an in-place update only `cargo`, a C compiler and `tar`); about 2 GiB are free where the build runs; no other self operation is running.
 `emrac self diagnose` shows each one.
 
 **`self downgrade`** is the same machinery with an older target: `--version 0.2.0` or `--tag r2`, and

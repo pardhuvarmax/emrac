@@ -144,8 +144,8 @@ cycle that ended with ``r3``.
      - u11
      - Read-only check of emrac's own installation (binary, how it was installed, config, history, journal, ledger helper); needs no pacman, network or root
    * - ``self upgrade`` / ``self downgrade``
-     - u14, u15
-     - Download and check a release against the index, build the package, install it with ``sudo pacman -U``, check the result; only for a copy a pacman package owns; refuses a downgrade whose file format is older than yours; journal, backup, ``--dry-run``
+     - u14, u15, r3-u1
+     - Download and check a release against the index, build the package, install it with ``sudo pacman -U``, check the result; a copy nobody owns (``cargo install``, by hand) in a folder you can write to is replaced in place instead, keeping the old file and putting it back if the new one fails; anything else is refused; refuses a downgrade whose file format is older than yours; journal, backup, ``--dry-run``
    * - ``self diagnose``
      - u13
      - The checks of ``self check`` plus what an upgrade needs (tools, space, permissions), the release index in detail, ``--online`` reachability; repairs nothing; hides the home directory
