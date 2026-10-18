@@ -1032,6 +1032,24 @@ impl AlpmBackend {
         })
     }
 
+    /// What the sync databases say about a package that is not about its files:
+    /// when it was built, whether the database carries its signature, and how
+    /// many repository packages depend on it by name.
+    pub fn repo_meta(&self, name: &str) -> Option<RepoMeta> {
+        let dbs = self.handle.syncdbs();
+        let pkg = dbs.iter().find_map(|db| db.pkg(name).ok())?;
+        let dependents = dbs
+            .iter()
+            .flat_map(|db| db.pkgs().iter())
+            .filter(|p| p.name() != name && p.depends().iter().any(|d| d.name() == name))
+            .count();
+        Some(RepoMeta {
+            build_date: pkg.build_date(),
+            signed: pkg.base64_sig().is_some(),
+            dependents,
+        })
+    }
+
     /// Names of the sync-database packages satisfying `name`'s required
     /// dependencies, installed or not.
     pub fn sync_dependency_names(&self, name: &str) -> Vec<String> {
@@ -1300,6 +1318,14 @@ pub(crate) fn observe(root: &str, rel: &str) -> Observed {
 }
 
 /// An official package as `recommend` sees it.
+/// See `AlpmBackend::repo_meta`.
+pub struct RepoMeta {
+    /// Unix seconds.
+    pub build_date: i64,
+    pub signed: bool,
+    pub dependents: usize,
+}
+
 pub struct RepoShape {
     pub download: u64,
     pub installed: u64,

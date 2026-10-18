@@ -1255,6 +1255,120 @@ impl Sources {
         )
     }
 
+    /// The inputs of `emrac score`: what the repositories or the AUR say, what
+    /// emrac has measured here (benchmarks, builds), the audit of an AUR
+    /// package's PKGBUILD (online only) and the cached Arch news.
+    pub fn score_facts(&self, name: &str, offline: bool) -> Result<crate::score::Facts> {
+        use crate::score::{AuditCounts, Bench, BuildFact, Facts, SourceFact};
+        let details = self.info(name, offline)?;
+        let official = details.repo != "aur";
+        let t = now();
+        let days_ago = |ts: i64| (t as i64 - ts).max(0) as u64 / 86_400;
+        let mut f = Facts {
+            name: details.name.clone(),
+            version: details.version.clone(),
+            repo: details.repo.clone(),
+            official,
+            ..Facts::default()
+        };
+
+        // what emrac measured here
+        let records = crate::benchmark::history(&details.name);
+        if !records.is_empty() {
+            let newest = records.iter().map(|r| (r.measurement.exe.clone(), r)).fold(
+                std::collections::BTreeMap::<String, &crate::benchmark::BenchRecord>::new(),
+                |mut m, (exe, r)| {
+                    m.insert(exe, r); // later records replace earlier ones
+                    m
+                },
+            );
+            let mut warms: Vec<u64> = newest
+                .values()
+                .filter_map(|r| r.measurement.warm_micros.or(r.measurement.first_micros))
+                .collect();
+            if !warms.is_empty() {
+                warms.sort_unstable();
+                f.bench = Some(Bench {
+                    warm_micros: warms[warms.len() / 2],
+                    peak_rss_kib: newest
+                        .values()
+                        .filter_map(|r| r.measurement.real_rss_kib())
+                        .max(),
+                    programs: newest.len(),
+                    recorded: newest.values().map(|r| r.time).max().unwrap_or(0),
+                });
+            }
+        }
+
+        // build time and the source/binary advice
+        if let Ok(facts) = self.recommend_facts(name, offline) {
+            let report = crate::recommend::evaluate(&facts);
+            f.build = report.build_secs.map(|(_, likely, _)| BuildFact {
+                secs: likely,
+                measured: report.build_basis == "measured",
+            });
+            f.source = report.score.map(|score| SourceFact {
+                score,
+                verdict: report.verdict.word().to_string(),
+            });
+        }
+
+        if official {
+            if let Some(meta) = self.alpm.repo_meta(&details.name) {
+                f.age_days = Some(days_ago(meta.build_date));
+                f.signed = Some(meta.signed);
+                f.dependents = Some(meta.dependents);
+            }
+            // Arch news of the last 90 days that name it (the cached feed only)
+            let news = crate::arch_news::load_fresh(true, t);
+            let word = details.name.to_lowercase();
+            f.news_mentions = news
+                .items
+                .iter()
+                .filter(|i| t.saturating_sub(i.published) <= 90 * 86_400)
+                .filter(|i| {
+                    i.title
+                        .to_lowercase()
+                        .split(|c: char| {
+                            !(c.is_alphanumeric() || c == '-' || c == '_' || c == '+' || c == '.')
+                        })
+                        .any(|w| w == word)
+                })
+                .count();
+        } else {
+            f.age_days = details.last_modified.map(days_ago);
+            f.out_of_date_days = details.out_of_date.map(days_ago);
+            f.orphan = details.maintainer.is_none();
+            f.votes = details.votes;
+            f.popularity = details.popularity;
+            for signal in self.aur_trust_for_info(&details) {
+                match signal.level {
+                    crate::aur_trust::Level::High => f.trust_high += 1,
+                    crate::aur_trust::Level::Warning => f.trust_warning += 1,
+                    crate::aur_trust::Level::Note => {}
+                }
+            }
+            if offline {
+                f.audit_note = Some("--offline is set".to_string());
+            } else {
+                match self.audit_aur(name) {
+                    Ok(report) => {
+                        let count = |s: crate::audit::Severity| {
+                            report.findings.iter().filter(|x| x.severity == s).count()
+                        };
+                        f.audit = Some(AuditCounts {
+                            critical: count(crate::audit::Severity::Critical),
+                            high: count(crate::audit::Severity::High),
+                            warning: count(crate::audit::Severity::Warning),
+                        });
+                    }
+                    Err(e) => f.audit_note = Some(format!("the PKGBUILD could not be read: {e}")),
+                }
+            }
+        }
+        Ok(f)
+    }
+
     /// Makes a bundle in `dir` (which must not exist): the repository packages
     /// that `roots` need, or, with no roots, every upgrade `target` waits for.
     /// With `target`, only what that machine lacks or has older.

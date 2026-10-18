@@ -557,6 +557,22 @@ pub enum Commands {
         history: bool,
     },
 
+    /// A report card for a package: performance, build time, maintenance,
+    /// security, popularity and source worthiness, each from a stated rule
+    ///
+    /// A dimension with no data is shown as unknown, never as a made-up number,
+    /// and there is no overall score on purpose: the six answer different
+    /// questions. `--details` shows every rule and the points it moved.
+    #[command(verbatim_doc_comment)]
+    Score {
+        /// The package (official or AUR)
+        pkg: String,
+
+        /// Show the rules behind every number
+        #[arg(long)]
+        details: bool,
+    },
+
     /// How the recommendation for a package was reached, rule by rule, and
     /// what would change it
     Explain {

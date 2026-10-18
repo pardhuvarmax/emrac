@@ -367,9 +367,9 @@ Signature & Advanced Features
      - ``docs/feats/SPEC.md`` IV.2; ``docs/plan/r3/u3-explain.md``
    * - 3
      - Package Score
-     - Not started
-     - Nothing built yet.
-     - ``docs/feats/SPEC.md`` IV.3
+     - Done
+     - ``emrac score <pkg>``: Performance (from ``benchmark``), Build time, Maintenance, Security, Popularity and Source worthiness, each from a stated rule and input; unknown when there is no data; no overall number on purpose; ``--details`` shows the rules (u18)
+     - ``docs/feats/SPEC.md`` IV.3; ``docs/plan/r3/u18-package-score.md``
    * - 4
      - Build Profiles with Inheritance
      - Not started
@@ -537,7 +537,7 @@ Part V is the command surface of features covered above.
      - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
      - ``docs/feats/SPEC.md`` Part V
 
-Core scope: 59 tracked: 9 done, 33 partial, 17 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
+Core scope: 59 tracked: 10 done, 33 partial, 16 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
 
 Extended scope
 ----------------
@@ -1590,9 +1590,9 @@ Totals
      - Idea / planned / research / not planned
      - Total
    * - Core
-     - 9
+     - 10
      - 33
-     - 17
+     - 16
      - 0
      - 59
    * - Extended
@@ -1608,9 +1608,9 @@ Totals
      - 62
      - 77
    * - **All**
-     - **43**
+     - **44**
      - **57**
-     - **25**
+     - **24**
      - **150**
      - **275**
 

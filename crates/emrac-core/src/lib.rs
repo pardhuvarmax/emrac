@@ -45,6 +45,7 @@ mod reinstall;
 pub mod repo_trust;
 mod rollback;
 mod sandbox;
+pub mod score;
 pub mod self_check;
 pub mod self_meta;
 pub mod self_ops;

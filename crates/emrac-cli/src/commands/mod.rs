@@ -33,6 +33,7 @@ pub mod remove;
 pub mod report;
 pub mod restore;
 pub mod rollback;
+pub mod score;
 pub mod search;
 pub mod self_cmd;
 pub mod snapshot;

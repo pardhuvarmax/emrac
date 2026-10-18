@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 595
+     - 606
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 43
+     - 46
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 32
    * - **Automated total**
      -
-     - **670**
+     - **684**
 
-emrac-core library (595)
+emrac-core library (606)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -688,6 +688,21 @@ emrac-core library (595)
 * ``the_timeout_kills_a_run_on_time_and_a_normal_exit_is_reported``
 * ``tmpfs_mounts_get_a_size_cap_when_one_is_set``
 
+``score::tests`` (11)
+~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_full_card_and_its_json``
+* ``an_unaudited_aur_package_says_so_instead_of_pretending``
+* ``aur_security_starts_at_80_and_the_audit_and_trust_signals_take_off``
+* ``build_time_bands``
+* ``maintenance_bands_and_the_aur_penalties``
+* ``official_security_is_signature_and_news``
+* ``performance_bands_have_inclusive_edges_and_memory_takes_points_off``
+* ``popularity_is_the_average_of_votes_and_popularity_for_the_aur_only``
+* ``source_worthiness_is_the_recommend_score_as_it_is``
+* ``there_are_six_dimensions_in_the_specs_order_and_no_overall``
+* ``what_has_no_data_is_unknown_not_a_number``
+
 ``self_check::tests`` (12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -879,7 +894,7 @@ emrac-core library (595)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (43)
+emrac command line, unit tests (46)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -942,7 +957,7 @@ emrac command line, unit tests (43)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-``view::tests`` (15)
+``view::tests`` (18)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_long_check_summary_wraps_under_itself_and_never_runs_past_the_width``
@@ -951,6 +966,7 @@ emrac command line, unit tests (43)
 * ``an_upgrade_shows_the_old_and_new_version_with_the_change_picked_out``
 * ``ascii_checks_are_ascii_even_when_the_text_has_dashes``
 * ``checks_get_a_mark_a_title_column_and_their_details``
+* ``details_show_every_rule_with_the_points_it_moved``
 * ``every_view_fits_a_narrow_terminal``
 * ``narrow_terminals_put_the_summary_under_the_title_and_wrap_the_fix``
 * ``snapshots_orphans_and_pins_are_tables``
@@ -958,6 +974,8 @@ emrac command line, unit tests (43)
 * ``the_build_view_shows_a_sparkline_and_a_table``
 * ``the_history_is_a_table_with_marks_and_notes_under_failures``
 * ``the_mirror_views_show_groups_and_a_speed_bar``
+* ``the_plain_card_is_one_line_per_dimension``
+* ``the_report_card_has_a_bar_and_a_number_for_what_is_known_and_a_dash_for_the_rest``
 * ``the_summary_has_the_sizes_a_bar_and_the_plan_id``
 * ``the_timeline_groups_by_day_with_a_glyph_for_each_kind``
 
@@ -1173,6 +1191,34 @@ nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 pa
 * a package that was installed before the build is not offered
 
 (9 checks.)
+
+End-to-end: the package report card (dev/e2e/score.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``emrac score`` for an official package and an AUR package: six dimensions from stated
+rules, unknown when there is no data, no overall number: ``dev/e2e/run.sh score``.
+Last full run: after u18, 18 of 18 passed.
+
+* the card has a header and the six dimensions in order
+* there is no overall score
+* an official package's maintenance is its repository build age
+* its security is the signature, with the honest note under --details
+* popularity is unknown for an official package, and says why
+* performance is unknown before a benchmark and says what to run
+* after a benchmark performance has a number
+* and no hint is left for it
+* your own builds make build time measured
+* 240 s scores 85 in the stated bands
+* --details shows the rule behind a number
+* --json is the card: six dimensions, unknown as null
+* an unknown package is refused
+* on a terminal there are bars
+* piped there are none
+* an AUR package is scored from the AUR and its PKGBUILD is audited
+* its popularity comes from the votes
+* its maintenance is when the AUR page last changed
+
+(18 checks.)
 
 End-to-end: how emrac looks (dev/e2e/clui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

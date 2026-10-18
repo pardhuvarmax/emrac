@@ -672,6 +672,128 @@ pub fn benchmark_view(st: &Style, records: &[BenchRecord]) -> String {
     t.render(st, st.width)
 }
 
+// ------------------------------------------------------------------- score
+
+fn score_header(card: &emrac_core::score::Card) -> String {
+    format!(
+        "{} {} ({}): a report card, {} of {} known",
+        card.name,
+        card.version,
+        card.repo,
+        card.known(),
+        card.dimensions.len()
+    )
+}
+
+/// The report card on a terminal: a bar and a number for each dimension that
+/// is known, a dash for one that is not, and with `details` the rules.
+pub fn score_view(st: &Style, card: &emrac_core::score::Card, details: bool) -> String {
+    let mut out = String::new();
+    out.push_str(&format!(
+        "{} {} {}: a report card, {} of {} known\n\n",
+        st.paint(Role::Package, &card.name),
+        st.paint(Role::Version, &card.version),
+        st.paint(Role::Dim, &format!("({})", card.repo)),
+        card.known(),
+        card.dimensions.len()
+    ));
+    // title, bar, number, then the summary wrapped under its own column
+    let tw = card
+        .dimensions
+        .iter()
+        .map(|d| d.title.chars().count())
+        .max()
+        .unwrap_or(0);
+    let prefix = 2 + tw + 2 + 10 + 2 + 3 + 2;
+    let text_w = st.width.saturating_sub(prefix).max(20);
+    for d in &card.dimensions {
+        let (bar_text, num) = match d.score {
+            Some(s) => (
+                render_line(st, &bar(st, f64::from(s) / 100.0, 10)),
+                st.paint(Role::Size, &emrac_core::style::pad_left(&s.to_string(), 3)),
+            ),
+            None => (
+                st.paint(Role::Dim, &st.glyphs().bar_empty.repeat(10)),
+                st.paint(Role::Dim, "  -"),
+            ),
+        };
+        let role = if d.score.is_some() {
+            Role::Plain
+        } else {
+            Role::Dim
+        };
+        let mut wrapped = wrap(&st.text(&d.summary), text_w).into_iter();
+        out.push_str(&format!(
+            "  {}  {bar_text}  {num}  {}\n",
+            st.paint(Role::Package, &pad_right(d.title, tw)),
+            st.paint(role, &wrapped.next().unwrap_or_default())
+        ));
+        for more in wrapped {
+            out.push_str(&format!(
+                "{}{}\n",
+                " ".repeat(prefix),
+                st.paint(role, &more)
+            ));
+        }
+    }
+    for d in &card.dimensions {
+        if let Some(h) = &d.hint {
+            out.push_str(&format!(
+                "  {}\n",
+                st.paint(Role::Dim, &format!("{}: to know it, run `{h}`", d.title))
+            ));
+        }
+    }
+    if details {
+        for d in &card.dimensions {
+            if d.rules.is_empty() {
+                continue;
+            }
+            out.push_str(&format!("\n{}\n", heading(st, d.title)));
+            for r in &d.rules {
+                let pts = r.points.map_or(String::new(), |p| format!("  ({p:+})"));
+                for (i, l) in wrap(&st.text(&r.text), st.width.saturating_sub(6))
+                    .into_iter()
+                    .enumerate()
+                {
+                    let lead = if i == 0 { st.glyphs().bullet } else { " " };
+                    out.push_str(&format!(
+                        "  {} {l}{}\n",
+                        st.paint(Role::Dim, lead),
+                        if i == 0 {
+                            st.paint(Role::Size, &pts)
+                        } else {
+                            String::new()
+                        }
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The same card as plain text, for a pipe: one line per dimension.
+pub fn score_plain(card: &emrac_core::score::Card, details: bool) -> String {
+    let mut out = format!("{}\n", score_header(card));
+    for d in &card.dimensions {
+        let num = d.score.map_or("-".to_string(), |s| s.to_string());
+        out.push_str(&format!("  {:<12} {:>3}  {}\n", d.title, num, d.summary));
+        if details {
+            for r in &d.rules {
+                let pts = r.points.map_or(String::new(), |p| format!(" ({p:+})"));
+                out.push_str(&format!("      - {}{pts}\n", r.text));
+            }
+        }
+    }
+    for d in &card.dimensions {
+        if let Some(h) = &d.hint {
+            out.push_str(&format!("  {}: to know it, run `{h}`\n", d.title));
+        }
+    }
+    out
+}
+
 // ------------------------------------------------------------------ bundle
 
 pub fn bundle_changes_view(st: &Style, changes: &[Change]) -> String {
@@ -1470,6 +1592,110 @@ mod tests {
         let a = tree_prefixes(&ascii(), &[1, 2, 1]);
         assert_eq!(a, [" |- ", " | `- ", " `- "]);
         assert!(tree_prefixes(&uncoloured(), &[]).is_empty());
+    }
+
+    fn sample_card() -> emrac_core::score::Card {
+        use emrac_core::score::{card, Bench, BuildFact, Facts, SourceFact};
+        card(&Facts {
+            name: "neovim".into(),
+            version: "0.10.2-1".into(),
+            repo: "extra".into(),
+            official: true,
+            signed: Some(true),
+            age_days: Some(6),
+            dependents: Some(212),
+            bench: Some(Bench {
+                warm_micros: 4300,
+                peak_rss_kib: None,
+                programs: 2,
+                recorded: 1_790_000_000,
+            }),
+            build: Some(BuildFact {
+                secs: 1700,
+                measured: false,
+            }),
+            source: Some(SourceFact {
+                score: 22,
+                verdict: "binary".into(),
+            }),
+            ..Facts::default()
+        })
+    }
+
+    #[test]
+    fn the_report_card_has_a_bar_and_a_number_for_what_is_known_and_a_dash_for_the_rest() {
+        let c = sample_card();
+        let out = score_view(&uncoloured(), &c, false);
+        assert!(
+            out.starts_with("neovim 0.10.2-1 (extra): a report card, 5 of 6 known"),
+            "{out}"
+        );
+        let perf = out.lines().find(|l| l.contains("Performance")).unwrap();
+        assert!(
+            perf.contains('\u{2587}') && perf.contains("100") && perf.contains("starts in 4.3 ms"),
+            "{perf}"
+        );
+        let pop = out.lines().find(|l| l.contains("Popularity")).unwrap();
+        assert!(
+            pop.contains("  -  ") && pop.contains("no popularity") && !pop.contains('\u{2587}'),
+            "{pop}"
+        );
+        assert!(
+            out.contains("(212 packages depend on it)"),
+            "the rest of the summary wraps under it: {out}"
+        );
+        assert!(!out.contains("run `"), "no hint for what is known");
+        fits(&out, 80);
+        same_without_colour(|st| score_view(st, &c, true));
+        let a = score_view(&ascii(), &c, false);
+        assert!(a.contains('#') && !a.contains('\u{2587}'));
+    }
+
+    #[test]
+    fn details_show_every_rule_with_the_points_it_moved() {
+        use emrac_core::score::{card, Facts};
+        let c = card(&Facts {
+            name: "x".into(),
+            version: "1".into(),
+            repo: "aur".into(),
+            official: false,
+            age_days: Some(10),
+            out_of_date_days: Some(3),
+            ..Facts::default()
+        });
+        let out = score_view(&uncoloured(), &c, true);
+        assert!(
+            out.contains("flagged out of date 3 days ago") && out.contains("(-30)"),
+            "{out}"
+        );
+        assert!(
+            out.contains("Maintenance \u{2500}"),
+            "a heading per dimension: {out}"
+        );
+        let plain = score_plain(&c, true);
+        assert!(
+            plain.contains("      - flagged out of date 3 days ago (-30)"),
+            "{plain}"
+        );
+        assert!(
+            plain.contains("Performance:") || plain.contains("to know it, run `emrac benchmark x`"),
+            "{plain}"
+        );
+    }
+
+    #[test]
+    fn the_plain_card_is_one_line_per_dimension() {
+        let out = score_plain(&sample_card(), false);
+        assert_eq!(
+            out.lines().next().unwrap(),
+            "neovim 0.10.2-1 (extra): a report card, 5 of 6 known"
+        );
+        assert!(
+            out.contains("  Performance  100  starts in 4.3 ms"),
+            "{out}"
+        );
+        assert!(out.contains("  Popularity     -  the official repositories keep no popularity data (212 packages depend on it)"), "{out}");
+        assert!(!out.contains('\u{2587}'));
     }
 
     #[test]
