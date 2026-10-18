@@ -10,5 +10,5 @@ fit in a single crate's own README.
   also the text of its tag).
 - [`tests/`](./tests) — the list of every passing test, generated and kept
   current by `dev/gen-tests-doc.sh`.
-- [`feats/`](./feats) — collected feature ideas and the cross-distribution
+- [`feats/`](./feats) — [`feats.md`](./feats/feats.md) lists every feature and its status; the folder holds the collected feature ideas and the cross-distribution
   design; nothing here is a commitment.

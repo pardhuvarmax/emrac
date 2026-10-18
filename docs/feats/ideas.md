@@ -68,7 +68,7 @@ Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress
 
 ### Platform and extensibility
 
-- `[idea]` **Backend plugin interface** (pacman repos, AUR, Flatpak, others), possibly sandboxed via WASM, so new sources do not touch core transaction logic.
+- `[idea]` **Plugin system and backend plugin interface** (`emrac plugin ...`): new package sources (Flatpak, others) and extensions without touching core transaction logic. Plugins are compiled **WebAssembly modules, never scripts**, run in a WASM runtime with the enforcement built in: deny-by-default host calls, capabilities declared in a manifest and granted by the user, memory, time and call limits, every host call logged. Security checks come with it: a plugin is installed only after its hash and signature verify, its requested capabilities are shown in the install preview and audited like a package manifest, versions are pinned, and an update that asks for more capabilities needs a new approval.
 - `[idea]` **Preset sharing**: shareable optimization-flag presets (e.g. "low-latency desktop", "minimal server") with signatures, building on the config preset idea in section 1.
 
 ### Intelligence and automation
@@ -129,10 +129,9 @@ Emrac's Layer 2 sandbox already does most of what a maintainer needs (a clean-ch
 - `[idea]` **Upstream watcher**: detect a new upstream release, bump `pkgver`, update checksums, test-build in the sandbox, and prepare a commit for the maintainer to approve. Never pushes on its own unless an explicit policy allows it.
 - `[idea]` **Maintainer dashboard (TUI)**: out-of-date flags, failing builds, and packages needing a rebuild because a dependency's soname changed.
 
-### Safe scripting and automation
+### Safe automation (declarative only; no scripting of any kind)
 
 - `[idea]` **Capability-based workflow files**: each pipeline step declares what it needs (network, paths, secrets) and Emrac enforces it with Landlock or the namespace. Build, check, and lint steps get no network and no secrets; only the push step sees credentials.
-- `[idea]` **Restricted scripting layer** instead of raw bash for hooks: declarative TOML steps for common cases, with Lua or WASM when real logic is needed.
 - `[idea]` **Dry-run for automation**: every workflow run is first shown as a Shadow Tree-style plan of what it will build, touch, and push.
 
 ### Credentials: each user brings their own SSH key

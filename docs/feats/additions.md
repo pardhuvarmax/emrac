@@ -1,6 +1,6 @@
 # Emrac: Additions
 
-Further ideas and features for Emrac, collected in two batches. Everything here is deterministic and local: no AI or LLMs, and no scripting layer (decided against).
+Further ideas and features for Emrac, collected in two batches. Everything here is deterministic and local: no AI or LLMs, and no scripting of any kind: no scripting engine, no embedded interpreter, no user-written scripts run by emrac (decided).
 
 Status tags: `[idea]` not started, `[planned]` decided, `[building]` in progress, `[dropped]`.
 
