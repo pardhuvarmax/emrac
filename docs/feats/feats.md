@@ -27,10 +27,11 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | 6. Self-management service (Emrac-SMS) | 5 | 0 | 0 | 0 | 0 | 0 | 5 |
 | 7. AUR defense (planned for r4) | 1 | 4 | 0 | 5 | 0 | 0 | 10 |
 | 8. Package forensics (proposed) | 0 | 2 | 0 | 7 | 0 | 0 | 9 |
-| 9. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
-| 10. Newer ideas (not yet in the other documents) | 0 | 1 | 0 | 26 | 0 | 0 | 27 |
-| 11. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **86** | **52** | **28** | **123** | **9** | **3** | **301** |
+| 9. Plugin system (proposed) | 0 | 0 | 1 | 16 | 0 | 0 | 17 |
+| 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
+| 11. Newer ideas (not yet in the other documents) | 0 | 1 | 0 | 26 | 0 | 0 | 27 |
+| 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
+| **All** | **86** | **52** | **29** | **139** | **9** | **3** | **318** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -44,9 +45,10 @@ Some features appear in more than one section (soak time, the offline bundle, Wa
 - [6. Self-management service (Emrac-SMS)](#6-self-management-service-emrac-sms)
 - [7. AUR defense (planned for r4)](#7-aur-defense-planned-for-r4)
 - [8. Package forensics (proposed)](#8-package-forensics-proposed)
-- [9. Research programme (REA, containers, other package managers)](#9-research-programme-rea-containers-other-package-managers)
-- [10. Newer ideas (not yet in the other documents)](#10-newer-ideas-not-yet-in-the-other-documents)
-- [11. Decided against, or far future](#11-decided-against-or-far-future)
+- [9. Plugin system (proposed)](#9-plugin-system-proposed)
+- [10. Research programme (REA, containers, other package managers)](#10-research-programme-rea-containers-other-package-managers)
+- [11. Newer ideas (not yet in the other documents)](#11-newer-ideas-not-yet-in-the-other-documents)
+- [12. Decided against, or far future](#12-decided-against-or-far-future)
 - [Where each thing is documented](#where-each-thing-is-documented)
 
 ## 1. Built: what works today
@@ -138,7 +140,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | III.18 Unified Interfaces | Partial | CLI with `--json`, `--dry-run`, `--yes`, completion. No TUI at all (browser, inspector, queue and build monitors, log viewer, news reader, history browser, command palette). |  |
 | III.19 Configuration | Partial | TOML user config. Not yet: system-wide config, repository and profile config, themes, keybindings, aliases, environment profiles. |  |
 | III.20 Performance | Partial | Fast by construction. Not yet: a deliberate index/cache layer, parallel downloads. |  |
-| III.21 Extensibility (future) | Specified | Plugin system, public API, remote build workers, distributed compilation, reproducible-build verification, binary cache servers, team build profiles, benchmark database. The plugin system is WASM-sandboxed with enforcement and security checks (see section 10). AI-assisted items in the spec are excluded by the no-AI decision. | `SPEC.md` |
+| III.21 Extensibility (future) | Specified | Plugin system, public API, remote build workers, distributed compilation, reproducible-build verification, binary cache servers, team build profiles, benchmark database. The plugin system is WASM-sandboxed with enforcement and security checks (see section 9). AI-assisted items in the spec are excluded by the no-AI decision. | `SPEC.md` |
 | IV.1 Install Planner | Partial | Packages, sizes, removals, provider choices, risk, plan id, hooks, config files, policy. Not yet: compile time, services to restart before the commit, estimated time. |  |
 | IV.2 Explain Decisions | Partial | `explain` for the source/binary decision only. | r3 u3 |
 | IV.3 Package Score | Specified | A report card per package: performance, build time, maintenance, security, popularity, source worthiness. |  |
@@ -169,7 +171,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | V Shell integration (`alias`, `integrate`) | Partial | `completion` exists; `alias` and `integrate` do not. |  |
 | V System (`env`, `paths`, `about`, `diagnostics`) | Partial | `--version`, `--help`; `doctor --report` covers the bug-report part. |  |
 | V Development (`dev`, `sandbox`, `test`, `trace`, `debug`) | Specified | Internal tooling. |  |
-| V Export / Import (`export`, `import`, `bundle`) | Specified | See also the offline bundle idea in section 10. |  |
+| V Export / Import (`export`, `import`, `bundle`) | Specified | See also the offline bundle idea in section 11. |  |
 | V Help (`man`, `docs`, `license`, `credits`, `bug-report`) | Specified | Only clap's `--help` exists. |  |
 | V `lock` / `unlock` | Specified | `pin`/`unpin` are built; `lock`/`unlock` are not. |  |
 | Integrated Modal Editor (`emrac edit <resource>`) | Specified | A built-in modal editor for PKGBUILDs, `.SRCINFO`, patches, profiles and config, with `--external` for `$EDITOR`. | `SPEC.md` Part I |
@@ -248,9 +250,9 @@ Grouped as in `ideas.md`. Tags there are older than the code, so the status here
 | `.pacnew` / config-merge handling | Built | CLI merge and resolve with validation and revert (TUI integration is not). | u27, u30 |
 | Plan diff view | Partial | A drifted plan shows what changed; there is no command to diff two saved plans. | r2 u18 |
 | Pacman hook compatibility | Built | pacman runs its hooks as always, and plans now preview them. | r3 u4 |
-| Offline / air-gapped mode | Partial | `--offline` for lookups and plans from local data; no verified bundle (see section 10). |  |
+| Offline / air-gapped mode | Partial | `--offline` for lookups and plans from local data; no verified bundle (see section 11). |  |
 | Mirror ranking and parallel downloads | Idea | Built into the engine. |  |
-| Plugin system (WASM-sandboxed, with security checks) and backend plugin interface | Specified | `emrac plugin list\|search\|install\|remove\|update\|enable\|disable\|verify`. Plugins are compiled WebAssembly modules, never scripts. Enforcement: deny-by-default host calls, capabilities declared in a manifest and granted by the user, memory/time/call limits, every host call logged. Security checks: hash and signature verified before install, requested capabilities shown in the install preview and audited like a package manifest, versions pinned, an update that asks for more capabilities needs a new approval. Also the way new sources (Flatpak and others) are added without touching core transaction logic. | `SPEC.md` III.21, Part V Plugins; `ideas.md` |
+| Plugin system (WASM-sandboxed, with security checks) and backend plugin interface | Specified | `emrac plugin list\|search\|install\|remove\|update\|enable\|disable\|verify`. Plugins are compiled WebAssembly modules, never scripts. Enforcement: deny-by-default host calls, capabilities declared in a manifest and granted by the user, memory/time/call limits, every host call logged. Security checks: hash and signature verified before install, requested capabilities shown in the install preview and audited like a package manifest, versions pinned, an update that asks for more capabilities needs a new approval. Also the way new sources (Flatpak and others) are added without touching core transaction logic. | `SPEC.md` III.21, Part V Plugins; `ideas.md`; `plugin-feat.md` |
 | Preset sharing | Idea | Signed optimization-flag presets. |  |
 | Smoke tests in the sandbox | Idea | Run `check()` and "does the binary start" before commit. |  |
 | Binary vs source benchmarking | Idea | Measure whether a source build was worth it (`recommend` predicts, `benchmark` would measure). |  |
@@ -345,7 +347,31 @@ Specified in `self-service-feat.md`; its five phases are built.
 | Offline analysis (`--root /mnt`) | Idea | Analyze a mounted disk from a live USB or the rescue binary (C7) without trusting the running kernel. |  |
 | Tamper-evident history with an off-machine anchor | Partial | The SHA-256 chain, the root-owned ledger and the audit watch are built; storing the latest hash somewhere else (a git remote or a printed code) is not. | r2 u7-u9 |
 
-## 9. Research programme (REA, containers, other package managers)
+## 9. Plugin system (proposed)
+
+`plugin-feat.md`: WebAssembly modules, never scripts, with the enforcement and security checks built in. Nothing is built. The design is a proposal; the open choices (runtime, signing, whether there is a registry at all) are listed on the page.
+
+| Feature | Status | What it is | Where |
+|---|---|---|---|
+| `emrac plugin list \| search \| install \| remove \| enable \| disable \| update` | Specified | The command surface in `SPEC.md` Part V. The design adds `info`, `verify` and `test`. | `SPEC.md` Part V; `plugin-feat.md` section 8 |
+| Plugin runtime and enforcement | Idea | The WASM runtime runs in a child process inside the same bubblewrap sandbox as builds (no network, empty home); host calls are deny-by-default and logged; plugins run unprivileged and are never loaded by a root helper or a pacman hook. | `plugin-feat.md` section 2 |
+| Capability model | Idea | Capabilities declared in the manifest and granted by you: `fs.read:<path>`, `net.get:<host>`, `net.post:<host>`, `events:<kinds>`, `time`, and output kinds. There is no host call to write, read the environment or reach other hosts; running an external tool is a separate, later capability (section 15). | `plugin-feat.md` sections 3 and 15 |
+| Resource limits | Idea | Per call: memory, instruction budget (fuel), wall time (the host process is killed), output size and number of findings, host-call counts. A limit hit switches the plugin off for that run and never blocks or passes a transaction. | `plugin-feat.md` section 4 |
+| Add-only plugin findings | Idea | Plugin output is merged and labelled with the plugin; it cannot suppress or edit a built-in finding, and its severity is capped below `critical` by default. | `plugin-feat.md` section 2 |
+| Plugin manifest and module inspection | Idea | `plugin.toml` (id, version, ABI, extension points, capabilities, limits, hash) validated strictly; before install the module must validate as WebAssembly and its imports must be a subset of the declared capabilities (no WASI, no threads). | `plugin-feat.md` sections 5-7 |
+| Plugin install security checks | Idea | Hash and signature verified; key trust explicit on first use; an install preview in words with a default-no question `--yes` does not answer; pinning in `plugins.lock`; an update that asks for more capabilities needs a new approval; downgrades refused; history records; `plugin verify` and a `doctor` row. | `plugin-feat.md` section 7 |
+| E1 Audit-rule plugins | Idea | Extra checks over a PKGBUILD, `.install` and patches, returning findings in the shape `audit` already has. The first extension point to build. | `plugin-feat.md` section 1 |
+| E2-E4 Health-check, plan-note and formatter plugins | Idea | Extra `doctor` rows, extra notes under a plan, and new output formats for existing JSON reports. | `plugin-feat.md` section 1 |
+| E5 Package-source plugins (Flatpak and others) | Idea | New sources without touching core transaction logic; needs its own design because it involves external tools and the transaction machinery. | `plugin-feat.md` section 1; `ideas.md` |
+| E6-E7 Event-observer and policy-gate plugins | Idea | Observers receive structured events and report them (notification, webhook, log). Gates can veto a transaction under a policy you configured; they only ever make it stricter, never approve what a built-in check stopped, and never apply to recovery. | `plugin-feat.md` sections 1-3 |
+| E8-E9 Read-only command and plan-proposal plugins | Idea | A namespaced read-only command from the data a plugin was granted, and plugins that propose operations that emrac turns into a normal previewed plan. | `plugin-feat.md` section 1 |
+| Execution by proxy (`exec:<tool>`) | Idea | emrac runs a named, hash-pinned tool in the build sandbox on a plugin's behalf, from declared argument templates only; read-only by default, writes need a separate capability that `--yes` does not answer; never privileged, output treated as untrusted, every run logged. Phase 4 or later. | `plugin-feat.md` section 15 |
+| Industry-tool plugin families | Idea | Adapters for Git and forges, containers, infrastructure as code, Kubernetes, CI/CD, observability, supply chain and security, build systems, artifact registries, notifications, editors and fleet tools. The tool stays a separately installed program; installs, removals and commits stay with emrac. | `plugin-feat.md` sections 13-15 |
+| Core-versus-plugin boundary | Idea | Protections for the transaction and for recovery stay built in so removing a plugin never removes one; a suggested plugin list was reviewed and roughly a third to a half duplicates the core. | `plugin-feat.md` section 14 |
+| Signed plugin index, `search`, revocation | Idea | A signed index with rollback protection and a revocation list, in phase 3 only. Shares the governance question of the AUR defense feed. | `plugin-feat.md` section 10 |
+| Plugin SDK and template | Idea | A crate and template so writing a rule is not an exercise in the raw ABI. | `plugin-feat.md` section 12 |
+
+## 10. Research programme (REA, containers, other package managers)
 
 `rea-research-plan.md` and `rea-portage.md`. Research informs design; nothing here runs inside emrac. Findings so far are in `research/` and drove u4 to u8.
 
@@ -383,7 +409,7 @@ Specified in `self-service-feat.md`; its five phases are built.
 | P21 Binary packages with matching rules | Idea | Reuse a prebuilt package only if its inputs match. |  |
 | P22 USE-flag-like per-package toggles | Idea | Per-package feature toggles that change build options and dependencies. |  |
 
-## 10. Newer ideas (not yet in the other documents)
+## 11. Newer ideas (not yet in the other documents)
 
 Collected after the documents above. Everything here is deterministic and local; no AI, no scripting engine.
 
@@ -417,7 +443,7 @@ Collected after the documents above. Everything here is deterministic and local;
 | Optional-dependency suggestions | Idea | After a transaction, which optional dependencies are unmet and what each adds (rpm weak dependencies). |  |
 | `.pacnew` resolution offered right after an upgrade | Idea | Offer `emrac pacnew resolve` for the files the upgrade just created, using the u5 prediction. |  |
 
-## 11. Decided against, or far future
+## 12. Decided against, or far future
 
 Recorded so nobody re-proposes them by accident.
 
@@ -439,6 +465,7 @@ Recorded so nobody re-proposes them by accident.
 | [`cross-distro-feat.md`](./cross-distro-feat.md) | Wandrover, cross-distribution package resolution. |
 | [`self-service-feat.md`](./self-service-feat.md) | The self-management service, `emrac self`. |
 | [`aur-defense-feat.md`](./aur-defense-feat.md) | Layered AUR malware defense, planned for r4. |
+| [`plugin-feat.md`](./plugin-feat.md) | The plugin system: WebAssembly modules with enforcement and security checks (proposed). |
 | [`pkgforensics.md`](./pkgforensics.md) | Package forensics: timeline, provenance, persistence, baseline, evidence capture (proposed). |
 | [`rea-research-plan.md`](./rea-research-plan.md), [`rea-portage.md`](./rea-portage.md) | The research programme and what to learn from Portage. |
 | [`../plan/`](../plan) | One plan per slice, written before the code (`r1/`, `r2/`, `r3/`). |
@@ -448,4 +475,4 @@ Recorded so nobody re-proposes them by accident.
 
 ## Keeping this file current
 
-When a slice ships, change its rows here from Idea or Specified to Built or Partial and name the slice; when a new idea is proposed, add a row to the section it belongs to (or section 10) with a one-line description and where it is written up. `FEATURE_STATUS.rst` stays the per-category status of the spec; this file is the union of everything.
+When a slice ships, change its rows here from Idea or Specified to Built or Partial and name the slice; when a new idea is proposed, add a row to the section it belongs to (or section 11) with a one-line description and where it is written up. `FEATURE_STATUS.rst` stays the per-category status of the spec; this file is the union of everything.

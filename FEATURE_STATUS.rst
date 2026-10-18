@@ -338,8 +338,8 @@ Complete Feature Catalog
    * - 21
      - Extensibility (Future)
      - Not started
-     - Future-scoped in the spec itself. The plugin system (WebAssembly modules with enforcement and security checks, never scripts) and the other extensibility items are listed under Future scope, "Extensibility (SPEC III.21)".
-     - ``docs/feats/SPEC.md`` III.21; Future scope, section 3.3 below
+     - Future-scoped in the spec itself. The plugin system (WebAssembly modules with enforcement and security checks, never scripts) and the other extensibility items are listed under Future scope, "Plugin system" and "Extensibility (SPEC III.21)".
+     - ``docs/feats/SPEC.md`` III.21; Future scope
 
 Signature & Advanced Features
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -817,7 +817,7 @@ Ideas from other projects, safety and recovery, workflow, the maintainer workflo
      - ``docs/feats/ideas.md``; ``docs/plan/r3/u4-hook-preview.md``
    * - Offline / air-gapped mode
      - Partial
-     - ``--offline`` for lookups and plans from local data; no verified bundle (see section 10).
+     - ``--offline`` for lookups and plans from local data; no verified bundle (see section 11).
      - ``docs/feats/ideas.md``
    * - Mirror ranking and parallel downloads
      - Idea
@@ -955,7 +955,7 @@ Ideas from other projects, safety and recovery, workflow, the maintainer workflo
 Newer ideas
 ~~~~~~~~~~~
 
-Collected after the documents above; tracked in ``docs/feats/feats.md`` section 10. Includes ``emrac pachooks`` (the pacman hook editor; ``emrac hooks`` is already the spec's event-hook group), git-style history, supply-chain and offline-bundle ideas.
+Collected after the documents above; tracked in ``docs/feats/feats.md`` section 11. Includes ``emrac pachooks`` (the pacman hook editor; ``emrac hooks`` is already the spec's event-hook group), git-style history, supply-chain and offline-bundle ideas.
 
 .. list-table::
    :header-rows: 1
@@ -1270,10 +1270,10 @@ Wandrover: cross-distribution package resolution
      - Import a foreign package list into a reviewed Arch plan.
      - ``docs/feats/cross-distro-feat.md``
 
-Extensibility (SPEC III.21)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Plugin system (plugin-feat.md)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The plugin system stays, as WebAssembly modules (never scripts) with enforcement and security checks; the other extensibility items are in the spec as future.
+The plugin system stays, as WebAssembly modules (never scripts) with enforcement and security checks. Nothing is built; ``docs/feats/plugin-feat.md`` is the design proposal, with the open choices listed.
 
 .. list-table::
    :header-rows: 1
@@ -1283,10 +1283,88 @@ The plugin system stays, as WebAssembly modules (never scripts) with enforcement
      - Status
      - Notes
      - Tracked in
-   * - Plugin system (WASM-sandboxed, with security checks)
+   * - ``emrac plugin list | search | install | remove | enable | disable | update``
      - Not started
-     - ``emrac plugin list|search|install|remove|update|enable|disable|verify``. Plugins are compiled WebAssembly modules, never scripts. **Enforcement:** deny-by-default host calls; capabilities declared in a manifest and granted by the user; memory, time and call limits; every host call logged. **Security checks:** hash and signature verified before install; requested capabilities shown in the install preview and audited like a package manifest; versions pinned; an update that asks for more capabilities needs a new approval. Also how new package sources (Flatpak and others) are added without touching core transaction logic.
-     - ``docs/feats/SPEC.md`` III.21 and Part V Plugins; ``docs/feats/ideas.md``
+     - The command surface in ``SPEC.md`` Part V. The design adds ``info``, ``verify`` and ``test``.
+     - ``docs/feats/plugin-feat.md``
+   * - Plugin runtime and enforcement
+     - Idea
+     - The WASM runtime runs in a child process inside the same bubblewrap sandbox as builds (no network, empty home); host calls are deny-by-default and logged; plugins run unprivileged and are never loaded by a root helper or a pacman hook.
+     - ``docs/feats/plugin-feat.md``
+   * - Capability model
+     - Idea
+     - Capabilities declared in the manifest and granted by you: ``fs.read:<path>``, ``net.get:<host>``, ``net.post:<host>``, ``events:<kinds>``, ``time``, and output kinds. There is no host call to write, read the environment or reach other hosts; running an external tool is a separate, later capability (section 15).
+     - ``docs/feats/plugin-feat.md``
+   * - Resource limits
+     - Idea
+     - Per call: memory, instruction budget (fuel), wall time (the host process is killed), output size and number of findings, host-call counts. A limit hit switches the plugin off for that run and never blocks or passes a transaction.
+     - ``docs/feats/plugin-feat.md``
+   * - Add-only plugin findings
+     - Idea
+     - Plugin output is merged and labelled with the plugin; it cannot suppress or edit a built-in finding, and its severity is capped below ``critical`` by default.
+     - ``docs/feats/plugin-feat.md``
+   * - Plugin manifest and module inspection
+     - Idea
+     - ``plugin.toml`` (id, version, ABI, extension points, capabilities, limits, hash) validated strictly; before install the module must validate as WebAssembly and its imports must be a subset of the declared capabilities (no WASI, no threads).
+     - ``docs/feats/plugin-feat.md``
+   * - Plugin install security checks
+     - Idea
+     - Hash and signature verified; key trust explicit on first use; an install preview in words with a default-no question ``--yes`` does not answer; pinning in ``plugins.lock``; an update that asks for more capabilities needs a new approval; downgrades refused; history records; ``plugin verify`` and a ``doctor`` row.
+     - ``docs/feats/plugin-feat.md``
+   * - E1 Audit-rule plugins
+     - Idea
+     - Extra checks over a PKGBUILD, ``.install`` and patches, returning findings in the shape ``audit`` already has. The first extension point to build.
+     - ``docs/feats/plugin-feat.md``
+   * - E2-E4 Health-check, plan-note and formatter plugins
+     - Idea
+     - Extra ``doctor`` rows, extra notes under a plan, and new output formats for existing JSON reports.
+     - ``docs/feats/plugin-feat.md``
+   * - E5 Package-source plugins (Flatpak and others)
+     - Idea
+     - New sources without touching core transaction logic; needs its own design because it involves external tools and the transaction machinery.
+     - ``docs/feats/plugin-feat.md``
+   * - E6-E7 Event-observer and policy-gate plugins
+     - Idea
+     - Observers receive structured events and report them (notification, webhook, log). Gates can veto a transaction under a policy you configured; they only ever make it stricter, never approve what a built-in check stopped, and never apply to recovery.
+     - ``docs/feats/plugin-feat.md``
+   * - E8-E9 Read-only command and plan-proposal plugins
+     - Idea
+     - A namespaced read-only command from the data a plugin was granted, and plugins that propose operations that emrac turns into a normal previewed plan.
+     - ``docs/feats/plugin-feat.md``
+   * - Execution by proxy (``exec:<tool>``)
+     - Idea
+     - emrac runs a named, hash-pinned tool in the build sandbox on a plugin's behalf, from declared argument templates only; read-only by default, writes need a separate capability that ``--yes`` does not answer; never privileged, output treated as untrusted, every run logged. Phase 4 or later.
+     - ``docs/feats/plugin-feat.md``
+   * - Industry-tool plugin families
+     - Idea
+     - Adapters for Git and forges, containers, infrastructure as code, Kubernetes, CI/CD, observability, supply chain and security, build systems, artifact registries, notifications, editors and fleet tools. The tool stays a separately installed program; installs, removals and commits stay with emrac.
+     - ``docs/feats/plugin-feat.md``
+   * - Core-versus-plugin boundary
+     - Idea
+     - Protections for the transaction and for recovery stay built in so removing a plugin never removes one; a suggested plugin list was reviewed and roughly a third to a half duplicates the core.
+     - ``docs/feats/plugin-feat.md``
+   * - Signed plugin index, ``search``, revocation
+     - Idea
+     - A signed index with rollback protection and a revocation list, in phase 3 only. Shares the governance question of the AUR defense feed.
+     - ``docs/feats/plugin-feat.md``
+   * - Plugin SDK and template
+     - Idea
+     - A crate and template so writing a rule is not an exercise in the raw ABI.
+     - ``docs/feats/plugin-feat.md``
+
+Extensibility (SPEC III.21)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The other extensibility items in the spec, all future-scoped.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 9 45 22
+
+   * - Feature
+     - Status
+     - Notes
+     - Tracked in
    * - Public API
      - Not started
      - A stable programmatic interface to the same engine the CLI uses (the machine-readable ``--json`` output is the first step).
@@ -1480,7 +1558,7 @@ Recorded so nobody re-proposes them by accident.
      - A far-future idea of yours, deliberately not planned or scheduled. The research documents hold what dpkg and rpm do for atomic file replacement and journaling, which is where it would start.
      - 
 
-Future scope: 61 tracked: 2 done, 5 partial, 8 not started, 29 idea, 5 planned (r4), 9 research, 3 not planned.
+Future scope: 77 tracked: 2 done, 5 partial, 8 not started, 45 idea, 5 planned (r4), 9 research, 3 not planned.
 
 Totals
 --------
@@ -1511,14 +1589,14 @@ Totals
      - 2
      - 5
      - 8
-     - 46
-     - 61
+     - 62
+     - 77
    * - **All**
      - **35**
      - **53**
      - **32**
-     - **135**
-     - **255**
+     - **151**
+     - **271**
 
 Some features appear in more than one scope's list (soak time, the offline
 bundle, migration mode); each table counts its own rows. The core catalogue

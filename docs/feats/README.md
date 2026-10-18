@@ -11,3 +11,4 @@ The collected feature ideas for emrac. Nothing here is a commitment unless it sa
 - [`aur-defense-feat.md`](./aur-defense-feat.md) — layered AUR malware defense. Planned for the r4 cycle.
 - [`rea-research-plan.md`](./rea-research-plan.md) and [`rea-portage.md`](./rea-portage.md) — the research programme and what to learn from Portage.
 - [`pkgforensics.md`](./pkgforensics.md) — package forensics: timeline, provenance, persistence, baseline, evidence capture. Proposed.
+- [`plugin-feat.md`](./plugin-feat.md) — the plugin system: WebAssembly modules (never scripts) with enforcement and security checks; extension points, capabilities, install checks, phases, open choices. Proposed.
