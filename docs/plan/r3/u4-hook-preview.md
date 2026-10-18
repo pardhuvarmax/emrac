@@ -68,7 +68,7 @@ Hooks that will run (12):
 - `crates/emrac-cli/src/output.rs`: `print_plan` shows the preview; `--json` gets a `hooks` key.
 - `install`, `remove`, `upgrade` call it. `Plan` and its digest are unchanged: the hooks depend on
   the system, not on the plan, so they must not change a plan id.
-- Docs: `docs/SPEC.md` is left alone; `FEATURE_STATUS.rst`, `CHANGELOG.md`, `docs/tests/…`.
+- Docs: `docs/feats/SPEC.md` is left alone; `FEATURE_STATUS.rst`, `CHANGELOG.md`, `docs/tests/…`.
 
 ## Verification
 

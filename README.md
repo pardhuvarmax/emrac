@@ -101,7 +101,7 @@ Errors go to stderr as `emrac found: …` (something you can fix) or `emrac says
 
 ## Documentation
 
-[`SPEC.md`](./SPEC.md) is the complete specification:
+[`SPEC.md`](./docs/feats/SPEC.md) is the complete specification:
 
 - Vision & philosophy
 - Full feature catalog
