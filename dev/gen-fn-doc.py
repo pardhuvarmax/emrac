@@ -5,7 +5,7 @@
     python3 dev/gen-fn-doc.py --check    # exit 1 if docs/fn.md is out of date
 
 Functions inside `#[cfg(test)]` modules are counted but not listed (the tests are
-in docs/tests/emrac-tests.rst). A method is shown as `Type::name`; a function in a
+in docs/tests/emrac-tests.rst), and so is the integration test file under tests/. A method is shown as `Type::name`; a function in a
 trait impl as `Type::name` with `(Trait)`. Visibility is shown: `pub`, `pub(crate)`
 or nothing for private.
 """
@@ -130,8 +130,7 @@ def scan(path):
 
 
 def main():
-    files = sorted(p for c in ("emrac-core", "emrac-cli") for p in (ROOT / "crates" / c).rglob("*.rs")
-                   if "target" not in p.parts)
+    files = sorted(p for c in ("emrac-core", "emrac-cli") for p in (ROOT / "crates" / c / "src").rglob("*.rs"))
     body, total, total_tests = [], 0, 0
     per_crate = {}
     for p in files:
