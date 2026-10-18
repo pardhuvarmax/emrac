@@ -9,6 +9,7 @@ pub mod config;
 pub mod deps;
 pub mod doctor;
 pub mod downgrade;
+pub mod exchange;
 pub mod explain;
 pub mod history;
 pub mod info;

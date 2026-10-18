@@ -360,6 +360,53 @@ pub enum Commands {
         pkg: Option<String>,
     },
 
+    /// Describe this machine in one small file: packages, a safe subset of the
+    /// settings, holds and repository names (to the screen, or with -o)
+    Export {
+        /// Only the installed packages
+        #[arg(long)]
+        packages: bool,
+
+        /// Only the settings that can be exchanged
+        #[arg(long)]
+        config: bool,
+
+        /// Only the repository names
+        #[arg(long)]
+        repos: bool,
+
+        /// Only the holds (pins)
+        #[arg(long)]
+        pins: bool,
+
+        /// Write to this file instead of the screen (never overwrites one)
+        #[arg(short = 'o', long, value_name = "FILE")]
+        output: Option<String>,
+    },
+
+    /// Compare an exchange file with this machine, then apply each part you
+    /// agree to (--dry-run: the comparison only; --json: the comparison only)
+    Import {
+        /// The file `emrac export` wrote
+        file: String,
+
+        /// Only the packages
+        #[arg(long)]
+        packages: bool,
+
+        /// Only the settings
+        #[arg(long)]
+        config: bool,
+
+        /// Only the repository names (reported, never applied)
+        #[arg(long)]
+        repos: bool,
+
+        /// Only the holds (pins)
+        #[arg(long)]
+        pins: bool,
+    },
+
     /// What emrac has built and installed here, and how long builds took
     Stats {
         /// Only the last period: a number with m, h, d or w (for example 30d)

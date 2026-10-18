@@ -795,6 +795,15 @@ impl AlpmBackend {
         })
     }
 
+    /// The names of the enabled sync repositories, in `pacman.conf` order.
+    pub fn sync_repo_names(&self) -> Vec<String> {
+        self.handle
+            .syncdbs()
+            .iter()
+            .map(|db| db.name().to_string())
+            .collect()
+    }
+
     /// The installed size in bytes of an installed package; `None` when it is
     /// not installed.
     pub fn installed_size(&self, name: &str) -> Option<u64> {

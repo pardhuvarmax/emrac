@@ -358,6 +358,34 @@ fn run(cli: &Cli) -> Result<()> {
         Commands::Timeline { since, pkg } => {
             commands::timeline::run(&sources, since.as_deref(), pkg.as_deref(), json)
         }
+        Commands::Export {
+            packages,
+            config: only_config,
+            repos,
+            pins,
+            output,
+        } => commands::exchange::export(
+            &sources,
+            &config,
+            commands::exchange::scope_from(*packages, *only_config, *repos, *pins),
+            output.as_deref(),
+        ),
+        Commands::Import {
+            file,
+            packages,
+            config: only_config,
+            repos,
+            pins,
+        } => commands::exchange::import(
+            &sources,
+            &config,
+            file,
+            commands::exchange::scope_from(*packages, *only_config, *repos, *pins),
+            dry_run,
+            yes,
+            offline,
+            json,
+        ),
         Commands::Stats { since } => commands::stats::run(&sources, since.as_deref(), json),
         Commands::Benchmark {
             pkg,

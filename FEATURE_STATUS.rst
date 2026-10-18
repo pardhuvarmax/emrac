@@ -525,9 +525,9 @@ Part V is the command surface of features covered above.
      - Internal dev/debug tooling
      - ``docs/feats/SPEC.md`` Part V
    * - Export / Import (``export``, ``import``, ``bundle``)
-     - Not started
-     - Nothing built yet.
-     - ``docs/feats/SPEC.md`` Part V
+     - Partial
+     - ``emrac export`` / ``import`` (u12): packages, a safe subset of the settings, holds and repository names in one file; import reports first, installs through the normal install path, and never applies repositories, ``self.*``, ``safety.*``, ``flags.*`` or ``review.skip_*``. ``bundle`` is not built
+     - ``docs/feats/SPEC.md`` Part V; ``docs/plan/r3/u12-export-import.md``
    * - Help (``help``, ``man``, ``docs``, ``license``, ``credits``, ``bug-report``)
      - Not started
      - Only clap's auto-generated ``--help`` exists today
@@ -537,7 +537,7 @@ Part V is the command surface of features covered above.
      - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
      - ``docs/feats/SPEC.md`` Part V
 
-Core scope: 59 tracked: 5 done, 33 partial, 21 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
+Core scope: 59 tracked: 5 done, 34 partial, 20 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
 
 Extended scope
 ----------------
@@ -1575,8 +1575,8 @@ Totals
      - Total
    * - Core
      - 5
-     - 33
-     - 21
+     - 34
+     - 20
      - 0
      - 59
    * - Extended
@@ -1593,8 +1593,8 @@ Totals
      - 77
    * - **All**
      - **35**
-     - **56**
-     - **29**
+     - **57**
+     - **28**
      - **151**
      - **271**
 

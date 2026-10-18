@@ -1255,6 +1255,47 @@ impl Sources {
         )
     }
 
+    /// The exchange file for this machine (`emrac export`).
+    pub fn export(
+        &self,
+        scope: crate::exchange::Scope,
+        config: &crate::config::Config,
+    ) -> Result<crate::exchange::Exchange> {
+        let pins = crate::pins::PinStore::list()?;
+        Ok(crate::exchange::build(
+            scope,
+            &self.alpm.installed_snapshot(),
+            &self.alpm.sync_repo_names(),
+            config,
+            &pins,
+            &crate::history::format_utc_date(now()),
+        ))
+    }
+
+    /// How an exchange file differs from this machine (`emrac import`).
+    pub fn import_report(
+        &self,
+        ex: &crate::exchange::Exchange,
+        scope: crate::exchange::Scope,
+        config: &crate::config::Config,
+    ) -> Result<crate::exchange::ImportReport> {
+        let installed: Vec<(String, String)> = self
+            .alpm
+            .installed_snapshot()
+            .into_iter()
+            .map(|p| (p.name, p.version))
+            .collect();
+        let pins = crate::pins::PinStore::list()?;
+        Ok(crate::exchange::compare(
+            ex,
+            scope,
+            &installed,
+            config,
+            &self.alpm.sync_repo_names(),
+            &pins,
+        ))
+    }
+
     /// Build and transaction statistics for `emrac stats`.
     pub fn stats(&self, since_secs: Option<u64>) -> crate::build_stats::Stats {
         let history = History::all().unwrap_or_default();

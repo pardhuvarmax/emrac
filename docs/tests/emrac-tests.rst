@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 517
+     - 527
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 17
@@ -31,9 +31,9 @@ Totals
      - 31
    * - **Automated total**
      -
-     - **565**
+     - **575**
 
-emrac-core library (517)
+emrac-core library (527)
 ------------------------
 
 ``arch_news::tests`` (7)
@@ -304,6 +304,20 @@ emrac-core library (517)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``only_the_no_network_failure_suggests_a_retry_with_network``
+
+``exchange::tests`` (10)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_bad_value_for_a_safe_setting_is_refused_by_the_setting_itself``
+* ``a_file_is_refused_when_it_is_wrong``
+* ``a_hostile_file_cannot_change_what_protects_you``
+* ``a_part_outside_the_scope_is_not_compared``
+* ``explicit_packages_to_install_and_dependencies_left_to_come_along``
+* ``only_differing_safe_settings_are_changes``
+* ``only_the_safe_settings_are_exported``
+* ``repositories_are_only_reported_and_pins_already_in_force_are_not_new``
+* ``the_file_round_trips``
+* ``the_scope_leaves_parts_out``
 
 ``graph_render::tests`` (7)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1032,6 +1046,38 @@ nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 pa
 * a package that was installed before the build is not offered
 
 (9 checks.)
+
+End-to-end: export and import (dev/e2e/exchange.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``emrac export`` writes a file of the machine; ``emrac import`` reports first and
+applies only what is safe and agreed to: ``dev/e2e/run.sh exchange``. Last full run: after u12, 23 of 23 passed.
+
+* export writes a format-1 file with the installed packages
+* export never overwrites a file
+* the file holds no protection or self-update setting
+* the safe settings are in it
+* --packages alone leaves out settings and repositories
+* the repository names are in it, without server addresses
+* importing a file of this very machine finds nothing to do
+* the report names the packages that are missing
+* --dry-run changes nothing
+* import installs the missing explicit packages through the install path
+* the install is in the history like any other
+* another version is reported, never changed
+* the report says which settings are not applied, and why
+* an unknown repository is only reported
+* --yes applies the safe setting
+* but not the update source, the key or the protections
+* --yes does not answer the hold question
+* answered yes by a person, the hold is added
+* a package name that is an option rejects the file
+* a file of another format is refused
+* something that is not TOML is refused
+* a missing file is refused
+* --json gives the comparison and applies nothing
+
+(23 checks.)
 
 End-to-end: graphs drawn in the terminal (dev/e2e/graph.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

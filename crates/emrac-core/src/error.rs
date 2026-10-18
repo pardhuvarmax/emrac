@@ -145,6 +145,10 @@ pub enum Error {
     #[error("{0}")]
     PacmanDb(String),
 
+    /// An exchange file could not be read or applied.
+    #[error("{0}")]
+    Exchange(String),
+
     /// A graph could not be drawn.
     #[error("{0}")]
     Graph(String),
@@ -395,6 +399,7 @@ impl Error {
             | Error::PacmanDb(_)
             | Error::Benchmark(_)
             | Error::Graph(_)
+            | Error::Exchange(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }
