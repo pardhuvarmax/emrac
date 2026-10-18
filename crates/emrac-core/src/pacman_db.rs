@@ -71,6 +71,11 @@ pub fn backups() -> Vec<Backup> {
 /// (a fraction of the size, and only `pacman -Qkk` needs them), and removes
 /// the oldest beyond `KEEP`. Returns the new backup.
 pub fn backup_to(root: &Path, dest: &Path, now: u64) -> Result<Backup> {
+    // Checked first: tar creates its output file before it looks at the
+    // source, so a missing database would leave a stray `.part` behind.
+    if !root.join("local").is_dir() {
+        return Err(err(format!("{}: no `local` database here", root.display())));
+    }
     fs::create_dir_all(dest).map_err(|e| err(format!("{}: {e}", dest.display())))?;
     let path = dest.join(file_name(now));
     let part = path.with_extension("gz.part");
