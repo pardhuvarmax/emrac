@@ -21,6 +21,8 @@ dev/e2e/run.sh
 
 `dev/e2e/run.sh buildtools` runs [`buildtools.sh`](./buildtools.sh) as the ordinary user: a local checkout posing as an AUR package has a build-only dependency and a runtime one; after the build emrac must offer to remove exactly what the build added and nothing needs, in each of the `build.remove_make_deps` modes.
 
+`dev/e2e/run.sh helppages` runs [`helppages.sh`](./helppages.sh) as the ordinary user: `man` for a command, a subcommand, `emrac` itself and every command as roff, `docs`, `license` (and the whole text offline), `credits`, `support`, `feedback`, and `bug-report` (the doctor report, the failed-transactions section, scrubbed of the user name and home path, and the line that it was only printed).
+
 `dev/e2e/run.sh exchange` runs [`exchange.sh`](./exchange.sh) as the ordinary user: `emrac export` of a real machine (the file, no overwrite, no protection or self-update setting in it, no server addresses), the round trip (remove two packages, `import` installs them through the install path), another version reported and left alone, and a hostile file: `self.*` and `safety.*` reported as not applied and really unchanged, an unknown repository only reported, `--yes` not answering the hold question, and bad files refused.
 
 `dev/e2e/run.sh graph` runs [`graph.sh`](./graph.sh) as the ordinary user: `emrac graph --format boxes` for real packages (the root in a double box, every direct dependency drawn, a shared package once, the size refusal, JSON and dot unchanged), then `--format easy` refused cleanly without `graph-easy`, installed from the AUR by emrac itself, and drawn with it.

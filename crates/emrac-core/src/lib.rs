@@ -3,6 +3,7 @@ mod audit;
 pub mod aur_trust;
 mod backend;
 pub mod benchmark;
+mod bug_report;
 pub mod build_stats;
 pub mod build_tools;
 mod cache;

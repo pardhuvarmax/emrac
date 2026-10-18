@@ -20,6 +20,7 @@ podman build -t emrac-test -f dev/container/Containerfile dev/container
 # dev/e2e/run.sh recovery pacman fails mid-install (injected): what emrac finds and how it mends it
 # dev/e2e/run.sh buildtools an AUR build with a build-only dependency: what emrac offers to remove
 # dev/e2e/run.sh stats    emrac stats from a build-times file, emrac benchmark of an installed package
+# dev/e2e/run.sh helppages man, docs, license, credits, support, feedback, bug-report
 # dev/e2e/run.sh exchange emrac export / import: a file of the machine, a report, only what is safe applied
 # dev/e2e/run.sh graph    emrac graph drawn in the terminal, natively and through graph-easy
 # dev/e2e/run.sh timeline emrac timeline over real transactions, a snapshot and a build-times fixture
@@ -81,6 +82,13 @@ buildtools)
     podman run --rm --security-opt 'unmask=/proc/*' \
         -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
         -v "$repo_root/dev/e2e/buildtools.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+helppages)
+    echo "==> Running the help page checks"
+    podman run --rm \
+        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/helppages.sh:/t.sh:ro" \
         emrac-test bash /t.sh
     ;;
 exchange)

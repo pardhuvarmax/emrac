@@ -2031,6 +2031,34 @@ impl Sources {
         )
     }
 
+    /// The text of `emrac bug-report`: the doctor report, the emrac version and
+    /// the last three failed transactions, scrubbed as one piece. Printed by the
+    /// caller; never sent anywhere.
+    pub fn bug_report(&self) -> Result<String> {
+        let report = self.doctor(false)?;
+        let mut text = format!(
+            "# emrac bug report\n\nemrac {}\n\n",
+            env!("CARGO_PKG_VERSION")
+        );
+        text.push_str(&doctor::report_markdown(&report, &self.doctor_env()));
+        text.push_str(&crate::bug_report::failed_section(
+            &History::all_with_archive().unwrap_or_default(),
+        ));
+        let home = std::env::var("HOME").unwrap_or_default();
+        let user = std::env::var("USER")
+            .or_else(|_| std::env::var("LOGNAME"))
+            .unwrap_or_default();
+        let host = read_trimmed("/proc/sys/kernel/hostname").unwrap_or_default();
+        Ok(doctor::scrub(
+            &text,
+            &doctor::Scrub {
+                home: &home,
+                user: &user,
+                host: &host,
+            },
+        ))
+    }
+
     fn doctor_inputs(&self, online: bool) -> DoctorInputs {
         let db_path = self
             .pacman

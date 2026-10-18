@@ -409,7 +409,24 @@ pub fn evaluate(f: &Facts) -> Vec<Check> {
             .map(|k| k.package.as_str())
             .filter(|p| !names.contains(p))
             .collect();
-        out.push(if other.is_empty() {
+        out.push(if other.is_empty() && f.kernels.len() > 1 {
+            // Several kernels, and this transaction changes every one of them:
+            // none stays as it is, but it is not "the only kernel".
+            let mut c = check(
+                "kernel-fallback",
+                "Fallback kernel",
+                Status::Note,
+                format!(
+                    "this changes all {} installed kernels ({}): none stays untouched to boot instead, and one cause (an initramfs hook, a driver) can break them together",
+                    names.len(),
+                    names.join(", ")
+                ),
+            );
+            c.fix = Some(
+                "to keep one back until the others have booted: `emrac pin <kernel>`, then `emrac unpin <kernel>`".into(),
+            );
+            c
+        } else if other.is_empty() {
             let mut c = check(
                 "kernel-fallback",
                 "Fallback kernel",
@@ -453,7 +470,14 @@ pub fn evaluate(f: &Facts) -> Vec<Check> {
                 "kernel-initramfs",
                 "Fallback initramfs",
                 Status::Note,
-                format!("no initramfs-{}-fallback.img in /boot", missing.join(", ")),
+                format!(
+                    "no {} in /boot",
+                    missing
+                        .iter()
+                        .map(|k| format!("initramfs-{k}-fallback.img"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
             );
             c.detail.push(
                 "the fallback preset in /etc/mkinitcpio.d/ was probably removed on purpose".into(),
@@ -878,6 +902,26 @@ mod tests {
     }
 
     #[test]
+    fn missing_fallback_images_are_named_one_by_one() {
+        let mut f = facts(PlanAction::Upgrade, &["linux", "linux-lts", "linux-zen"]);
+        f.boot_readable = true;
+        f.kernels = ["linux", "linux-lts", "linux-zen"]
+            .iter()
+            .map(|n| KernelFacts {
+                fallback_initramfs: Some(false),
+                ..kernel(n)
+            })
+            .collect();
+        let c = evaluate(&f);
+        let check = by(&c, "kernel-initramfs");
+        assert_eq!(check.status, Status::Note);
+        assert_eq!(
+            check.summary,
+            "no initramfs-linux-fallback.img, initramfs-linux-lts-fallback.img, initramfs-linux-zen-fallback.img in /boot"
+        );
+    }
+
+    #[test]
     fn a_kernel_upgrade_checks_boot_space_fallbacks_and_the_boot_entry() {
         let mut f = facts(PlanAction::Upgrade, &["linux"]);
         f.kernels = vec![kernel("linux"), kernel("linux-lts")];
@@ -937,6 +981,21 @@ mod tests {
             .as_deref()
             .unwrap()
             .contains("pacman -S linux linux-headers"));
+        // Every installed kernel in the same transaction: not "the only kernel",
+        // and the advice is not to install one that is already there.
+        f.kernels = vec![kernel("linux"), kernel("linux-lts"), kernel("linux-zen")];
+        f.names = vec!["linux".into(), "linux-lts".into(), "linux-zen".into()];
+        let c = evaluate(&f);
+        let fb = by(&c, "kernel-fallback");
+        assert_eq!(fb.status, Status::Note);
+        assert!(
+            fb.summary.contains("all 3 installed kernels"),
+            "{}",
+            fb.summary
+        );
+        assert!(!fb.summary.contains("the only installed kernel"));
+        assert!(fb.fix.as_deref().unwrap().contains("emrac pin"));
+        assert!(!fb.fix.as_deref().unwrap().contains("pacman -S"));
         // A package that is not a kernel touches none of this.
         let other = facts(PlanAction::Upgrade, &["bash"]);
         assert!(evaluate(&other)

@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 527
+     - 531
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 17
+     - 22
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 31
    * - **Automated total**
      -
-     - **575**
+     - **584**
 
-emrac-core library (527)
+emrac-core library (531)
 ------------------------
 
 ``arch_news::tests`` (7)
@@ -161,6 +161,13 @@ emrac-core library (527)
 * ``only_executables_directly_in_the_bin_directories_are_runnable``
 * ``the_median_of_odd_even_and_no_values``
 * ``the_store_appends_caps_and_reads_back_by_package``
+
+``bug_report::tests`` (3)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_failure_without_an_error_text_still_appears``
+* ``at_most_three_newest_first_and_only_the_first_line_of_the_error``
+* ``no_failures_says_so``
 
 ``build_stats::tests`` (7)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -515,7 +522,7 @@ emrac-core library (527)
 * ``an_override_is_reapplied_on_install_and_upgrade_only``
 * ``only_changes_that_are_missed_need_a_decision``
 
-``preflight::tests`` (11)
+``preflight::tests`` (12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_kernel_image_is_found_as_a_whole_word_only``
@@ -524,6 +531,7 @@ emrac-core library (527)
 * ``a_waiting_upgrade_makes_a_partial_upgrade_a_problem_that_lists_the_packages``
 * ``an_older_version_is_a_problem_and_a_rolled_back_repository_a_warning``
 * ``an_unreadable_boot_degrades_to_notes_and_a_fixed_space_floor``
+* ``missing_fallback_images_are_named_one_by_one``
 * ``mount_tables_and_mirror_addresses_are_parsed``
 * ``power_matters_only_on_battery_and_only_for_risky_work``
 * ``removing_the_last_kernel_is_a_problem_and_removing_one_of_two_is_not``
@@ -791,7 +799,7 @@ emrac-core library (527)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (17)
+emrac command line, unit tests (22)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -806,6 +814,15 @@ emrac command line, unit tests (17)
 * ``an_alternative_names_only_what_changes``
 * ``points_say_the_cap_instead_of_zero_and_signs_otherwise``
 * ``the_thresholds_are_the_engines``
+
+``commands::helppages::tests`` (5)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_command_and_a_subcommand_are_found``
+* ``an_unknown_command_lists_the_known_ones``
+* ``every_command_renders_as_a_man_page``
+* ``the_libraries_named_are_the_ones_in_cargo_toml``
+* ``the_licence_is_the_gpl_3``
 
 ``commands::plan_check::tests`` (2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1046,6 +1063,32 @@ nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 pa
 * a package that was installed before the build is not offered
 
 (9 checks.)
+
+End-to-end: help pages and the bug report (dev/e2e/helppages.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``man``, ``docs``, ``license``, ``credits``, ``support``, ``feedback`` and
+``bug-report``: ``dev/e2e/run.sh helppages``. Last full run: after u13, 17 of 17 passed.
+
+* man prints the help of a command when not on a terminal
+* man takes a subcommand
+* man --roff is roff source with a title line
+* man of emrac itself lists the commands
+* an unknown command lists the known ones
+* every command renders as roff
+* docs gives the site and the repository
+* docs without --open opens nothing
+* license says GPL and offers the full text
+* license --full is the whole text offline
+* credits names the author, the licence and what it runs
+* support says what to run first
+* feedback gives the new-issue page and says nothing is sent
+* bug-report has the doctor report and the version
+* bug-report has a failed-transactions section
+* bug-report is scrubbed: no user name, no home path
+* bug-report says it was not sent
+
+(17 checks.)
 
 End-to-end: export and import (dev/e2e/exchange.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -407,6 +407,57 @@ pub enum Commands {
         pins: bool,
     },
 
+    /// The manual page of a command (a subcommand as a second word)
+    Man {
+        /// The command, for example `install` or `snapshot create`
+        #[arg(required = true, num_args = 1..=2, value_name = "COMMAND")]
+        command: Vec<String>,
+
+        /// Print the roff source instead of showing the page
+        #[arg(long)]
+        roff: bool,
+    },
+
+    /// Where the documentation is
+    Docs {
+        /// Open the documentation site in the browser
+        #[arg(long)]
+        open: bool,
+    },
+
+    /// The licence (GPL-3.0-or-later)
+    License {
+        /// The whole text of the licence
+        #[arg(long)]
+        full: bool,
+    },
+
+    /// Who made emrac and what it is built on
+    Credits,
+
+    /// Where to get help, and what to run first
+    Support {
+        /// Open the issues page in the browser
+        #[arg(long)]
+        open: bool,
+    },
+
+    /// Where to send an idea or a complaint
+    Feedback {
+        /// Open the new-issue page in the browser
+        #[arg(long)]
+        open: bool,
+    },
+
+    /// A report to paste into an issue: the doctor report and the last
+    /// failed transactions, with your user name, host name and home scrubbed.
+    /// It is printed, never sent
+    BugReport {
+        /// Open the new-issue page (only a title is filled in)
+        #[arg(long)]
+        open: bool,
+    },
+
     /// What emrac has built and installed here, and how long builds took
     Stats {
         /// Only the last period: a number with m, h, d or w (for example 30d)

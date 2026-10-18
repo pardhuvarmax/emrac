@@ -20,7 +20,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | Section | Built | Partial | Specified | Idea | Research | Not planned | Total |
 |---|---|---|---|---|---|---|---|
 | 1. Built: what works today | 56 | 0 | 0 | 0 | 0 | 0 | 56 |
-| 2. The specification (SPEC.md): catalogue and signature features | 0 | 33 | 23 | 0 | 0 | 0 | 56 |
+| 2. The specification (SPEC.md): catalogue and signature features | 1 | 33 | 22 | 0 | 0 | 0 | 56 |
 | 3. Ideas from additions.md (A, B, C) | 13 | 8 | 0 | 18 | 0 | 0 | 39 |
 | 4. Ideas from ideas.md | 10 | 7 | 1 | 38 | 0 | 0 | 56 |
 | 5. Wandrover: cross-distribution package resolution | 0 | 0 | 0 | 9 | 0 | 0 | 9 |
@@ -31,7 +31,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
 | 11. Newer ideas (not yet in the other documents) | 0 | 1 | 0 | 26 | 0 | 0 | 27 |
 | 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **86** | **56** | **25** | **139** | **9** | **3** | **318** |
+| **All** | **87** | **56** | **24** | **139** | **9** | **3** | **318** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -172,7 +172,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | V System (`env`, `paths`, `about`, `diagnostics`) | Partial | `--version`, `--help`; `doctor --report` covers the bug-report part. |  |
 | V Development (`dev`, `sandbox`, `test`, `trace`, `debug`) | Specified | Internal tooling. |  |
 | V Export / Import (`export`, `import`, `bundle`) | Partial | `export` and `import` (u12): packages, a safe subset of the settings, holds and repository names in one file; import reports first and applies only what is safe and agreed to. `bundle` (offline) is not built; see section 11. | `docs/plan/r3/u12-export-import.md` |
-| V Help (`man`, `docs`, `license`, `credits`, `bug-report`) | Specified | Only clap's `--help` exists. |  |
+| V Help (`help`, `man`, `docs`, `license`, `credits`, `bug-report`) | Built | `help` (clap), `man` (a real man page, or `--roff`), `docs`, `license [--full]`, `credits`, `support`, `feedback` and `bug-report` (the scrubbed doctor report and the last failed transactions; printed, never sent). | `docs/plan/r3/u13-help-pages.md` |
 | V `lock` / `unlock` | Specified | `pin`/`unpin` are built; `lock`/`unlock` are not. |  |
 | Integrated Modal Editor (`emrac edit <resource>`) | Specified | A built-in modal editor for PKGBUILDs, `.SRCINFO`, patches, profiles and config, with `--external` for `$EDITOR`. | `SPEC.md` Part I |
 | TUI (whole interface) | Specified | Package browser, inspector, dependency explorer, queue and build monitors, log viewer, news reader, history browser, cache manager, rollback interface, themes, keybindings. | `SPEC.md` III.18 |

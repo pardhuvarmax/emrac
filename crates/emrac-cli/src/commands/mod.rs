@@ -11,6 +11,7 @@ pub mod doctor;
 pub mod downgrade;
 pub mod exchange;
 pub mod explain;
+pub mod helppages;
 pub mod history;
 pub mod info;
 pub mod install;

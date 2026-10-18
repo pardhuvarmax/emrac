@@ -84,6 +84,7 @@ st=dev/e2e/stats.sh
 tl=dev/e2e/timeline.sh
 gr=dev/e2e/graph.sh
 xc=dev/e2e/exchange.sh
+hp=dev/e2e/helppages.sh
 pre_run=$(sed -n 's/^# last full run: *//p' "$pre" | head -1)
 self_run=$(sed -n 's/^# last full run: *//p' "$selfup" | head -1)
 hk_run=$(sed -n 's/^# last full run: *//p' "$hk" | head -1)
@@ -94,6 +95,8 @@ st_run=$(sed -n 's/^# last full run: *//p' "$st" | head -1)
 tl_run=$(sed -n 's/^# last full run: *//p' "$tl" | head -1)
 gr_run=$(sed -n 's/^# last full run: *//p' "$gr" | head -1)
 xc_run=$(sed -n 's/^# last full run: *//p' "$xc" | head -1)
+hp_run=$(sed -n 's/^# last full run: *//p' "$hp" | head -1)
+sed -n 's/^ck "\([^"]*\)".*/\1/p' "$hp" >"$work/e2e_helppages.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$xc" >"$work/e2e_exchange.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$gr" >"$work/e2e_graph.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$tl" >"$work/e2e_timeline.txt"
@@ -105,7 +108,7 @@ sed -n 's/^ck "\([^"]*\)".*/\1/p' "$hk" >"$work/e2e_hooks.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$pre" >"$work/e2e_pre.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$selfup" >"$work/e2e_self.txt"
 
-awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" -v hk_file="$work/e2e_hooks.txt" -v hk_run="$hk_run" -v rc_file="$work/e2e_recovery.txt" -v rc_run="$rc_run" -v bt_file="$work/e2e_buildtools.txt" -v bt_run="$bt_run" -v po_file="$work/e2e_policy.txt" -v po_run="$po_run" -v st_file="$work/e2e_stats.txt" -v st_run="$st_run" -v tl_file="$work/e2e_timeline.txt" -v tl_run="$tl_run" -v gr_file="$work/e2e_graph.txt" -v gr_run="$gr_run" -v xc_file="$work/e2e_exchange.txt" -v xc_run="$xc_run" '
+awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" -v hk_file="$work/e2e_hooks.txt" -v hk_run="$hk_run" -v rc_file="$work/e2e_recovery.txt" -v rc_run="$rc_run" -v bt_file="$work/e2e_buildtools.txt" -v bt_run="$bt_run" -v po_file="$work/e2e_policy.txt" -v po_run="$po_run" -v st_file="$work/e2e_stats.txt" -v st_run="$st_run" -v tl_file="$work/e2e_timeline.txt" -v tl_run="$tl_run" -v gr_file="$work/e2e_graph.txt" -v gr_run="$gr_run" -v xc_file="$work/e2e_exchange.txt" -v xc_run="$xc_run" -v hp_file="$work/e2e_helppages.txt" -v hp_run="$hp_run" '
     function rule(text, ch,   i, line) {
         line = ""
         for (i = 0; i < length(text); i++) line = line ch
@@ -235,6 +238,16 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work
         print ""
         print "(" n " checks.)"
         print ""
+        title("End-to-end: help pages and the bug report (dev/e2e/helppages.sh)", "~")
+        print "``man``, ``docs``, ``license``, ``credits``, ``support``, ``feedback`` and"
+        print "``bug-report``: ``dev/e2e/run.sh helppages``. Last full run: " hp_run "."
+        print ""
+        n = 0
+        while ((getline t < hp_file) > 0) { n++; print "* " t }
+        close(hp_file)
+        print ""
+        print "(" n " checks.)"
+        print ""
         title("End-to-end: export and import (dev/e2e/exchange.sh)", "~")
         print "``emrac export`` writes a file of the machine; ``emrac import`` reports first and"
         print "applies only what is safe and agreed to: ``dev/e2e/run.sh exchange``. Last full run: " xc_run "."
@@ -302,7 +315,7 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work
 case "$mode" in
 write)
     cp "$work/out.rst" "$target"
-    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") + $(wc -l <"$work/e2e_hooks.txt") + $(wc -l <"$work/e2e_recovery.txt") + $(wc -l <"$work/e2e_buildtools.txt") + $(wc -l <"$work/e2e_policy.txt") + $(wc -l <"$work/e2e_stats.txt") + $(wc -l <"$work/e2e_timeline.txt") + $(wc -l <"$work/e2e_graph.txt") + $(wc -l <"$work/e2e_exchange.txt") end-to-end checks)"
+    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") + $(wc -l <"$work/e2e_hooks.txt") + $(wc -l <"$work/e2e_recovery.txt") + $(wc -l <"$work/e2e_buildtools.txt") + $(wc -l <"$work/e2e_policy.txt") + $(wc -l <"$work/e2e_stats.txt") + $(wc -l <"$work/e2e_timeline.txt") + $(wc -l <"$work/e2e_graph.txt") + $(wc -l <"$work/e2e_exchange.txt") + $(wc -l <"$work/e2e_helppages.txt") end-to-end checks)"
     ;;
 check)
     if ! diff -u "$target" "$work/out.rst" >"$work/diff.txt"; then

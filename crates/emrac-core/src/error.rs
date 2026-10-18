@@ -145,6 +145,10 @@ pub enum Error {
     #[error("{0}")]
     PacmanDb(String),
 
+    /// A help page could not be shown.
+    #[error("{0}")]
+    Help(String),
+
     /// An exchange file could not be read or applied.
     #[error("{0}")]
     Exchange(String),
@@ -400,6 +404,7 @@ impl Error {
             | Error::Benchmark(_)
             | Error::Graph(_)
             | Error::Exchange(_)
+            | Error::Help(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

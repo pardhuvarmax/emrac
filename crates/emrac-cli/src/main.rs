@@ -57,6 +57,23 @@ fn run(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
+    // These print fixed text or the command definitions: no libalpm handle.
+    match &cli.command {
+        Commands::Man { command, roff } => return commands::helppages::man(command, *roff),
+        Commands::Docs { open } => return commands::helppages::docs(*open),
+        Commands::License { full } => {
+            commands::helppages::license(*full);
+            return Ok(());
+        }
+        Commands::Credits => {
+            commands::helppages::credits();
+            return Ok(());
+        }
+        Commands::Support { open } => return commands::helppages::support(*open),
+        Commands::Feedback { open } => return commands::helppages::feedback(*open),
+        _ => {}
+    }
+
     if let Commands::Ledger { command } = &cli.command {
         return match command {
             LedgerCommand::Events { ack } => commands::ledger::events(ack.as_deref(), cli.json),
@@ -386,6 +403,7 @@ fn run(cli: &Cli) -> Result<()> {
             offline,
             json,
         ),
+        Commands::BugReport { open } => commands::helppages::bug_report(&sources, *open),
         Commands::Stats { since } => commands::stats::run(&sources, since.as_deref(), json),
         Commands::Benchmark {
             pkg,
@@ -498,6 +516,12 @@ fn run(cli: &Cli) -> Result<()> {
         | Commands::Divert { .. }
         | Commands::Policy { .. }
         | Commands::PolicyHelper { .. }
+        | Commands::Man { .. }
+        | Commands::Docs { .. }
+        | Commands::License { .. }
+        | Commands::Credits
+        | Commands::Support { .. }
+        | Commands::Feedback { .. }
         | Commands::LedgerAppend => {
             unreachable!("handled above")
         }

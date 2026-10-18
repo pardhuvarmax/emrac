@@ -529,15 +529,15 @@ Part V is the command surface of features covered above.
      - ``emrac export`` / ``import`` (u12): packages, a safe subset of the settings, holds and repository names in one file; import reports first, installs through the normal install path, and never applies repositories, ``self.*``, ``safety.*``, ``flags.*`` or ``review.skip_*``. ``bundle`` is not built
      - ``docs/feats/SPEC.md`` Part V; ``docs/plan/r3/u12-export-import.md``
    * - Help (``help``, ``man``, ``docs``, ``license``, ``credits``, ``bug-report``)
-     - Not started
-     - Only clap's auto-generated ``--help`` exists today
-     - ``docs/feats/SPEC.md`` Part V
+     - Done
+     - ``help`` (clap), ``man`` (a man page, or ``--roff``), ``docs``, ``license [--full]``, ``credits``, ``support``, ``feedback`` and ``bug-report`` (the scrubbed doctor report and the last failed transactions; printed, never sent)
+     - ``docs/feats/SPEC.md`` Part V; ``docs/plan/r3/u13-help-pages.md``
    * - ``lock``/``unlock``, ``pin``/``unpin`` (under Package Management)
      - Partial
      - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
      - ``docs/feats/SPEC.md`` Part V
 
-Core scope: 59 tracked: 5 done, 34 partial, 20 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
+Core scope: 59 tracked: 6 done, 34 partial, 19 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
 
 Extended scope
 ----------------
@@ -1574,9 +1574,9 @@ Totals
      - Idea / planned / research / not planned
      - Total
    * - Core
-     - 5
+     - 6
      - 34
-     - 20
+     - 19
      - 0
      - 59
    * - Extended
@@ -1592,9 +1592,9 @@ Totals
      - 62
      - 77
    * - **All**
-     - **35**
+     - **36**
      - **57**
-     - **28**
+     - **27**
      - **151**
      - **271**
 
