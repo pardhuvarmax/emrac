@@ -3,8 +3,9 @@
 use std::time::Duration;
 
 use emrac_core::style::{
-    bar, boxed, cell, diff_line, heading, line_text, mark, render_line, sparkline, version_change,
-    Activity, Animations, Column, Depth, Role, Seg, Status, Style, Table, Theme,
+    boxed, cell, diff_line, graded_bar, heading, line_text, mark, render_line, sparkline,
+    version_change, Activity, Animations, Column, Depth, Grade, Role, Seg, Status, Style, Table,
+    Theme,
 };
 use emrac_core::Result;
 
@@ -126,7 +127,7 @@ pub fn gallery(st: &Style, animations: Animations) -> String {
         t.row(vec![
             cell(n, Role::Package),
             cell(size, Role::Size),
-            bar(st, f, 10),
+            graded_bar(st, f, 10, Grade::HighBad),
         ]);
     }
     for l in t.render(st, st.width.saturating_sub(2)).lines() {
@@ -147,13 +148,23 @@ pub fn gallery(st: &Style, animations: Animations) -> String {
     ));
     out.push_str(&format!(
         "  {}  {}\n",
-        render_line(st, &bar(st, 0.35, 20)),
-        st.paint(Role::Dim, "35% of 20 cells")
+        render_line(st, &graded_bar(st, 0.35, 20, Grade::HighGood)),
+        st.paint(Role::Dim, "35% of 20 cells, a full bar is good")
+    ));
+    out.push_str(&format!(
+        "  {}  {}\n",
+        render_line(st, &graded_bar(st, 0.8, 20, Grade::HighBad)),
+        st.paint(Role::Dim, "80% of 20 cells, a full bar is bad")
+    ));
+    out.push_str(&format!(
+        "  {}  {}\n",
+        render_line(st, &graded_bar(st, 1.0, 20, Grade::HighGood)),
+        st.paint(Role::Dim, "100%, red through yellow to green")
     ));
     out.push_str(&format!(
         "  {}  {}\n",
         render_line(st, &sparkline(st, &[3, 5, 2, 9, 7, 4, 8, 1])),
-        st.paint(Role::Dim, "last 8 builds")
+        st.paint(Role::Dim, "last 8 builds, tall is slow")
     ));
 
     out.push_str(&format!("\n{}\n", heading(st, "A diff")));

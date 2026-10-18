@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u20 addendum 3 (after r3) — 2026-10-19 — bars and sparklines in the heat colours, and a wait that changes colour
+
+Bars and sparklines on a terminal are drawn in the heat colours, red, orange, yellow, green, instead of one purple. A bar knows which end is good: scores and mirror speeds run red to green (a full bar is good); disk use (the plan's share of free space, the orphans' sizes) runs green to red (a full bar is bad); a sparkline of build times runs to red for the slowest cell; a bar with no judgement (the AUR share in `stats`) is one colour. A short bar only reaches the first part of the ramp. The ramp has eleven steps in true and 256 colours (darker in the `light` theme), three on 16 colours, and none in `mono`, where the length is the signal; the text of every bar is unchanged and piped output is as before. Also, in `clui.animations active` the spinner and progress bar drawn while emrac waits cycle through the same colours, red, orange, yellow, green and back, about every three seconds: the colour moves, the glyphs do not. New `Role::Heat`, `Grade`, `graded_bar`, `pulse_step`; `emrac ui` shows the three kinds; 4 more tests in `style.rs`.
+
 ## Slice u20 addendum 2 (after r3) — 2026-10-19 — a designed `emrac --version`
 
 On a terminal, `emrac --version` (or `-V`) prints the EMRAC lettering in shaded blocks with a slanted outline (the design the author drew), then `emrac v0.3.0 - libalpm v16.0.1`, who built it with the address, and the motto, in the theme's colours; with an ASCII locale the blocks become `#`, `%` and `:`. Piped or redirected it is still the old plain lines (`emrac 0.3.0`, `built by …`), so scripts that read it are unaffected. `emrac_core::libalpm_version()`, `view::version_banner` (1 test), 2 more checks in `dev/e2e/clui.sh` (50).

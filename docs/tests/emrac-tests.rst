@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 667
+     - 671
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 49
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **748**
+     - **752**
 
-emrac-core library (667)
+emrac-core library (671)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -881,7 +881,7 @@ emrac-core library (667)
 * ``the_elf_reader_agrees_with_readelf_on_a_real_binary_and_a_library``
 * ``transaction_starts_are_found_in_the_log``
 
-``style::tests`` (32)
+``style::tests`` (36)
 ~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_bar_is_filled_in_proportion_and_a_little_is_not_nothing``
@@ -889,8 +889,10 @@ emrac-core library (667)
 * ``a_box_never_exceeds_the_terminal``
 * ``a_coloured_table_strips_to_the_plain_one``
 * ``a_diff_line_keeps_its_sign``
+* ``a_graded_bar_changes_colour_along_its_cells_and_keeps_its_text``
 * ``a_heading_is_a_title_and_a_rule``
 * ``a_long_flexible_cell_is_cut_before_a_column_is_dropped``
+* ``a_sparkline_colours_each_cell_by_its_height``
 * ``a_sparkline_scales_to_the_biggest``
 * ``a_table_lines_its_columns_up``
 * ``a_table_much_narrower_than_its_content_does_not_panic``
@@ -902,11 +904,13 @@ emrac-core library (667)
 * ``colour_depth_comes_from_colorterm_and_term``
 * ``colour_follows_the_terminal_the_variables_and_the_setting``
 * ``every_theme_styles_every_role_and_strips_to_the_same_text``
+* ``heat_runs_from_red_through_yellow_to_green_at_every_depth``
 * ``padding_counts_columns``
 * ``paint_does_nothing_without_colour_and_wraps_with_it``
 * ``rows_can_carry_notes_under_them``
 * ``strip_ansi_removes_only_sequences``
 * ``text_is_wrapped_at_spaces_by_columns``
+* ``the_activity_colour_runs_red_to_green_and_back_and_never_stands_still``
 * ``the_activity_line_and_progress_bar_are_pure``
 * ``the_ascii_set_is_ascii_and_the_unicode_set_is_not``
 * ``the_layout_pieces_need_a_real_terminal``

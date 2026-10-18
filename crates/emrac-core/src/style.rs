@@ -294,6 +294,9 @@ impl Style {
 
     fn code(&self, role: Role) -> Option<&'static str> {
         use Role::*;
+        if let Heat(step) = role {
+            return self.heat_code(step);
+        }
         if self.depth == Depth::TrueColor {
             if let Some(code) = self.true_color(role) {
                 return Some(code);
@@ -319,7 +322,7 @@ impl Style {
                 Accent => Some("35"),
                 Brand => Some("1;36"),
                 Question => Some("34"),
-                Plain => None,
+                Plain | Heat(_) => None,
             },
             // For a light background: no yellow or bright cyan, which wash out.
             Theme::Light => match role {
@@ -339,7 +342,7 @@ impl Style {
                 Accent => Some("35"),
                 Brand => Some("1;34"),
                 Question => Some("34"),
-                Plain => None,
+                Plain | Heat(_) => None,
             },
             // Bold, dim and reverse only: for a terminal with no colour, or a taste for none.
             Theme::Mono => match role {
@@ -347,7 +350,7 @@ impl Style {
                 Ok | Added => Some("1"),
                 Warn => Some("1;4"),
                 Problem => Some("1;7"),
-                Note | Version | Size | Plain => None,
+                Note | Version | Size | Plain | Heat(_) => None,
                 Dim | Removed => Some("2"),
                 Path => Some("4"),
             },
@@ -366,7 +369,7 @@ impl Style {
                 Accent => Some("1;95"),
                 Brand => Some("1;96"),
                 Question => Some("1;94"),
-                Plain => None,
+                Plain | Heat(_) => None,
             },
         }
     }
@@ -375,6 +378,36 @@ impl Style {
 impl Style {
     /// The 24-bit colours of the themes that have a palette of their own.
     /// `mono` has none, and the roles not listed keep their 16-colour code.
+    /// The colour of a step of the ramp: red, through yellow, to green.
+    fn heat_code(&self, step: u8) -> Option<&'static str> {
+        let i = usize::from(step.min(10));
+        let light = self.theme == Theme::Light;
+        match self.theme {
+            // no colour at all: the length of the bar says it
+            Theme::Mono => Some("1"),
+            _ if self.depth == Depth::TrueColor => Some(if light {
+                HEAT_TRUE_LIGHT[i]
+            } else {
+                HEAT_TRUE[i]
+            }),
+            _ if self.depth == Depth::Color256 => Some(if light {
+                HEAT_256_LIGHT[i]
+            } else {
+                HEAT_256[i]
+            }),
+            Theme::HighContrast => Some(match i {
+                0..=3 => "1;91",
+                4..=6 => "1;93",
+                _ => "1;92",
+            }),
+            _ => Some(match i {
+                0..=3 => "31",
+                4..=6 => "33",
+                _ => "32",
+            }),
+        }
+    }
+
     fn true_color(&self, role: Role) -> Option<&'static str> {
         use Role::*;
         match self.theme {
@@ -418,6 +451,41 @@ impl Style {
     }
 }
 
+const HEAT_TRUE: [&str; 11] = [
+    "38;2;235;80;80",
+    "38;2;236;104;80",
+    "38;2;237;128;80",
+    "38;2;238;152;80",
+    "38;2;239;176;80",
+    "38;2;240;200;80",
+    "38;2;212;202;88",
+    "38;2;184;204;96",
+    "38;2;156;206;104",
+    "38;2;128;208;112",
+    "38;2;100;210;120",
+];
+const HEAT_TRUE_LIGHT: [&str; 11] = [
+    "38;2;185;40;40",
+    "38;2;181;55;32",
+    "38;2;177;70;24",
+    "38;2;173;85;16",
+    "38;2;169;100;8",
+    "38;2;165;115;0",
+    "38;2;137;118;12",
+    "38;2;109;121;24",
+    "38;2;81;124;36",
+    "38;2;53;127;48",
+    "38;2;25;130;60",
+];
+const HEAT_256: [&str; 11] = [
+    "38;5;196", "38;5;202", "38;5;208", "38;5;214", "38;5;220", "38;5;226", "38;5;190", "38;5;154",
+    "38;5;118", "38;5;82", "38;5;46",
+];
+const HEAT_256_LIGHT: [&str; 11] = [
+    "38;5;124", "38;5;160", "38;5;166", "38;5;172", "38;5;178", "38;5;142", "38;5;106", "38;5;70",
+    "38;5;64", "38;5;34", "38;5;28",
+];
+
 /// What a piece of text is, so the theme can colour it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -438,6 +506,8 @@ pub enum Role {
     Accent,
     Brand,
     Question,
+    /// A step of the red-to-green ramp, 0 (red) to 10 (green): bars and sparklines.
+    Heat(u8),
 }
 
 // -------------------------------------------------------------------- glyphs
@@ -776,8 +846,34 @@ pub fn mark_width(st: &Style) -> usize {
     line_width(&mark(st, Status::Ok))
 }
 
-/// A bar: `fraction` (0 to 1) of `width` cells filled.
+/// Which end of a bar is the good one, for the colour of its cells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Grade {
+    /// A full bar is good (a score): the cells run red, yellow, green.
+    HighGood,
+    /// A full bar is bad (disk use, build time): green, yellow, red.
+    HighBad,
+    /// No judgement: one colour.
+    Neutral,
+}
+
+fn heat_step(position: f64, grade: Grade) -> Role {
+    let step = (position.clamp(0.0, 1.0) * 10.0).round() as u8;
+    match grade {
+        Grade::HighGood => Role::Heat(step),
+        Grade::HighBad => Role::Heat(10 - step),
+        Grade::Neutral => Role::Note,
+    }
+}
+
+/// A bar of `width` cells with `fraction` of them full, one colour.
 pub fn bar(st: &Style, fraction: f64, width: usize) -> Line {
+    graded_bar(st, fraction, width, Grade::Neutral)
+}
+
+/// A bar whose full cells change colour along its length, so a glance says how
+/// good or bad it is: the first cells are one end of the ramp, the last the other.
+pub fn graded_bar(st: &Style, fraction: f64, width: usize, grade: Grade) -> Line {
     let g = st.glyphs();
     let f = if fraction.is_nan() {
         0.0
@@ -788,27 +884,36 @@ pub fn bar(st: &Style, fraction: f64, width: usize) -> Line {
     if f > 0.0 && full == 0 {
         full = 1; // something is something
     }
-    vec![
-        Seg::new(g.bar_full.repeat(full), Role::Accent),
-        Seg::new(g.bar_empty.repeat(width - full.min(width)), Role::Dim),
-    ]
+    let mut line: Line = (0..full.min(width))
+        .map(|i| {
+            let position = if width > 1 {
+                i as f64 / (width - 1) as f64
+            } else {
+                f
+            };
+            Seg::new(g.bar_full, heat_step(position, grade))
+        })
+        .collect();
+    line.push(Seg::new(
+        g.bar_empty.repeat(width - full.min(width)),
+        Role::Dim,
+    ));
+    line
 }
 
-/// One cell per value, as tall as the value is next to the biggest.
+/// One cell per value, as tall as the value is next to the biggest, coloured
+/// by its height: the tallest are the worst (these are times), so they run to red.
 pub fn sparkline(st: &Style, values: &[u64]) -> Line {
     let g = st.glyphs();
     let max = values.iter().copied().max().unwrap_or(0);
-    let text: String = values
+    values
         .iter()
         .map(|&v| {
-            if max == 0 {
-                g.spark[0]
-            } else {
-                g.spark[((v as f64 / max as f64) * (g.spark.len() - 1) as f64).round() as usize]
-            }
+            let share = if max == 0 { 0.0 } else { v as f64 / max as f64 };
+            let glyph = g.spark[(share * (g.spark.len() - 1) as f64).round() as usize];
+            Seg::new(glyph, heat_step(share, Grade::HighBad))
         })
-        .collect();
-    vec![Seg::new(text, Role::Accent)]
+        .collect()
 }
 
 /// `old → new` with the part of `new` that changed picked out.
@@ -1100,6 +1205,19 @@ pub fn progress_bar(st: &Style, done: usize, total: usize, width: usize) -> Stri
     )
 }
 
+/// How many ticks the colour takes to go red, yellow, green and back (about
+/// three seconds at the frame rate of an activity).
+pub const PULSE_TICKS: usize = 40;
+
+/// The step of the red-to-green ramp at a tick: it rises from red to green and
+/// falls back, so the colour is never still and never jumps.
+pub fn pulse_step(tick: usize) -> u8 {
+    let i = tick % PULSE_TICKS;
+    let half = PULSE_TICKS / 2;
+    let up = if i <= half { i } else { PULSE_TICKS - i };
+    (up * 10 / half) as u8
+}
+
 /// The line drawn for an activity at a moment: pure, so it can be tested.
 pub fn activity_line(
     st: &Style,
@@ -1108,12 +1226,14 @@ pub fn activity_line(
     progress: Option<(usize, usize)>,
     detail: &str,
 ) -> String {
-    let spin = st.paint(Role::Accent, spinner_frame(st, tick));
+    // the colour itself moves while it waits: red, yellow, green, and back
+    let colour = Role::Heat(pulse_step(tick));
+    let spin = st.paint(colour, spinner_frame(st, tick));
     let mut line = format!("{spin} {label}");
     if let Some((done, total)) = progress {
         line.push_str(&format!(
             "  {}  {done} of {total}",
-            st.paint(Role::Accent, &progress_bar(st, done, total, 12))
+            st.paint(colour, &progress_bar(st, done, total, 12))
         ));
     }
     if !detail.is_empty() {
@@ -2033,5 +2153,133 @@ mod tests {
             .iter()
             .chain(UNICODE.spark.iter())
             .all(|s| display_width(s) == 1));
+    }
+
+    #[test]
+    fn heat_runs_from_red_through_yellow_to_green_at_every_depth() {
+        for theme in [Theme::Default, Theme::Light, Theme::HighContrast] {
+            let colour = |depth, step| {
+                Style {
+                    theme,
+                    depth,
+                    ..fancy()
+                }
+                .paint(Role::Heat(step), "x")
+            };
+            // all eleven steps differ on 256 and true colour, and the ends are not the same
+            for depth in [Depth::Color256, Depth::TrueColor] {
+                let all: std::collections::HashSet<String> =
+                    (0..=10).map(|n| colour(depth, n)).collect();
+                assert_eq!(all.len(), 11, "{theme:?} {depth:?}");
+            }
+            // 16 colours: red, yellow, green
+            let basic: Vec<String> = [0, 5, 10]
+                .iter()
+                .map(|&n| colour(Depth::Basic, n))
+                .collect();
+            assert!(
+                basic[0].contains("31") || basic[0].contains("91"),
+                "{basic:?}"
+            );
+            assert!(
+                basic[1].contains("33") || basic[1].contains("93"),
+                "{basic:?}"
+            );
+            assert!(
+                basic[2].contains("32") || basic[2].contains("92"),
+                "{basic:?}"
+            );
+        }
+        let mono = Style {
+            theme: Theme::Mono,
+            ..fancy()
+        };
+        assert_eq!(
+            mono.paint(Role::Heat(0), "x"),
+            mono.paint(Role::Heat(10), "x")
+        );
+        assert_eq!(
+            strip_ansi(&fancy().paint(Role::Heat(99), "x")),
+            "x",
+            "a step past the end is the last"
+        );
+    }
+
+    #[test]
+    fn the_activity_colour_runs_red_to_green_and_back_and_never_stands_still() {
+        assert_eq!(pulse_step(0), 0, "red at the start");
+        assert_eq!(pulse_step(PULSE_TICKS / 2), 10, "green half way");
+        assert_eq!(pulse_step(PULSE_TICKS), 0, "and round again");
+        assert!(
+            pulse_step(PULSE_TICKS / 4) > 3 && pulse_step(PULSE_TICKS / 4) < 7,
+            "yellow between"
+        );
+        for t in 0..PULSE_TICKS * 2 {
+            let (a, b) = (i32::from(pulse_step(t)), i32::from(pulse_step(t + 1)));
+            assert!((a - b).abs() <= 1, "no jump at {t}: {a} {b}");
+            assert!(pulse_step(t) <= 10);
+        }
+        // two frames of one activity differ in colour, not in text
+        let st = fancy();
+        let a = activity_line(&st, 0, "wait", Some((1, 4)), "");
+        let b = activity_line(&st, 10, "wait", Some((1, 4)), "");
+        assert_ne!(
+            a.replace(spinner_frame(&st, 0), ""),
+            b.replace(spinner_frame(&st, 10), "")
+        );
+        let plain = |tick| {
+            strip_ansi(&activity_line(&st, tick, "wait", Some((1, 4)), ""))
+                .replace(spinner_frame(&st, tick), "")
+        };
+        assert_eq!(plain(0), plain(10), "only the colour moves");
+        // with no colour the line is the same as it always was
+        assert_eq!(
+            activity_line(&plain_unicode(), 5, "wait", None, ""),
+            format!("{} wait", spinner_frame(&plain_unicode(), 5))
+        );
+    }
+
+    #[test]
+    fn a_graded_bar_changes_colour_along_its_cells_and_keeps_its_text() {
+        let st = fancy();
+        let good = graded_bar(&st, 1.0, 11, Grade::HighGood);
+        let roles: Vec<Role> = good.iter().take(11).map(|s| s.role).collect();
+        assert_eq!(roles[0], Role::Heat(0), "red first");
+        assert_eq!(roles[5], Role::Heat(5), "yellow in the middle");
+        assert_eq!(roles[10], Role::Heat(10), "green last");
+        let bad = graded_bar(&st, 1.0, 11, Grade::HighBad);
+        assert_eq!(bad[0].role, Role::Heat(10), "green first when full is bad");
+        assert_eq!(bad[10].role, Role::Heat(0));
+        // a short bar only reaches the first part of the ramp
+        let short = graded_bar(&st, 0.3, 10, Grade::HighGood);
+        assert!(
+            short
+                .iter()
+                .filter(|s| matches!(s.role, Role::Heat(n) if n > 5))
+                .count()
+                == 0
+        );
+        // the text is the same as the plain bar's, and the width is exact
+        for f in [0.0, 0.001, 0.37, 1.0] {
+            assert_eq!(
+                line_text(&graded_bar(&st, f, 10, Grade::HighGood)),
+                line_text(&bar(&st, f, 10))
+            );
+            assert_eq!(line_width(&graded_bar(&st, f, 10, Grade::HighBad)), 10);
+        }
+        assert_eq!(
+            bar(&st, 0.5, 4)[0].role,
+            Role::Note,
+            "no judgement, one colour"
+        );
+    }
+
+    #[test]
+    fn a_sparkline_colours_each_cell_by_its_height() {
+        let line = sparkline(&fancy(), &[0, 5, 10]);
+        assert_eq!(line.len(), 3);
+        assert_eq!(line[0].role, Role::Heat(10), "the lowest is green");
+        assert_eq!(line[2].role, Role::Heat(0), "the tallest is red");
+        assert_eq!(line_text(&line), "\u{2581}\u{2585}\u{2588}");
     }
 }

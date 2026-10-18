@@ -10,8 +10,8 @@ use emrac_core::build_stats::BuildStats;
 use emrac_core::bundle::{Change, ChangeKind};
 use emrac_core::mirrors::{Group, Ranked, Sample};
 use emrac_core::style::{
-    bar, boxed, cell, heading, mark, mark_width, pad_right, render_line, sparkline, version_change,
-    wrap, Column, Line, Role, Seg, Status, Style, Table,
+    boxed, cell, graded_bar, heading, mark, mark_width, pad_right, render_line, sparkline,
+    version_change, wrap, Column, Grade, Line, Role, Seg, Status, Style, Table,
 };
 use emrac_core::timeline::{self, Event, Kind};
 use emrac_core::{
@@ -131,7 +131,7 @@ pub fn plan_summary(st: &Style, plan: &Plan, free: Option<u64>, digest: &str) ->
             };
             disk.push_str(&format!(
                 "   {}  {}",
-                render_line(st, &bar(st, frac, 12)),
+                render_line(st, &graded_bar(st, frac, 12, Grade::HighBad)),
                 st.paint(Role::Dim, &format!("{share} of the free space on /"))
             ));
         }
@@ -346,7 +346,7 @@ pub fn orphans_view(st: &Style, orphans: &[Orphan]) -> String {
             cell(o.name.clone(), Role::Package),
             cell(o.version.clone(), Role::Version),
             cell(human_size(o.installed_size), Role::Size),
-            bar(st, o.installed_size as f64 / max as f64, 10),
+            graded_bar(st, o.installed_size as f64 / max as f64, 10, Grade::HighBad),
         ]);
     }
     t.render(st, st.width)
@@ -569,8 +569,9 @@ pub fn mirrors_view(st: &Style, ranked: &[Ranked]) -> String {
                 format!("{}/{}", s.recent_successes, s.recent_attempts),
                 s.median_total_ms.map_or("-".into(), |m| format!("{m} ms")),
                 s.kib_per_s.map_or("-".into(), |k| format!("{k} KiB/s")),
-                s.kib_per_s
-                    .map_or(vec![], |k| bar(st, k as f64 / fastest.max(1) as f64, 8)),
+                s.kib_per_s.map_or(vec![], |k| {
+                    graded_bar(st, k as f64 / fastest.max(1) as f64, 8, Grade::HighGood)
+                }),
                 s.sync_age_s.map_or("?".into(), age),
             ),
             _ => ("-".into(), "-".into(), "-".into(), vec![], "-".into()),
@@ -722,7 +723,10 @@ pub fn score_view(st: &Style, card: &emrac_core::score::Card, details: bool) -> 
     for d in &card.dimensions {
         let (bar_text, num) = match d.score {
             Some(s) => (
-                render_line(st, &bar(st, f64::from(s) / 100.0, 10)),
+                render_line(
+                    st,
+                    &graded_bar(st, f64::from(s) / 100.0, 10, Grade::HighGood),
+                ),
                 st.paint(Role::Size, &emrac_core::style::pad_left(&s.to_string(), 3)),
             ),
             None => (
@@ -799,7 +803,10 @@ fn overall_view(st: &Style, card: &emrac_core::score::Card) -> String {
     match o.score {
         Some(s) => out.push_str(&format!(
             "  {title}  {}  {}  {}\n",
-            render_line(st, &bar(st, f64::from(s) / 100.0, 10)),
+            render_line(
+                st,
+                &graded_bar(st, f64::from(s) / 100.0, 10, Grade::HighGood)
+            ),
             st.paint(Role::Size, &emrac_core::style::pad_left(&s.to_string(), 3)),
             st.paint(Role::Dim, &overall_words(o))
         )),
