@@ -474,9 +474,9 @@ Listed in ``SPEC.md`` Part IV but left unnumbered in the spec.
      - Under an ``install`` or ``upgrade`` plan: advice when the download, the disk growth, the share of free space or the number of new packages is large, or one package is most of it. Limits in ``[advisor]`` of the config; it never blocks (u15)
      - ``docs/feats/SPEC.md`` IV+; ``docs/plan/r3/u15-package-advisor.md``
    * - Mirror Intelligence
-     - Not started
-     - Nothing built yet.
-     - ``docs/feats/SPEC.md`` IV+
+     - Done
+     - ``emrac mirrors`` lists the active mirrors with what has been measured; ``mirrors test`` downloads ``core.db`` from each (latency, speed, how far behind Arch it says it is) into a history; ``mirrors rank`` orders them by a stated rule (good, stale, unreliable, untested) and can write the list to a file or replace the mirror list (asks, saves the old one). It only reorders mirrors already active in the file (u16)
+     - ``docs/feats/SPEC.md`` IV+; ``docs/plan/r3/u16-mirror-intelligence.md``
    * - Package Impact Preview
      - Partial
      - ``emrac impact`` shows what removing, installing or upgrading a package affects (reverse dependencies, orphans, space); affected services and desktop entries are not listed yet
@@ -537,7 +537,7 @@ Part V is the command surface of features covered above.
      - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
      - ``docs/feats/SPEC.md`` Part V
 
-Core scope: 59 tracked: 7 done, 33 partial, 19 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
+Core scope: 59 tracked: 8 done, 33 partial, 18 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
 
 Extended scope
 ----------------
@@ -1574,9 +1574,9 @@ Totals
      - Idea / planned / research / not planned
      - Total
    * - Core
-     - 7
+     - 8
      - 33
-     - 19
+     - 18
      - 0
      - 59
    * - Extended
@@ -1592,9 +1592,9 @@ Totals
      - 62
      - 77
    * - **All**
-     - **37**
+     - **38**
      - **57**
-     - **27**
+     - **26**
      - **150**
      - **271**
 

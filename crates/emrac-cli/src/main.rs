@@ -6,8 +6,8 @@ mod prompt;
 use emrac_core::{Config, Limits, Result, Sources};
 
 use cli::{
-    BundleCommand, Cli, Commands, HistoryCommand, LedgerCommand, NewsCommand, SelfCommand,
-    SnapshotCommand, WatchCommand,
+    BundleCommand, Cli, Commands, HistoryCommand, LedgerCommand, MirrorsCommand, NewsCommand,
+    SelfCommand, SnapshotCommand, WatchCommand,
 };
 use commands::aur_install::BuildChoice;
 use commands::rollback::Which;
@@ -62,6 +62,24 @@ fn run(cli: &Cli) -> Result<()> {
     } = &cli.command
     {
         return commands::bundle::verify(dir, cli.json);
+    }
+
+    if let Commands::Mirrors { command, file } = &cli.command {
+        let file = file.as_deref().unwrap_or(commands::mirrors::default_file());
+        return match command {
+            None => commands::mirrors::list(file, cli.json),
+            Some(MirrorsCommand::Test { limit, jobs }) => {
+                commands::mirrors::test(file, *limit, *jobs, cli.json)
+            }
+            Some(MirrorsCommand::Rank { keep, write, apply }) => commands::mirrors::rank(
+                file,
+                *keep,
+                write.as_deref(),
+                *apply,
+                cli.yes || Config::load().map(|c| c.flags.yes).unwrap_or(false),
+                cli.json,
+            ),
+        };
     }
 
     // These print fixed text or the command definitions: no libalpm handle.
@@ -239,7 +257,7 @@ fn run(cli: &Cli) -> Result<()> {
     sources.set_interactive(!yes);
 
     match &cli.command {
-        Commands::SelfCmd { .. } | Commands::News { .. } => {
+        Commands::SelfCmd { .. } | Commands::News { .. } | Commands::Mirrors { .. } => {
             unreachable!("handled before Sources::init")
         }
         Commands::Search {

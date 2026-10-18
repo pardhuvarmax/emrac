@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 548
+     - 562
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 25
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **605**
+     - **619**
 
-emrac-core library (548)
+emrac-core library (562)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -472,6 +472,24 @@ emrac-core library (548)
 * ``what_a_hook_runs_is_scanned_like_any_code``
 * ``what_installing_would_remove_is_a_warning_and_a_summary_line``
 * ``what_the_package_changes_is_reported``
+
+``mirrors::tests`` (14)
+~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_failing_or_closed_mirror_is_a_sample_not_an_error``
+* ``a_mirror_without_lastsync_is_ok_with_an_unknown_age``
+* ``a_ranking_that_adds_drops_or_repeats_a_mirror_is_refused``
+* ``a_rewritten_list_keeps_the_header_reorders_and_never_adds``
+* ``a_tie_goes_to_the_name_so_the_result_is_stable``
+* ``a_working_mirror_is_timed_and_its_freshness_read``
+* ``each_group_is_decided_by_its_stated_rule``
+* ``keep_comments_out_the_rest``
+* ``only_the_last_ten_attempts_count_for_reliability``
+* ``the_history_is_appended_and_capped``
+* ``the_mirrorlist_is_parsed_active_and_commented``
+* ``the_order_is_good_by_speed_then_stale_then_unreliable_then_untested_in_file_order``
+* ``the_summary_takes_medians_over_successes_and_remembers_the_last_error``
+* ``urls_are_built_the_way_pacman_builds_them``
 
 ``pacman_db::tests`` (4)
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1092,6 +1110,38 @@ nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 pa
 * a package that was installed before the build is not offered
 
 (9 checks.)
+
+End-to-end: Mirror Intelligence (dev/e2e/mirrors.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Real mirrors over the network plus one that cannot be reached; ``--apply`` runs as
+root: ``dev/e2e/run.sh mirrors``. Last full run: after u16, 23 of 23 passed.
+
+* the list shows the active mirrors, none measured yet
+* rank before any measurement says to test first
+* a file with no active mirror is refused
+* a missing file is refused
+* test measures every active mirror and records them
+* the one that cannot be reached is shown as FAILED
+* a working mirror reports its freshness when it has lastsync
+* --limit measures only the first ones
+* the list now shows groups and numbers
+* rank puts the unreachable mirror last
+* rank puts the working ones first and says the rule
+* rank alone changes nothing
+* --write saves the proposal and keeps the header and the comments
+* the proposal has the same active mirrors and no others
+* the unreachable mirror comes last in the proposal
+* --write will not overwrite a file
+* --keep comments out the rest
+* --json gives the ranking
+* --apply without an answer changes nothing
+* --apply --yes replaces the list with the ranked one
+* the old list was saved first, unchanged
+* ranking the ranked list again has nothing to change
+* the file mode is world-readable like a mirror list
+
+(23 checks.)
 
 End-to-end: the Package Advisor (dev/e2e/advisor.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

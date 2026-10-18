@@ -360,6 +360,24 @@ pub enum Commands {
         pkg: Option<String>,
     },
 
+    /// Your mirrors, measured and ranked from a history, not a one-time test
+    ///
+    /// `emrac mirrors` lists the active mirrors of the mirror list with what has
+    /// been measured; `mirrors test` measures them now (a real `core.db`
+    /// download: latency, speed, and how far behind Arch each mirror says it
+    /// is); `mirrors rank` shows the order the history supports and can put it
+    /// in the list. Ranking only reorders the mirrors already active in the
+    /// file; it never adds one.
+    #[command(verbatim_doc_comment)]
+    Mirrors {
+        #[command(subcommand)]
+        command: Option<MirrorsCommand>,
+
+        /// The mirror list to read (default /etc/pacman.d/mirrorlist)
+        #[arg(long, global = true, value_name = "FILE")]
+        file: Option<String>,
+    },
+
     /// Packages on a drive for a machine without network: create, verify, apply
     ///
     /// A bundle is a folder of the repositories' own package files and their
@@ -900,6 +918,40 @@ pub enum GraphFormat {
     Easy,
     Dot,
     Json,
+}
+
+#[derive(Subcommand)]
+pub enum MirrorsCommand {
+    /// Measure the active mirrors now and add the results to the history
+    Test {
+        /// Measure at most this many (the first ones in the file)
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+
+        /// How many at a time
+        #[arg(long, default_value_t = 6)]
+        jobs: usize,
+    },
+
+    /// The order the history supports, and why; optionally write or apply it
+    ///
+    /// The order: good (fastest first), then stale (more than a day behind
+    /// Arch), then unreliable (fewer than 8 of the last 10 worked, or the last
+    /// one failed), then untested, in the order of your file.
+    #[command(verbatim_doc_comment)]
+    Rank {
+        /// Keep only the best N active; the rest are commented out
+        #[arg(long, value_name = "N")]
+        keep: Option<usize>,
+
+        /// Write the proposed list to this file (never overwrites one)
+        #[arg(long, value_name = "FILE")]
+        write: Option<String>,
+
+        /// Replace the mirror list: asks, saves the old one, uses sudo
+        #[arg(long)]
+        apply: bool,
+    },
 }
 
 #[derive(Subcommand)]

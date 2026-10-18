@@ -145,6 +145,10 @@ pub enum Error {
     #[error("{0}")]
     PacmanDb(String),
 
+    /// The mirror list could not be measured, ranked or rewritten.
+    #[error("{0}")]
+    Mirrors(String),
+
     /// A bundle could not be made, read or applied.
     #[error("{0}")]
     Bundle(String),
@@ -410,6 +414,7 @@ impl Error {
             | Error::Exchange(_)
             | Error::Help(_)
             | Error::Bundle(_)
+            | Error::Mirrors(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

@@ -20,7 +20,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | Section | Built | Partial | Specified | Idea | Research | Not planned | Total |
 |---|---|---|---|---|---|---|---|
 | 1. Built: what works today | 56 | 0 | 0 | 0 | 0 | 0 | 56 |
-| 2. The specification (SPEC.md): catalogue and signature features | 3 | 32 | 21 | 0 | 0 | 0 | 56 |
+| 2. The specification (SPEC.md): catalogue and signature features | 4 | 32 | 20 | 0 | 0 | 0 | 56 |
 | 3. Ideas from additions.md (A, B, C) | 13 | 8 | 0 | 18 | 0 | 0 | 39 |
 | 4. Ideas from ideas.md | 10 | 7 | 1 | 38 | 0 | 0 | 56 |
 | 5. Wandrover: cross-distribution package resolution | 0 | 0 | 0 | 9 | 0 | 0 | 9 |
@@ -31,7 +31,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
 | 11. Newer ideas (not yet in the other documents) | 0 | 2 | 0 | 25 | 0 | 0 | 27 |
 | 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **89** | **56** | **23** | **138** | **9** | **3** | **318** |
+| **All** | **90** | **56** | **22** | **138** | **9** | **3** | **318** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -162,7 +162,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | IV.19 Package Collections | Specified | `collection install\|save\|export`: reusable bundles. |  |
 | IV.20 Workspace Mode | Specified | A workspace bundles a profile, repositories, collections and mirrors. |  |
 | IV+ Package Advisor | Built | `advisor` (u15): advice under an install or upgrade plan with a large download, large disk growth, a lot of the free space, many new packages, or one package that is most of it; limits in `[advisor]`, never blocks. | `docs/plan/r3/u15-package-advisor.md` |
-| IV+ Mirror Intelligence | Specified | Mirrors chosen by latency, reliability and current performance. |  |
+| IV+ Mirror Intelligence | Built | `mirrors`, `mirrors test`, `mirrors rank [--keep N] [--write FILE \| --apply]` (u16): latency, speed, reliability over the last ten attempts and freshness (`lastsync`) from a real `core.db` download, kept in a history; a stated order (good, stale, unreliable, untested); only reorders the mirrors already active. | `docs/plan/r3/u16-mirror-intelligence.md` |
 | IV+ Package Impact Preview | Partial | `impact` shows removal/install/upgrade effects; services, desktop entries and reclaimed space are not yet all included. | u16 |
 | IV+ Compile Farm Support | Specified | Distribute source builds to builder machines over SSH. |  |
 | IV+ Build Artifact Library | Specified | Reuse compatible local builds by profile, compiler and flags. |  |

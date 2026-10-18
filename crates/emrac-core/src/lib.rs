@@ -25,6 +25,7 @@ pub mod journal;
 pub mod ledger;
 pub mod ledger_watch;
 mod manifest;
+pub mod mirrors;
 mod package;
 pub mod pacman_db;
 mod pacnew;
