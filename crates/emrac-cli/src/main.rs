@@ -6,8 +6,8 @@ mod prompt;
 use emrac_core::{Config, Limits, Result, Sources};
 
 use cli::{
-    Cli, Commands, HistoryCommand, LedgerCommand, NewsCommand, SelfCommand, SnapshotCommand,
-    WatchCommand,
+    BundleCommand, Cli, Commands, HistoryCommand, LedgerCommand, NewsCommand, SelfCommand,
+    SnapshotCommand, WatchCommand,
 };
 use commands::aur_install::BuildChoice;
 use commands::rollback::Which;
@@ -55,6 +55,13 @@ fn run(cli: &Cli) -> Result<()> {
     if let Commands::Completion { shell } = &cli.command {
         commands::completion::run(*shell);
         return Ok(());
+    }
+
+    if let Commands::Bundle {
+        command: BundleCommand::Verify { dir },
+    } = &cli.command
+    {
+        return commands::bundle::verify(dir, cli.json);
     }
 
     // These print fixed text or the command definitions: no libalpm handle.
@@ -404,6 +411,15 @@ fn run(cli: &Cli) -> Result<()> {
             json,
         ),
         Commands::BugReport { open } => commands::helppages::bug_report(&sources, *open),
+        Commands::Bundle { command } => match command {
+            BundleCommand::Create { dir, pkgs, target } => {
+                commands::bundle::create(&sources, dir, pkgs, target.as_deref(), json)
+            }
+            BundleCommand::Apply { dir } => {
+                commands::bundle::apply(&sources, dir, dry_run, yes, json)
+            }
+            BundleCommand::Verify { .. } => unreachable!("handled above"),
+        },
         Commands::Stats { since } => commands::stats::run(&sources, since.as_deref(), json),
         Commands::Benchmark {
             pkg,

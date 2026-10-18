@@ -360,6 +360,12 @@ pub enum Commands {
         pkg: Option<String>,
     },
 
+    /// Packages on a drive for a machine without network: create, verify, apply
+    Bundle {
+        #[command(subcommand)]
+        command: BundleCommand,
+    },
+
     /// Describe this machine in one small file: packages, a safe subset of the
     /// settings, holds and repository names (to the screen, or with -o)
     Export {
@@ -868,6 +874,38 @@ pub enum GraphFormat {
     Easy,
     Dot,
     Json,
+}
+
+#[derive(Subcommand)]
+pub enum BundleCommand {
+    /// Make a bundle in a new folder: repository packages with their
+    /// signatures and a manifest of checksums (no AUR packages)
+    Create {
+        /// The new folder
+        dir: String,
+
+        /// The packages; their dependencies come along. With --for and none
+        /// named: every upgrade the target is waiting for
+        pkgs: Vec<String>,
+
+        /// The target's `emrac export --packages` file: only what it lacks or
+        /// has older goes in
+        #[arg(long = "for", value_name = "EXPORT_FILE")]
+        target: Option<String>,
+    },
+
+    /// Check a bundle's files against its manifest (no root, no network)
+    Verify {
+        /// The bundle folder
+        dir: String,
+    },
+
+    /// Install a bundle: verify, show what changes, ask, then `pacman -U`
+    /// with signatures required (never a downgrade)
+    Apply {
+        /// The bundle folder
+        dir: String,
+    },
 }
 
 #[derive(Subcommand)]

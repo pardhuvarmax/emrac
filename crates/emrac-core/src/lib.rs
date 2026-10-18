@@ -6,6 +6,7 @@ pub mod benchmark;
 mod bug_report;
 pub mod build_stats;
 pub mod build_tools;
+pub mod bundle;
 mod cache;
 mod config;
 pub mod config_preview;

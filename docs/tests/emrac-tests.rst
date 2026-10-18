@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 531
+     - 539
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 22
@@ -31,9 +31,9 @@ Totals
      - 31
    * - **Automated total**
      -
-     - **584**
+     - **592**
 
-emrac-core library (531)
+emrac-core library (539)
 ------------------------
 
 ``arch_news::tests`` (7)
@@ -189,6 +189,18 @@ emrac-core library (531)
 * ``something_shared_with_a_kept_tool_stays``
 * ``what_only_a_removed_tool_needed_goes_with_it``
 * ``what_the_built_package_needs_stays_and_so_does_what_hangs_on_it``
+
+``bundle::tests`` (8)
+~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_good_bundle_verifies``
+* ``a_hostile_manifest_is_refused``
+* ``a_size_that_differs_and_a_symlinked_package_are_found``
+* ``damage_is_found_one_way_or_another``
+* ``only_what_the_target_lacks_or_has_older_is_needed``
+* ``the_comparison_never_downgrades``
+* ``the_manifest_round_trips``
+* ``the_signed_config_requires_signatures_and_changes_nothing_else``
 
 ``cache::tests`` (12)
 ~~~~~~~~~~~~~~~~~~~~~
@@ -1063,6 +1075,40 @@ nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 pa
 * a package that was installed before the build is not offered
 
 (9 checks.)
+
+End-to-end: offline bundles (dev/e2e/bundle.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``emrac bundle create | verify | apply`` with real packages, including a bundle
+whose signature is bad and whose manifest was edited to match: ``dev/e2e/run.sh bundle``.
+Last full run: after u14, 24 of 24 passed.
+
+* create makes a bundle of a package and its dependencies
+* every package has a signature file
+* the user can copy and delete the bundle
+* the manifest lists a checksum for each file
+* create will not use a folder that exists
+* create with no packages and no --for is refused
+* a package the repositories do not have is refused, and no folder is left
+* verify passes on a good bundle
+* a changed byte is found by verify
+* apply refuses a damaged bundle and installs nothing
+* a missing signature file is found
+* a file nobody listed is found
+* apply --dry-run shows the install and changes nothing
+* apply installs through the normal path
+* the install is in the history
+* applying it again finds nothing to do
+* --for leaves out what the target already has
+* --for with nothing to do says so
+* with --for and no names, the target's pending upgrades are bundled
+* verify cannot tell: the manifest was made to agree
+* pacman itself refuses the bad signature and nothing is installed
+* a bundle older than what is installed is refused, not applied
+* --json gives the changes
+* a folder with no manifest is refused
+
+(24 checks.)
 
 End-to-end: help pages and the bug report (dev/e2e/helppages.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

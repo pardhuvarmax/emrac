@@ -525,19 +525,19 @@ Part V is the command surface of features covered above.
      - Internal dev/debug tooling
      - ``docs/feats/SPEC.md`` Part V
    * - Export / Import (``export``, ``import``, ``bundle``)
-     - Partial
-     - ``emrac export`` / ``import`` (u12): packages, a safe subset of the settings, holds and repository names in one file; import reports first, installs through the normal install path, and never applies repositories, ``self.*``, ``safety.*``, ``flags.*`` or ``review.skip_*``. ``bundle`` is not built
-     - ``docs/feats/SPEC.md`` Part V; ``docs/plan/r3/u12-export-import.md``
-   * - Help (``help``, ``man``, ``docs``, ``license``, ``credits``, ``bug-report``)
      - Done
-     - ``help`` (clap), ``man`` (a man page, or ``--roff``), ``docs``, ``license [--full]``, ``credits``, ``support``, ``feedback`` and ``bug-report`` (the scrubbed doctor report and the last failed transactions; printed, never sent)
+     - ``emrac export`` / ``import`` (u12): packages, a safe subset of the settings, holds and repository names in one file; import reports first, installs through the normal install path, and never applies repositories, ``self.*``, ``safety.*``, ``flags.*`` or ``review.skip_*``. ``bundle create | verify | apply`` (u14): repository packages and their signatures for a machine without network, installed with signatures required (AUR packages and sync databases are not in a bundle)
+     - ``docs/feats/SPEC.md`` Part V; ``docs/plan/r3/u12-export-import.md``; ``docs/plan/r3/u14-bundle.md``
+   * - Help (``help``, ``man``, ``docs``, ``license``, ``credits``, ``bug-report``)
+     - Not started
+     - Only clap's auto-generated ``--help`` exists today
      - ``docs/feats/SPEC.md`` Part V; ``docs/plan/r3/u13-help-pages.md``
    * - ``lock``/``unlock``, ``pin``/``unpin`` (under Package Management)
      - Partial
      - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
      - ``docs/feats/SPEC.md`` Part V
 
-Core scope: 59 tracked: 6 done, 34 partial, 19 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
+Core scope: 59 tracked: 6 done, 33 partial, 20 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
 
 Extended scope
 ----------------
@@ -997,10 +997,10 @@ Collected after the documents above; tracked in ``docs/feats/feats.md`` section 
      - Idea
      - A sanitized bundle (PKGBUILD, toolchain versions, environment summary, relevant log lines) to attach to an AUR comment or bug; pairs with the failure classifier (A13).
      - ``docs/feats/feats.md``
-   * - Offline bundles: ``bundle create | apply``
-     - Idea
-     - Export verified packages, databases and a reviewed plan to a drive; import and verify them on an air-gapped machine through the normal preview.
-     - ``docs/feats/feats.md``
+   * - Offline bundles: ``bundle create | verify | apply``
+     - Partial
+     - Built (u14): official repository packages with their signatures and a checksum manifest; ``--for`` takes the target's export file so only what it lacks goes in; ``apply`` goes through the pre-flight, history and journal, never downgrades, and pacman must find every signature valid. Not built: AUR packages, sync databases, a signed manifest.
+     - ``docs/feats/feats.md``; ``docs/plan/r3/u14-bundle.md``
    * - Git-style ``log`` / ``show``
      - Idea
      - Every transaction gets a short ID, a parent and a message; ``log --oneline --graph``, filters by package or date; ``show <tx>`` lists what changed.
@@ -1158,7 +1158,7 @@ Self-management service (self-service-feat.md)
      - Phase 5: explicit target, compatibility check.
      - ``docs/feats/self-service-feat.md``; ``docs/plan/r2/u12-self-service.md``; ``docs/design/release-index.md``; ``docs/design/self-upgrade.md``
 
-Extended scope: 135 tracked: 28 done, 18 partial, 89 idea.
+Extended scope: 135 tracked: 28 done, 19 partial, 88 idea.
 
 Future scope
 --------------
@@ -1575,15 +1575,15 @@ Totals
      - Total
    * - Core
      - 6
-     - 34
-     - 19
+     - 33
+     - 20
      - 0
      - 59
    * - Extended
      - 28
-     - 18
+     - 19
      - 0
-     - 89
+     - 88
      - 135
    * - Future
      - 2
@@ -1594,8 +1594,8 @@ Totals
    * - **All**
      - **36**
      - **57**
-     - **27**
-     - **151**
+     - **28**
+     - **150**
      - **271**
 
 Some features appear in more than one scope's list (soak time, the offline

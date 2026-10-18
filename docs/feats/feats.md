@@ -20,7 +20,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | Section | Built | Partial | Specified | Idea | Research | Not planned | Total |
 |---|---|---|---|---|---|---|---|
 | 1. Built: what works today | 56 | 0 | 0 | 0 | 0 | 0 | 56 |
-| 2. The specification (SPEC.md): catalogue and signature features | 1 | 33 | 22 | 0 | 0 | 0 | 56 |
+| 2. The specification (SPEC.md): catalogue and signature features | 2 | 32 | 22 | 0 | 0 | 0 | 56 |
 | 3. Ideas from additions.md (A, B, C) | 13 | 8 | 0 | 18 | 0 | 0 | 39 |
 | 4. Ideas from ideas.md | 10 | 7 | 1 | 38 | 0 | 0 | 56 |
 | 5. Wandrover: cross-distribution package resolution | 0 | 0 | 0 | 9 | 0 | 0 | 9 |
@@ -29,9 +29,9 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | 8. Package forensics (proposed) | 0 | 2 | 0 | 7 | 0 | 0 | 9 |
 | 9. Plugin system (proposed) | 0 | 0 | 1 | 16 | 0 | 0 | 17 |
 | 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
-| 11. Newer ideas (not yet in the other documents) | 0 | 1 | 0 | 26 | 0 | 0 | 27 |
+| 11. Newer ideas (not yet in the other documents) | 0 | 2 | 0 | 25 | 0 | 0 | 27 |
 | 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **87** | **56** | **24** | **139** | **9** | **3** | **318** |
+| **All** | **88** | **56** | **24** | **138** | **9** | **3** | **318** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -171,7 +171,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | V Shell integration (`alias`, `integrate`) | Partial | `completion` exists; `alias` and `integrate` do not. |  |
 | V System (`env`, `paths`, `about`, `diagnostics`) | Partial | `--version`, `--help`; `doctor --report` covers the bug-report part. |  |
 | V Development (`dev`, `sandbox`, `test`, `trace`, `debug`) | Specified | Internal tooling. |  |
-| V Export / Import (`export`, `import`, `bundle`) | Partial | `export` and `import` (u12): packages, a safe subset of the settings, holds and repository names in one file; import reports first and applies only what is safe and agreed to. `bundle` (offline) is not built; see section 11. | `docs/plan/r3/u12-export-import.md` |
+| V Export / Import (`export`, `import`, `bundle`) | Built | `export` and `import` (u12): packages, a safe subset of the settings, holds and repository names in one file; import reports first and applies only what is safe and agreed to. `bundle create \| verify \| apply` (u14): repository packages and their signatures on a drive, installed with signatures required. | `docs/plan/r3/u12-export-import.md`; `docs/plan/r3/u14-bundle.md` |
 | V Help (`help`, `man`, `docs`, `license`, `credits`, `bug-report`) | Built | `help` (clap), `man` (a real man page, or `--roff`), `docs`, `license [--full]`, `credits`, `support`, `feedback` and `bug-report` (the scrubbed doctor report and the last failed transactions; printed, never sent). | `docs/plan/r3/u13-help-pages.md` |
 | V `lock` / `unlock` | Specified | `pin`/`unpin` are built; `lock`/`unlock` are not. |  |
 | Integrated Modal Editor (`emrac edit <resource>`) | Specified | A built-in modal editor for PKGBUILDs, `.SRCINFO`, patches, profiles and config, with `--external` for `$EDITOR`. | `SPEC.md` Part I |
@@ -423,7 +423,7 @@ Collected after the documents above. Everything here is deterministic and local;
 | File history: `emrac blame <path>` | Idea | Which package installed a file, in which transaction, and what changed it since; with `emrac diff <date\|tx> <date\|tx>` for packages, files and services between two points. |  |
 | Transaction notes and known-good markers | Idea | `-m "before the demo"` on a transaction; mark a state known good; bisect, rollback and diff can target it. |  |
 | Build failure bundle | Idea | A sanitized bundle (PKGBUILD, toolchain versions, environment summary, relevant log lines) to attach to an AUR comment or bug; pairs with the failure classifier (A13). |  |
-| Offline bundles: `bundle create \| apply` | Idea | Export verified packages, databases and a reviewed plan to a drive; import and verify them on an air-gapped machine through the normal preview. |  |
+| Offline bundles: `bundle create \| verify \| apply` | Partial | Built (u14): official repository packages with their signatures and a checksum manifest; `--for` takes the target's export file so only what it lacks goes in; `apply` goes through the pre-flight, history and journal, never downgrades, and pacman must find every signature valid. Not built: AUR packages, sync databases, a signed manifest. | `docs/plan/r3/u14-bundle.md` |
 | Git-style `log` / `show` | Idea | Every transaction gets a short ID, a parent and a message; `log --oneline --graph`, filters by package or date; `show <tx>` lists what changed. |  |
 | `diff <tx> <tx>` and `revert <tx>` | Idea | Changes between two points, including tags; `revert` undoes one past transaction by creating a new one, after checking later transactions for conflicts (unlike `rollback`, which resets). |  |
 | Tags | Idea | `emrac tag known-good`; bisect, diff and restore can target it. |  |

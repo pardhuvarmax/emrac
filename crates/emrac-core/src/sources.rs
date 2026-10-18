@@ -1255,6 +1255,149 @@ impl Sources {
         )
     }
 
+    /// Makes a bundle in `dir` (which must not exist): the repository packages
+    /// that `roots` need, or, with no roots, every upgrade `target` waits for.
+    /// With `target`, only what that machine lacks or has older.
+    pub fn bundle_create(
+        &self,
+        dir: &std::path::Path,
+        roots: &[String],
+        target: Option<&crate::exchange::Exchange>,
+    ) -> Result<crate::bundle::Manifest> {
+        use crate::bundle::{self, BundlePackage, Manifest, Meta, Skipped};
+        let fail = |why: String| Error::Bundle(why);
+        let target_versions: Option<std::collections::BTreeMap<String, String>> = target.map(|t| {
+            t.package
+                .iter()
+                .map(|p| (p.name.clone(), p.version.clone()))
+                .collect()
+        });
+        let mut skipped: Vec<Skipped> = Vec::new();
+        let wanted: Vec<String> = if roots.is_empty() {
+            let (Some(have), Some(t)) = (&target_versions, target) else {
+                return Err(fail(
+                    "name the packages, or give --for <the target's export file> to bundle its upgrades".into(),
+                ));
+            };
+            let mut names = Vec::new();
+            for p in &t.package {
+                if p.foreign {
+                    continue;
+                }
+                if let Some(newer) = self.alpm.sync_version(&p.name) {
+                    if version_is_newer(have.get(&p.name).map_or("", String::as_str), &newer) {
+                        names.push(p.name.clone());
+                    }
+                }
+            }
+            if names.is_empty() {
+                return Err(fail(
+                    "nothing to bundle: the target is up to date with these repositories".into(),
+                ));
+            }
+            names
+        } else {
+            roots.to_vec()
+        };
+        for r in &wanted {
+            if !crate::exchange::valid_package_name(r) {
+                return Err(fail(format!("'{r}' is not a package name")));
+            }
+        }
+        let (closure, unresolved) = self.alpm.sync_closure(&wanted);
+        if !unresolved.is_empty() {
+            return Err(fail(format!(
+                "no repository provides: {} (AUR packages are not bundled: build them on a machine that has the network and install them normally)",
+                unresolved.join(", ")
+            )));
+        }
+        let chosen = match &target_versions {
+            Some(have) => bundle::needed(&closure, have, &|a, b| version_is_newer(b, a)),
+            None => closure,
+        };
+        if chosen.is_empty() {
+            return Err(fail(
+                "nothing to bundle: the target already has all of it".into(),
+            ));
+        }
+        if dir.exists() {
+            return Err(fail(format!(
+                "{} already exists; a bundle goes in a new folder",
+                dir.display()
+            )));
+        }
+        let pkg_dir = dir.join("pkg");
+        std::fs::create_dir_all(&pkg_dir)
+            .map_err(|e| fail(format!("{}: {e}", pkg_dir.display())))?;
+        let built = (|| -> Result<Manifest> {
+            let specs: Vec<String> = chosen
+                .iter()
+                .map(|p| format!("{}/{}", p.repo, p.name))
+                .collect();
+            self.pacman.download_into(&pkg_dir, &specs)?;
+            let mut packages = Vec::new();
+            for p in &chosen {
+                let file = pkg_dir.join(&p.filename);
+                let sig = pkg_dir.join(format!("{}.sig", p.filename));
+                if !file.is_file() {
+                    return Err(fail(format!(
+                        "pacman did not leave {} in the bundle",
+                        p.filename
+                    )));
+                }
+                if !sig.is_file() {
+                    return Err(fail(format!(
+                        "{} has no signature file; a bundle only carries signed packages",
+                        p.filename
+                    )));
+                }
+                packages.push(BundlePackage {
+                    name: p.name.clone(),
+                    version: p.version.clone(),
+                    repo: p.repo.clone(),
+                    file: p.filename.clone(),
+                    size: std::fs::metadata(&file).map(|m| m.len()).unwrap_or(0),
+                    sha256: bundle::sha256_file(&file)?,
+                    sig_sha256: bundle::sha256_file(&sig)?,
+                });
+            }
+            let manifest = Manifest {
+                meta: Meta {
+                    format: bundle::FORMAT,
+                    emrac: env!("CARGO_PKG_VERSION").to_string(),
+                    created: crate::history::format_utc_date(now()),
+                    arch: std::env::consts::ARCH.to_string(),
+                },
+                requested: roots.to_vec(),
+                for_target: target.map(|t| t.meta.exported.clone()),
+                package: packages,
+                skipped: std::mem::take(&mut skipped),
+            };
+            let path = dir.join("manifest.toml");
+            std::fs::write(&path, bundle::render(&manifest))
+                .map_err(|e| fail(format!("{}: {e}", path.display())))?;
+            Ok(manifest)
+        })();
+        if built.is_err() {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+        built
+    }
+
+    /// The installed packages as (name, version), for comparing with a bundle.
+    pub fn installed_pairs(&self) -> Vec<(String, String)> {
+        self.alpm
+            .installed_snapshot()
+            .into_iter()
+            .map(|p| (p.name, p.version))
+            .collect()
+    }
+
+    /// Installs the bundle's package files; pacman must find every signature valid.
+    pub fn execute_bundle(&self, files: &[std::path::PathBuf]) -> Result<()> {
+        self.pacman.execute_install_files_signed(files)
+    }
+
     /// The exchange file for this machine (`emrac export`).
     pub fn export(
         &self,

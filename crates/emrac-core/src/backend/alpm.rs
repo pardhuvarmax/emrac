@@ -127,6 +127,17 @@ pub enum SimOp<'a> {
     Files(&'a [std::path::PathBuf]),
 }
 
+/// A package in a sync database, as `emrac bundle` needs to know it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncPackage {
+    pub name: String,
+    pub version: String,
+    pub repo: String,
+    /// `<name>-<version>-<arch>.pkg.tar.zst`, as the repository serves it.
+    pub filename: String,
+    pub download_size: u64,
+}
+
 /// A dependency with several possible providers, as pacman would ask about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Providers {
@@ -793,6 +804,46 @@ impl AlpmBackend {
                 .collect(),
             backup: pkg.backup().iter().map(|b| b.name().to_string()).collect(),
         })
+    }
+
+    /// The repository packages that satisfy `roots` and, transitively, their
+    /// dependencies, whether or not they are installed here. A dependency no
+    /// repository provides is returned in the second list.
+    pub fn sync_closure(&self, roots: &[String]) -> (Vec<SyncPackage>, Vec<String>) {
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut out = Vec::new();
+        let mut unresolved = Vec::new();
+        let mut queue: std::collections::VecDeque<String> = roots.iter().cloned().collect();
+        while let Some(want) = queue.pop_front() {
+            let Some(pkg) = self.handle.syncdbs().find_satisfier(want.as_str()) else {
+                if !unresolved.contains(&want) {
+                    unresolved.push(want);
+                }
+                continue;
+            };
+            if !seen.insert(pkg.name().to_string()) {
+                continue;
+            }
+            out.push(SyncPackage {
+                name: pkg.name().to_string(),
+                version: pkg.version().to_string(),
+                repo: pkg.db().map_or(String::new(), |d| d.name().to_string()),
+                filename: pkg.filename().unwrap_or_default().to_string(),
+                download_size: pkg.download_size().max(0) as u64,
+            });
+            queue.extend(pkg.depends().iter().map(|d| d.to_string()));
+        }
+        (out, unresolved)
+    }
+
+    /// The newest repository version of each named package, when it is newer
+    /// than `version_of` says it is installed somewhere else.
+    pub fn sync_version(&self, name: &str) -> Option<String> {
+        self.handle
+            .syncdbs()
+            .iter()
+            .find_map(|db| db.pkg(name).ok())
+            .map(|p| p.version().to_string())
     }
 
     /// The names of the enabled sync repositories, in `pacman.conf` order.

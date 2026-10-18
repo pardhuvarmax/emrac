@@ -3,6 +3,7 @@ pub mod aur_install;
 pub mod aur_review;
 pub mod benchmark;
 pub mod build;
+pub mod bundle;
 pub mod cache;
 pub mod completion;
 pub mod config;

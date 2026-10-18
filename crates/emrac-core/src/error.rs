@@ -145,6 +145,10 @@ pub enum Error {
     #[error("{0}")]
     PacmanDb(String),
 
+    /// A bundle could not be made, read or applied.
+    #[error("{0}")]
+    Bundle(String),
+
     /// A help page could not be shown.
     #[error("{0}")]
     Help(String),
@@ -405,6 +409,7 @@ impl Error {
             | Error::Graph(_)
             | Error::Exchange(_)
             | Error::Help(_)
+            | Error::Bundle(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

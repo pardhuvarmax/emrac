@@ -202,6 +202,60 @@ impl PacmanBackend {
         self.run_inherited("sudo", &self.finish(args))
     }
 
+    /// Downloads `specs` (`repo/name`) with their signatures into `dir`
+    /// (`pacman -Sw --cachedir`). Always `--noconfirm`: a download changes
+    /// nothing on this machine. The files are root's, in a folder that is the
+    /// user's, so the user can still read, copy and delete them.
+    pub fn download_into(&self, dir: &std::path::Path, specs: &[String]) -> Result<()> {
+        let mut args = vec![
+            "pacman".to_string(),
+            "-Sw".to_string(),
+            "--noconfirm".to_string(),
+            "--cachedir".to_string(),
+            dir.display().to_string(),
+        ];
+        args.extend(specs.iter().cloned());
+        self.run_inherited("sudo", &args)
+    }
+
+    /// `pacman -U` under a copy of `pacman.conf` that requires a valid
+    /// signature on every local package file (`bundle::signed_config`).
+    pub fn execute_install_files_signed(&self, files: &[PathBuf]) -> Result<()> {
+        let conf = std::fs::read_to_string("/etc/pacman.conf").map_err(|e| Error::Io {
+            context: "couldn't read /etc/pacman.conf".into(),
+            source: e,
+        })?;
+        let signed = crate::bundle::signed_config(&conf)?;
+        let tmp = std::env::temp_dir().join(format!("emrac-pacman-{}.conf", std::process::id()));
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            let _ = std::fs::remove_file(&tmp);
+            let mut f = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&tmp)
+                .map_err(|e| Error::Io {
+                    context: format!("couldn't write {}", tmp.display()),
+                    source: e,
+                })?;
+            std::io::Write::write_all(&mut f, signed.as_bytes()).map_err(|e| Error::Io {
+                context: format!("couldn't write {}", tmp.display()),
+                source: e,
+            })?;
+        }
+        let mut args = vec![
+            "pacman".to_string(),
+            "--config".to_string(),
+            tmp.display().to_string(),
+            "-U".to_string(),
+        ];
+        args.extend(files.iter().map(|f| f.display().to_string()));
+        let result = self.run_inherited("sudo", &self.finish(args));
+        let _ = std::fs::remove_file(&tmp);
+        result
+    }
+
     /// Replaces an installed package with the repository package that
     /// conflicts with it, when the installed one is still required by name:
     /// `pacman -Rdd` then `pacman -S`. Always asks pacman's own questions.

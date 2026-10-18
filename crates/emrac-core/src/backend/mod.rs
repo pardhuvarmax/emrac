@@ -8,7 +8,7 @@ pub mod pacman;
 
 pub use alpm::{
     version_is_newer, AlpmBackend, DependencyConflict, InstalledSource, ResolvedPackage, SimOp,
-    Simulation,
+    Simulation, SyncPackage,
 };
 pub use archive::ArchiveBackend;
 pub use aur::AurBackend;
