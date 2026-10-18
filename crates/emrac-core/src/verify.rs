@@ -69,6 +69,10 @@ pub struct PackageReport {
     pub issues: Vec<Issue>,
     /// `backup=()` files whose contents differ — expected, not a problem.
     pub modified_config: Vec<String>,
+    /// Differences that are your local file policy (an overridden mode, a
+    /// diverted file's content): expected, not a problem.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub by_policy: Vec<String>,
 }
 
 impl PackageReport {
@@ -385,6 +389,39 @@ pub(crate) fn verify_entries(
         files_checked: entries.len(),
         issues,
         modified_config,
+        by_policy: Vec::new(),
+    }
+}
+
+/// Moves the differences your local file policy explains out of the issues: a
+/// mode that is the overridden one, the content of a diverted file.
+pub(crate) fn explain_by_policy(report: &mut PackageReport, policy: &crate::policy::Policy) {
+    use std::os::unix::fs::MetadataExt;
+    if policy.is_empty() {
+        return;
+    }
+    let (kept, explained): (Vec<Issue>, Vec<Issue>) = std::mem::take(&mut report.issues)
+        .into_iter()
+        .partition(|issue| {
+            let expected = match issue.kind {
+                IssueKind::ModeMismatch => policy
+                    .override_of(&issue.path)
+                    .and_then(|o| o.mode.as_deref())
+                    .and_then(|m| crate::policy::parse_mode(m).ok())
+                    .zip(std::fs::symlink_metadata(&issue.path).ok())
+                    .is_some_and(|(want, meta)| meta.mode() & 0o7777 == want),
+                IssueKind::ContentMismatch | IssueKind::SizeMismatch => {
+                    policy.is_diverted(&issue.path)
+                }
+                _ => false,
+            };
+            !expected
+        });
+    report.issues = kept;
+    for issue in explained {
+        if !report.by_policy.contains(&issue.path) {
+            report.by_policy.push(issue.path);
+        }
     }
 }
 
@@ -679,10 +716,64 @@ mod tests {
             files_checked: 1,
             issues: vec![issue],
             modified_config: vec![],
+            by_policy: vec![],
         };
         assert!(report.is_ok());
         assert_eq!(report.unreadable_count(), 1);
         assert_eq!(report.problem_count(), 0);
+    }
+
+    #[test]
+    fn what_your_policy_explains_is_not_damage() {
+        use crate::policy::{Divert, Override, Policy};
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("emrac-verify-policy-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let tool = dir.join("tool");
+        std::fs::write(&tool, "x").unwrap();
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o750)).unwrap();
+        let lib = dir.join("lib");
+        let (tool_s, lib_s) = (tool.display().to_string(), lib.display().to_string());
+        let issue = |path: &str, kind| Issue {
+            path: path.to_string(),
+            kind,
+            detail: None,
+        };
+        let mut report = PackageReport {
+            package: "p".into(),
+            version: "1".into(),
+            files_checked: 3,
+            issues: vec![
+                issue(&tool_s, IssueKind::ModeMismatch),
+                issue(&lib_s, IssueKind::ContentMismatch),
+                issue("/usr/bin/other", IssueKind::ModeMismatch),
+            ],
+            modified_config: vec![],
+            by_policy: vec![],
+        };
+        let policy = Policy {
+            overrides: vec![Override {
+                path: tool_s.clone(),
+                mode: Some("750".into()),
+                owner: None,
+                group: None,
+                note: None,
+            }],
+            diverts: vec![Divert::new(&lib_s)],
+        };
+        explain_by_policy(&mut report, &policy);
+        assert_eq!(report.by_policy, [tool_s.clone(), lib_s]);
+        assert_eq!(report.issues.len(), 1, "the unrelated one stays");
+        // an override whose mode is NOT what the file has is still a problem
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut again = PackageReport {
+            issues: vec![issue(&tool_s, IssueKind::ModeMismatch)],
+            by_policy: vec![],
+            ..report.clone()
+        };
+        explain_by_policy(&mut again, &policy);
+        assert_eq!(again.issues.len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

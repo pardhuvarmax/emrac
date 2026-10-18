@@ -143,6 +143,10 @@ pub struct DoctorInputs {
     pub orphan_count: usize,
     pub orphan_bytes: u64,
     pub expired_pins: Vec<String>,
+    /// Diverted files whose package has changed them since the diversion.
+    pub stale_diversions: Vec<String>,
+    /// Parts of the local file policy that are not in effect, and why.
+    pub policy_drift: Vec<String>,
     pub recent_failed_transactions: Vec<String>,
     /// AUR packages broken by a library or language update (u19), and the
     /// ones that may be.
@@ -579,6 +583,36 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             )
             .detail(listed(&i.expired_pins))
             .fix("emrac pin <pkg> --until … to renew, or emrac unpin <pkg>"),
+        );
+    }
+
+    if !i.stale_diversions.is_empty() {
+        checks.push(
+            check(
+                "stale-diversions",
+                "Diverted files",
+                Status::Warning,
+                format!(
+                    "{} the package has changed since you diverted {}: you are not getting those changes, security fixes included",
+                    plural(i.stale_diversions.len(), "diverted file is one", "diverted files are ones"),
+                    if i.stale_diversions.len() == 1 { "it" } else { "them" }
+                ),
+            )
+            .detail(listed(&i.stale_diversions))
+            .fix("emrac divert diff <path>, then merge the changes and `emrac divert reviewed <path>`, or `emrac divert remove <path>`"),
+        );
+    }
+
+    if !i.policy_drift.is_empty() {
+        checks.push(
+            check(
+                "policy",
+                "Local file policy",
+                Status::Warning,
+                "part of your overrides and diversions is not in effect",
+            )
+            .detail(i.policy_drift.clone())
+            .fix("emrac policy apply"),
         );
     }
 
@@ -1328,6 +1362,27 @@ mod tests {
             2,
             "one check per filesystem"
         );
+    }
+
+    #[test]
+    fn a_diverted_file_the_package_moved_on_from_is_a_warning_with_the_way_out() {
+        let mut i = healthy();
+        assert!(find(&evaluate(&i), "stale-diversions").is_empty());
+        i.stale_diversions = vec!["/usr/lib/libfoo.so.1".into()];
+        let checks = evaluate(&i);
+        let c = one(&checks, "stale-diversions");
+        assert_eq!(c.status, Status::Warning);
+        assert!(c.summary.contains("security fixes"), "{}", c.summary);
+        let fix = c.fix.clone().unwrap_or_default();
+        assert!(
+            fix.contains("divert diff")
+                && fix.contains("divert reviewed")
+                && fix.contains("divert remove")
+        );
+        i.policy_drift = vec!["override /usr/bin/x: not as the override says".into()];
+        let checks = evaluate(&i);
+        let c = one(&checks, "policy");
+        assert_eq!(c.fix.as_deref(), Some("emrac policy apply"));
     }
 
     #[test]

@@ -1572,6 +1572,14 @@ fn the_test_helper_does_not_pass_makepkgs_folders_on_to_emrac() {
 }
 
 #[test]
+fn explain_needs_a_package_and_is_in_the_help() {
+    let home = Home::new("explain");
+    let out = home.run(&["explain"]);
+    assert_eq!(out.status.code(), Some(2), "a package name is required");
+    assert!(stdout(&home.run(&["--help"])).contains("explain"));
+}
+
+#[test]
 fn recommend_needs_a_package_and_only_source_or_binary_may_precede_it() {
     let home = Home::new("recommend");
     let out = home.run(&["recommend"]);

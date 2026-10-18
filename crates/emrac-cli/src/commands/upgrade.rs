@@ -49,7 +49,7 @@ pub fn run(
             return Ok(());
         }
     }
-    output::print_plan(&upgrade.plan, json);
+    output::print_plan_with_preview(&upgrade.plan, &sources.preview(&upgrade.plan), json);
     crate::commands::plan_check::expect(&upgrade.plan, expect_plan)?;
     let shown = crate::commands::plan_check::Shown::new(&upgrade.plan);
     output::print_pin_notes(&upgrade.held, &upgrade.expired_pins, quiet);

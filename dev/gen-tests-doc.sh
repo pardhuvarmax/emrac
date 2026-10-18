@@ -76,12 +76,24 @@ last_run=$(sed -n 's/^# last full run: *//p' "$e2e" | head -1)
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$e2e" >"$work/e2e.txt"
 pre=dev/e2e/preflight.sh
 selfup=dev/e2e/self-upgrade.sh
+hk=dev/e2e/preview.sh
+rc=dev/e2e/recovery.sh
+bt=dev/e2e/buildtools.sh
+po=dev/e2e/policy.sh
 pre_run=$(sed -n 's/^# last full run: *//p' "$pre" | head -1)
 self_run=$(sed -n 's/^# last full run: *//p' "$selfup" | head -1)
+hk_run=$(sed -n 's/^# last full run: *//p' "$hk" | head -1)
+rc_run=$(sed -n 's/^# last full run: *//p' "$rc" | head -1)
+bt_run=$(sed -n 's/^# last full run: *//p' "$bt" | head -1)
+po_run=$(sed -n 's/^# last full run: *//p' "$po" | head -1)
+sed -n 's/^ck "\([^"]*\)".*/\1/p' "$po" >"$work/e2e_policy.txt"
+sed -n 's/^ck "\([^"]*\)".*/\1/p' "$bt" >"$work/e2e_buildtools.txt"
+sed -n 's/^ck "\([^"]*\)".*/\1/p' "$rc" >"$work/e2e_recovery.txt"
+sed -n 's/^ck "\([^"]*\)".*/\1/p' "$hk" >"$work/e2e_hooks.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$pre" >"$work/e2e_pre.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$selfup" >"$work/e2e_self.txt"
 
-awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" '
+awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" -v hk_file="$work/e2e_hooks.txt" -v hk_run="$hk_run" -v rc_file="$work/e2e_recovery.txt" -v rc_run="$rc_run" -v bt_file="$work/e2e_buildtools.txt" -v bt_run="$bt_run" -v po_file="$work/e2e_policy.txt" -v po_run="$po_run" '
     function rule(text, ch,   i, line) {
         line = ""
         for (i = 0; i < length(text); i++) line = line ch
@@ -177,6 +189,50 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work
         print ""
         print "(" n " checks.)"
         print ""
+        title("End-to-end: the plan preview against pacman (dev/e2e/preview.sh)", "~")
+        print "What emrac says a plan will do beyond its packages is compared with what"
+        print "pacman then does: the config files left as .pacnew or .pacsave, and the"
+        print "hooks (probe hooks next to the system ones, for an install, a removal and a"
+        print "full upgrade, in order): ``dev/e2e/run.sh preview``."
+        print "Last full run: " hk_run "."
+        print ""
+        n = 0
+        while ((getline t < hk_file) > 0) { n++; print "* " t }
+        close(hk_file)
+        print ""
+        print "(" n " checks.)"
+        print ""
+        title("End-to-end: after a transaction pacman did not finish (dev/e2e/recovery.sh)", "~")
+        print "pacman is made to fail the way a full disk does, in the middle of an install"
+        print "(strace fault injection): ``dev/e2e/run.sh recovery``. Last full run: " rc_run "."
+        print ""
+        n = 0
+        while ((getline t < rc_file) > 0) { n++; print "* " t }
+        close(rc_file)
+        print ""
+        print "(" n " checks.)"
+        print ""
+        title("End-to-end: build tools left behind by an AUR build (dev/e2e/buildtools.sh)", "~")
+        print "A local checkout posing as an AUR package has a build-only dependency and a"
+        print "runtime one; emrac must offer to remove exactly what the build added and"
+        print "nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: " bt_run "."
+        print ""
+        n = 0
+        while ((getline t < bt_file) > 0) { n++; print "* " t }
+        close(bt_file)
+        print ""
+        print "(" n " checks.)"
+        print ""
+        title("End-to-end: override and divert against pacman (dev/e2e/policy.sh)", "~")
+        print "A small package is upgraded, reinstalled and removed by real pacman while a"
+        print "local file policy is set: ``dev/e2e/run.sh policy``. Last full run: " po_run "."
+        print ""
+        n = 0
+        while ((getline t < po_file) > 0) { n++; print "* " t }
+        close(po_file)
+        print ""
+        print "(" n " checks.)"
+        print ""
         title("End-to-end: emrac updating itself (dev/e2e/self-upgrade.sh)", "~")
         print "Builds a 0.8.0 and a 0.9.0 release from the committed source and runs"
         print "``emrac self upgrade`` and ``self downgrade`` for real: ``dev/e2e/run.sh"
@@ -193,7 +249,7 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work
 case "$mode" in
 write)
     cp "$work/out.rst" "$target"
-    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") end-to-end checks)"
+    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") + $(wc -l <"$work/e2e_hooks.txt") + $(wc -l <"$work/e2e_recovery.txt") + $(wc -l <"$work/e2e_buildtools.txt") + $(wc -l <"$work/e2e_policy.txt") end-to-end checks)"
     ;;
 check)
     if ! diff -u "$target" "$work/out.rst" >"$work/diff.txt"; then

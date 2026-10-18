@@ -635,6 +635,160 @@ pub fn evaluate(f: &Facts) -> Report {
     }
 }
 
+// ----------------------------------------------------------------- explain
+
+/// One rule of the recommendation, as `emrac explain` lays it out.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ExplainedRule {
+    pub rule: &'static str,
+    /// A short name for the rule.
+    pub label: &'static str,
+    pub points: i32,
+    /// The score is capped at this because of the rule.
+    pub cap: Option<i32>,
+    /// It adds to the case for building from source (or is neutral); `false`
+    /// when it costs points or caps the score.
+    pub helps: bool,
+    /// What was found.
+    pub text: String,
+    /// Where the input came from.
+    pub input: String,
+}
+
+/// What the recommendation would be if one input were different.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Alternative {
+    pub rule: &'static str,
+    /// The change, in words.
+    pub change: String,
+    pub score: Option<i32>,
+    pub verdict: Verdict,
+    pub confidence: Confidence,
+}
+
+/// The recommendation with its reasoning laid out, rule by rule.
+#[derive(Debug, Clone, Serialize)]
+pub struct Explanation {
+    pub report: Report,
+    /// Every rule that applied, in the order the engine applied them.
+    pub rules: Vec<ExplainedRule>,
+    /// The sum of the start and the points before a cap and the 0 to 100 limits
+    /// were applied; differs from the score only when one of them did.
+    pub before_cap: Option<i32>,
+    /// One input changed at a time, the engine run again: only those that
+    /// change the score, the verdict or the confidence.
+    pub alternatives: Vec<Alternative>,
+}
+
+fn label_of(rule: &str) -> &'static str {
+    match rule {
+        "nothing-to-compile" => "nothing to compile",
+        "gain-tuned" => "your flags target this CPU",
+        "gain-none" => "your flags match the repo",
+        "gain-unsupported" => "your flags need a newer CPU",
+        "gain-opt" => "-O3",
+        "cost" => "build time",
+        "churn" => "changes often",
+        "trust" => "official binary is signed",
+        "fit" => "this machine's room",
+        _ => "other",
+    }
+}
+
+/// `evaluate`, with every rule shown and the alternatives worked out by running
+/// the same engine again with one input changed. Nothing here is a second set of
+/// rules: a number that appears is one `evaluate` produced.
+pub fn explain(f: &Facts) -> Explanation {
+    let report = evaluate(f);
+    let rules: Vec<ExplainedRule> = report
+        .reasons
+        .iter()
+        .map(|r| ExplainedRule {
+            rule: r.rule,
+            label: label_of(r.rule),
+            points: r.points,
+            cap: r.cap,
+            helps: r.cap.is_none() && r.points >= 0,
+            text: r.text.clone(),
+            input: r.input.clone(),
+        })
+        .collect();
+    let before_cap = report
+        .score
+        .map(|_| START + report.reasons.iter().map(|r| r.points).sum::<i32>());
+    let mut alternatives = Vec::new();
+    if report.score.is_some() {
+        let (_, likely, _, _) = build_time(f);
+        let has = |rule: &str| report.reasons.iter().any(|r| r.rule == rule);
+        let mut try_with = |rule: &'static str, change: String, edit: &dyn Fn(&mut Facts)| {
+            let mut g = f.clone();
+            edit(&mut g);
+            let r = evaluate(&g);
+            if r.score != report.score
+                || r.verdict != report.verdict
+                || r.confidence != report.confidence
+            {
+                alternatives.push(Alternative {
+                    rule,
+                    change,
+                    score: r.score,
+                    verdict: r.verdict,
+                    confidence: r.confidence,
+                });
+            }
+        };
+        if has("gain-none") || has("gain-unsupported") {
+            try_with(
+                "gain-tuned",
+                "`-march=native` in makepkg.conf (flags that use this CPU)".into(),
+                &|g| g.flags.march = Some("native".into()),
+            );
+        }
+        if f.flags.opt.as_deref() != Some("3") {
+            try_with("gain-opt", "`-O3` in makepkg.conf".into(), &|g| {
+                g.flags.opt = Some("3".into())
+            });
+        }
+        if cost_points(likely) < 0 {
+            try_with(
+                "cost",
+                "a build here that takes under 2 minutes".into(),
+                &|g| g.measured = vec![90],
+            );
+        }
+        if churn_points(f.updates_90d) < 0 {
+            try_with(
+                "churn",
+                "it changing rarely (2 updates or fewer in 90 days)".into(),
+                &|g| g.updates_90d = 0,
+            );
+        }
+        if has("fit") {
+            let peak = f.class.peak_mib();
+            try_with("fit", "enough memory and disk for the build".into(), &|g| {
+                g.machine.mem_mib = g.machine.mem_mib.max(peak);
+                g.machine.free_disk_mib = g.machine.free_disk_mib.map(|d| d.max(DISK_NEEDED_MIB));
+            });
+        }
+        if f.measured.len() < 3 && report.confidence != Confidence::High {
+            let secs = median(&f.measured).unwrap_or(likely);
+            try_with(
+                "confidence",
+                "three builds of this package measured here".into(),
+                &|g| g.measured = vec![secs; 3],
+            );
+        }
+    }
+    // The most helpful change first, then a stable order.
+    alternatives.sort_by_key(|a| (std::cmp::Reverse(a.score), a.rule));
+    Explanation {
+        report,
+        rules,
+        before_cap,
+        alternatives,
+    }
+}
+
 fn verdict_of(score: i32) -> Verdict {
     if score >= SOURCE_AT {
         Verdict::Source
@@ -979,6 +1133,95 @@ mod tests {
         let mut flags = Flags::default();
         parse_makepkg("CFLAGS=\"-march=native -O2 -pipe\"\n", &mut flags);
         f.flags = flags;
+    }
+
+    #[test]
+    fn every_rule_is_laid_out_with_its_points_cap_and_source() {
+        let e = explain(&facts());
+        assert_eq!(e.rules.len(), e.report.reasons.len());
+        let gain = &e.rules[0];
+        assert_eq!(
+            (gain.rule, gain.cap, gain.helps),
+            ("gain-none", Some(30), false)
+        );
+        assert_eq!(gain.label, "your flags match the repo");
+        assert!(gain.input.contains("CFLAGS"), "{}", gain.input);
+        // 50 + 0 (gain) - 10 (a 5 minute estimate) - 5 (trust) = 35, capped at 30
+        let sum: i32 = e.report.reasons.iter().map(|r| r.points).sum();
+        assert_eq!(e.before_cap, Some(START + sum));
+        assert!(e.before_cap.unwrap() > e.report.score.unwrap());
+    }
+
+    #[test]
+    fn what_would_change_is_the_engine_run_again_with_one_input_changed() {
+        let f = facts();
+        let e = explain(&f);
+        let tuned = e
+            .alternatives
+            .iter()
+            .find(|a| a.rule == "gain-tuned")
+            .expect("native flags would change a capped score");
+        // exactly what evaluate says for those flags, nothing else
+        let mut g = f.clone();
+        native(&mut g);
+        assert_eq!(tuned.score, evaluate(&g).score);
+        assert_eq!(tuned.verdict, evaluate(&g).verdict);
+        // each alternative really differs from the current answer
+        for a in &e.alternatives {
+            assert!(
+                a.score != e.report.score
+                    || a.verdict != e.report.verdict
+                    || a.confidence != e.report.confidence,
+                "{a:?}"
+            );
+        }
+        // best first
+        let scores: Vec<_> = e.alternatives.iter().map(|a| a.score).collect();
+        let mut sorted = scores.clone();
+        sorted.sort_by_key(|s| std::cmp::Reverse(*s));
+        assert_eq!(scores, sorted);
+    }
+
+    #[test]
+    fn a_change_the_cap_swallows_is_not_offered() {
+        // Flags are the repository's, so the cap holds: -O3 adds 5 but the score stays at the cap.
+        let mut f = facts();
+        f.class = Class::C;
+        f.installed_mib = Some(1.0);
+        let e = explain(&f);
+        assert!(
+            e.alternatives.iter().all(|a| a.rule != "gain-opt"),
+            "{:?}",
+            e.alternatives
+        );
+    }
+
+    #[test]
+    fn three_measured_builds_are_offered_as_a_confidence_change() {
+        let mut f = facts();
+        native(&mut f);
+        f.measured = vec![600];
+        let e = explain(&f);
+        assert_eq!(e.report.confidence, Confidence::Medium);
+        let c = e
+            .alternatives
+            .iter()
+            .find(|a| a.rule == "confidence")
+            .unwrap();
+        assert_eq!(c.confidence, Confidence::High);
+        assert_eq!(c.score, e.report.score);
+    }
+
+    #[test]
+    fn nothing_to_compile_is_one_rule_and_nothing_to_change() {
+        let mut f = facts();
+        f.arch_any = true;
+        let e = explain(&f);
+        // the one rule takes the whole start away: 50 - 50, score 0
+        assert_eq!((e.before_cap, e.report.score), (Some(0), Some(0)));
+        assert!(e.alternatives.is_empty());
+        assert_eq!(e.rules.len(), 1);
+        assert_eq!(e.rules[0].label, "nothing to compile");
     }
 
     #[test]

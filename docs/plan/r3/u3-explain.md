@@ -26,6 +26,11 @@ What would change this:
 - `--json` carries the same table.
 - `recommend` keeps showing the top three reasons and says `emrac explain <pkg>` for the rest.
 
+What was built: `recommend::explain` (core) and `commands/explain.rs`; the list of alternatives is `-march=native`,
+`-O3`, a quick build, rare updates, enough memory and disk, and three measured builds, each only if it changes the score,
+the verdict or the confidence. The layout is a list per rule (label and points, then what was found and `from:`) rather
+than a table, because the text of a rule is a sentence.
+
 Verification: unit tests on the "what would change" calculation (each alternative recomputed from
 the engine), the table text for each source of input, and the JSON; container: the example above
 against fixtures.

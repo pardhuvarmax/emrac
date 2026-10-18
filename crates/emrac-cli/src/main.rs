@@ -31,6 +31,9 @@ fn main() {
         emrac_core::say_err!(err.voice(), "{err}");
         std::process::exit(1);
     }
+    // Build tools the run's AUR builds left behind: offered once everything the
+    // run changed is finished and journaled.
+    commands::aur_install::offer_build_tool_removal();
 }
 
 /// emrac asks for sudo itself when a step needs it, so running the whole
@@ -41,7 +44,7 @@ fn warn_if_root() {
     let first = std::env::args().skip(1).find(|a| !a.starts_with('-'));
     let meant_for_root = matches!(
         first.as_deref(),
-        Some("ledger" | "ledger-append" | "completion")
+        Some("ledger" | "ledger-append" | "completion" | "policy-helper")
     );
     if !meant_for_root && emrac_core::ledger::running_as_root() {
         emrac_core::say_err!(emrac_core::Voice::Warns, "{}", cli::ROOT_WARNING);
@@ -65,6 +68,16 @@ fn run(cli: &Cli) -> Result<()> {
 
     if let Commands::LedgerAppend = &cli.command {
         return commands::ledger::append_from_stdin();
+    }
+
+    // The local file policy needs no libalpm handle of its own (the helper
+    // opens what it needs), so it is dispatched before the sources are built.
+    match &cli.command {
+        Commands::Override { command } => return commands::policy::override_cmd(command, cli.json),
+        Commands::Divert { command } => return commands::policy::divert_cmd(command, cli.json),
+        Commands::Policy { command } => return commands::policy::policy_cmd(command, cli.json),
+        Commands::PolicyHelper { verb } => return commands::policy::helper(verb),
+        _ => {}
     }
 
     if let Commands::History {
@@ -342,6 +355,7 @@ fn run(cli: &Cli) -> Result<()> {
         } => commands::deps::impact(&sources, pkg, *install, *upgrade, offline, json),
         Commands::Cycles => commands::deps::cycles(&sources, json),
         Commands::Recommend { args } => commands::recommend::run(&sources, args, offline, json),
+        Commands::Explain { pkg } => commands::explain::run(&sources, pkg, offline, json),
         Commands::Report => commands::report::run(&sources, json),
         Commands::Snapshot { command } => {
             commands::snapshot::create(&sources, command.as_ref(), json)
@@ -367,6 +381,7 @@ fn run(cli: &Cli) -> Result<()> {
                 interactive: !yes,
                 limits: Limits::from_config(&config.build),
                 force: true,
+                remove_tools: commands::aur_install::RemoveTools::from_config(&config.build),
             };
             commands::rebuild::run(
                 &sources,
@@ -395,6 +410,7 @@ fn run(cli: &Cli) -> Result<()> {
                 interactive: !yes,
                 limits: Limits::from_config(&config.build),
                 force: false,
+                remove_tools: commands::aur_install::RemoveTools::from_config(&config.build),
             };
             commands::reinstall::run(&sources, pkgs, dry_run, yes, offline, choice, json)
         }
@@ -440,6 +456,10 @@ fn run(cli: &Cli) -> Result<()> {
         | Commands::Completion { .. }
         | Commands::History { .. }
         | Commands::Ledger { .. }
+        | Commands::Override { .. }
+        | Commands::Divert { .. }
+        | Commands::Policy { .. }
+        | Commands::PolicyHelper { .. }
         | Commands::LedgerAppend => {
             unreachable!("handled above")
         }

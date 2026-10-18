@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 426
+     - 487
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 13
+     - 17
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 30
+     - 31
    * - **Automated total**
      -
-     - **469**
+     - **535**
 
-emrac-core library (426)
+emrac-core library (487)
 ------------------------
 
 ``arch_news::tests`` (7)
@@ -150,6 +150,16 @@ emrac-core library (426)
 * ``the_default_is_the_old_non_interactive_behaviour``
 * ``the_rest_of_each_command_is_identical_either_way``
 
+``build_tools::tests`` (6)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_ring_of_tools_that_only_need_each_other_goes_together``
+* ``nothing_added_nothing_proposed``
+* ``nothing_depending_on_it_means_it_can_go``
+* ``something_shared_with_a_kept_tool_stays``
+* ``what_only_a_removed_tool_needed_goes_with_it``
+* ``what_the_built_package_needs_stays_and_so_does_what_hangs_on_it``
+
 ``cache::tests`` (12)
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -166,7 +176,7 @@ emrac-core library (426)
 * ``purge_ignores_the_protections_and_trim_stops_at_the_limit``
 * ``the_standard_policy_is_unchanged_by_the_lean_facts``
 
-``config::tests`` (19)
+``config::tests`` (20)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_partial_build_section_keeps_the_other_defaults``
@@ -178,6 +188,7 @@ emrac-core library (426)
 * ``load_from_unreadable_path_is_an_io_error_not_defaults``
 * ``malformed_toml_and_wrong_types_fail_to_parse``
 * ``partial_and_empty_files_fill_in_defaults``
+* ``removing_build_tools_is_ask_always_or_never``
 * ``save_to_creates_parent_dirs_and_load_from_reads_it_back``
 * ``save_to_fails_cleanly_when_parent_is_a_file``
 * ``search_limit_accepts_numbers_and_unset``
@@ -188,6 +199,17 @@ emrac-core library (426)
 * ``toml_roundtrip_preserves_values``
 * ``unknown_keys_error_on_get_set_and_unset``
 * ``unset_then_save_resets_only_that_key_on_disk``
+
+``config_preview::tests`` (7)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_file_the_new_package_drops_is_kept_as_pacsave_if_edited``
+* ``a_missing_file_is_written_and_an_unreadable_one_is_a_maybe``
+* ``a_removal_keeps_only_edited_files_as_pacsave``
+* ``an_edited_file_gets_a_pacnew_only_if_the_package_changes_it``
+* ``an_untouched_file_is_replaced_without_a_pacnew``
+* ``no_upgrade_always_leaves_a_pacnew_for_a_file_that_exists``
+* ``without_the_new_package_an_edited_file_may_get_a_pacnew``
 
 ``config_style::tests`` (6)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -213,10 +235,11 @@ emrac-core library (426)
 * ``why_prefers_the_shortest_chain``
 * ``why_survives_cycles``
 
-``doctor::tests`` (27)
+``doctor::tests`` (28)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_cut_off_transaction_is_a_warning_with_the_recover_fix``
+* ``a_diverted_file_the_package_moved_on_from_is_a_warning_with_the_way_out``
 * ``a_failed_online_check_says_so_instead_of_guessing``
 * ``a_healthy_machine_has_nothing_above_a_note``
 * ``a_kernel_whose_modules_are_gone_says_reboot``
@@ -244,13 +267,14 @@ emrac-core library (426)
 * ``the_sandbox_check_reflects_bwrap_and_the_limits``
 * ``unmet_dependencies_are_a_problem_with_the_pairs_listed_and_capped``
 
-``downgrade::tests`` (5)
+``downgrade::tests`` (6)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``an_explicit_version_must_be_older``
 * ``epochs_and_pkgrel_order_correctly``
 * ``merged_list_is_newest_first_with_sources_and_installed_marker``
 * ``nothing_older_is_an_error``
+* ``vercmp_matches_the_pacman_truth_table``
 * ``without_a_version_it_is_the_newest_older_one``
 
 ``error::network_hint_tests`` (1)
@@ -289,6 +313,24 @@ emrac-core library (426)
 * ``the_archive_moves_only_old_records_and_never_the_newest_twenty``
 * ``unreadable_history_is_an_io_error_not_empty``
 * ``write_failure_is_reported``
+
+``hooks::tests`` (14)
+~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_custom_directory_replaces_the_system_one_and_dev_null_disables``
+* ``a_hook_file_is_read_with_every_option``
+* ``a_hook_pacman_would_refuse_is_refused_with_its_reason``
+* ``a_missing_depends_is_reported_and_aborts_only_with_abort_on_fail``
+* ``a_package_without_a_file_list_is_reported_not_guessed``
+* ``a_path_is_an_install_unless_the_old_version_or_the_disk_has_it``
+* ``a_removal_matches_every_file_the_package_owned``
+* ``any_trigger_is_enough_and_the_targets_are_what_matched``
+* ``globs_follow_fnmatch_with_no_flags``
+* ``hooks_a_package_brings_are_listed_unless_already_installed``
+* ``hooks_run_in_name_order_without_the_suffix``
+* ``package_triggers_match_by_name_operation_and_negation``
+* ``pre_hooks_come_first_and_each_pass_keeps_its_order``
+* ``the_last_matching_target_decides``
 
 ``journal::tests`` (7)
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -394,6 +436,37 @@ emrac-core library (426)
 * ``the_changes_between_two_plans_are_listed``
 * ``the_digest_ignores_order_sizes_and_warnings_and_sees_everything_else``
 
+``policy::tests`` (19)
+~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_diversion_is_stale_only_when_the_package_changed_the_file_since``
+* ``a_diversion_lives_under_an_id_of_its_path``
+* ``a_diverted_file_is_put_back_after_pacman_replaces_it``
+* ``a_package_change_set_aside_is_warned_about_every_time``
+* ``a_policy_is_read_written_and_checked``
+* ``an_edit_is_saved_before_pacman_can_overwrite_it``
+* ``an_override_changes_only_what_differs``
+* ``applying_an_override_sets_the_mode_and_then_finds_it_in_effect``
+* ``loading_a_missing_file_is_an_empty_policy_and_a_broken_one_an_error``
+* ``modes_are_three_or_four_octal_digits``
+* ``names_and_numbers_resolve_through_passwd_and_group``
+* ``only_a_file_nobody_else_can_write_in_directories_nobody_else_can_write_is_trusted``
+* ``paths_are_absolute_normal_and_not_patterns``
+* ``root_does_not_act_on_files_in_directories_others_can_change``
+* ``the_files_whose_fixes_matter_most_are_called_out``
+* ``the_hook_names_every_path_without_the_leading_slash``
+* ``the_hook_state_tells_missing_stale_and_unwanted_apart``
+* ``the_pre_hook_covers_install_upgrade_and_remove_of_diverted_paths_only``
+* ``the_three_sums_say_what_to_do_with_a_diverted_file``
+
+``policy_preview::tests`` (4)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_diversion_says_whether_the_package_changes_the_file``
+* ``a_diversion_without_a_base_is_never_called_harmless``
+* ``an_override_is_reapplied_on_install_and_upgrade_only``
+* ``only_changes_that_are_missed_need_a_decision``
+
 ``preflight::tests`` (11)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -415,9 +488,10 @@ emrac-core library (426)
 * ``classification``
 * ``only_modified_and_unknown_are_at_risk``
 
-``recommend::tests`` (18)
+``recommend::tests`` (23)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+* ``a_change_the_cap_swallows_is_not_offered``
 * ``a_flag_the_cpu_cannot_run_does_not_count``
 * ``a_long_build_outweighs_the_gain``
 * ``a_tuned_build_of_something_quick_is_worth_it``
@@ -425,17 +499,27 @@ emrac-core library (426)
 * ``a_verdict_that_flips_inside_the_estimates_range_has_low_confidence``
 * ``an_architecture_independent_package_has_nothing_to_compile``
 * ``cost_bands_and_churn_bands_follow_the_plan``
+* ``every_rule_is_laid_out_with_its_points_cap_and_source``
 * ``machine_facts_come_from_the_proc_text``
 * ``makepkg_conf_text_is_read_last_assignment_wins``
 * ``measured_builds_replace_the_estimate_and_raise_the_confidence``
 * ``no_binary_means_source_is_the_only_option_and_nothing_is_scored``
+* ``nothing_to_compile_is_one_rule_and_nothing_to_change``
 * ``short_memory_or_disk_costs_points_and_names_what_is_short``
 * ``the_build_times_file_is_written_capped_and_read_back_by_package_and_cores``
 * ``the_cpu_level_follows_the_flags``
 * ``the_repositorys_own_flags_cap_the_score_and_say_why``
 * ``the_toolchain_is_guessed_from_makedepends_and_from_dependencies``
+* ``three_measured_builds_are_offered_as_a_confidence_change``
 * ``updates_count_only_committed_installs_and_upgrades_in_90_days``
 * ``verdict_boundaries``
+* ``what_would_change_is_the_engine_run_again_with_one_input_changed``
+
+``reconcile::tests`` (2)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``only_regular_files_that_should_be_there_count``
+* ``the_message_and_the_fix_depend_on_what_was_happening``
 
 ``reinstall::tests`` (6)
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -619,7 +703,7 @@ emrac-core library (426)
 * ``the_risk_is_high_for_the_kernel_the_c_library_and_critical_news_and_low_for_ordinary_updates``
 * ``version_steps_are_classified``
 
-``verify::tests`` (13)
+``verify::tests`` (14)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_clean_package_has_no_issues``
@@ -635,6 +719,7 @@ emrac-core library (426)
 * ``no_extract_last_match_wins_and_bang_re_includes``
 * ``unreadable_is_counted_but_is_not_a_problem``
 * ``unset_and_escapes``
+* ``what_your_policy_explains_is_not_damage``
 
 ``voice::tests`` (6)
 ~~~~~~~~~~~~~~~~~~~~
@@ -646,13 +731,21 @@ emrac-core library (426)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (13)
+emrac command line, unit tests (17)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``every_shell_script_mentions_every_subcommand``
+
+``commands::explain::tests`` (4)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_source_is_one_line_and_cut_when_long``
+* ``an_alternative_names_only_what_changes``
+* ``points_say_the_cap_instead_of_zero_and_signs_otherwise``
+* ``the_thresholds_are_the_engines``
 
 ``commands::plan_check::tests`` (2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -682,10 +775,10 @@ emrac command line, unit tests (13)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (30)
+emrac command line, integration tests (31)
 ------------------------------------------
 
-``(top level)`` (30)
+``(top level)`` (31)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -702,6 +795,7 @@ emrac command line, integration tests (30)
 * ``doctor_report_is_markdown_without_the_users_identity``
 * ``doctor_reports_checks_as_json_and_exits_with_the_problem_count``
 * ``every_help_screen_carries_the_credit``
+* ``explain_needs_a_package_and_is_in_the_help``
 * ``history_archive_verify_and_ack``
 * ``history_is_empty_without_a_log_and_reads_one``
 * ``pins_list_and_unpin``
@@ -724,7 +818,7 @@ End-to-end checks
 
 These run the release binary against a real pacman inside the disposable
 test container; they need podman and network access, so CI does not run
-them. Run them with ``dev/e2e/run.sh``. Last full run: after u2 (after r3), 55 of 55 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3, u20 adds 3, u2-after-r3 adds 5).
+them. Run them with ``dev/e2e/run.sh``. Last full run: after u3 (after r3), 59 of 59 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3, u20 adds 3, u2-after-r3 adds 5, u3-after-r3 adds 4).
 
 * version names the builder
 * usage error exits 2
@@ -754,6 +848,10 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u2 (after r3), 55 o
 * recommend: an official package, both sides, and --json
 * recommend: with Arch's default flags the binary wins and the flags are the reason
 * recommend: -march=native in ~/.makepkg.conf is read and counts as a gain
+* explain: every rule with its points and where its input came from
+* explain: with the repository's flags the cap is shown and -march=native is what would change it
+* explain: it says what recommend says
+* explain --json carries the rules and the alternatives
 * recommend: an architecture-independent package has nothing to compile
 * recommend: a build is timed and the next recommend uses the measurement
 * rebuild builds an installed AUR package again
@@ -782,7 +880,7 @@ them. Run them with ``dev/e2e/run.sh``. Last full run: after u2 (after r3), 55 o
 * self check runs and names how emrac was installed
 * self check reports a cut-off transaction
 
-(55 checks.)
+(59 checks.)
 
 End-to-end: pre-flight, plan ids, news and trust (dev/e2e/preflight.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -817,6 +915,133 @@ preflight``. Last full run: after u20, 24 of 24 passed.
 * a repository database older than one seen is a warning
 
 (24 checks.)
+
+End-to-end: the plan preview against pacman (dev/e2e/preview.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+What emrac says a plan will do beyond its packages is compared with what
+pacman then does: the config files left as .pacnew or .pacsave, and the
+hooks (probe hooks next to the system ones, for an install, a removal and a
+full upgrade, in order): ``dev/e2e/run.sh preview``.
+Last full run: after u5, 22 of 22 passed.
+
+* an AbortOnFail hook whose Depends is missing is flagged as stopping the transaction
+* the flagged hook is marked in the list
+* --json carries the hooks, in order, with missing_depends
+* install: a negated target does not fire
+* install: the path hook fires on a file of the package
+* install: emrac predicted the hooks pacman ran before the transaction, in order
+* install: emrac predicted the hooks pacman ran after the transaction, in order
+* remove: the hooks pacman ran are the hooks emrac predicted
+* upgrade: the hooks pacman ran are the hooks emrac predicted
+* upgrade: more than one hook fired (the comparison means something)
+* fixtures: three packages installed at 1 with a version 2 waiting
+* untouched config files are not listed
+* edited files are listed before the download as maybes
+* a file the new package stops shipping is listed as kept (.pacsave)
+* --json carries them
+* with the packages cached, a changed file is a certain .pacnew
+* with the packages cached, an unchanged file is not listed
+* pacman did exactly that: .pacnew only for the changed file, yours kept
+* pacman saved the dropped file as .pacsave
+* a removal lists an edited file as .pacsave
+* pacman kept it as .pacsave
+* NoUpgrade makes an existing file a certain .pacnew
+
+(22 checks.)
+
+End-to-end: after a transaction pacman did not finish (dev/e2e/recovery.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+pacman is made to fail the way a full disk does, in the middle of an install
+(strace fault injection): ``dev/e2e/run.sh recovery``. Last full run: after u6, 9 of 9 passed.
+
+* a transaction that worked says nothing about missing files
+* the install fails
+* pacman still lists the package (this is what it leaves behind)
+* emrac says the package is recorded but its file is missing
+* emrac names the command that mends it
+* the failure is in the history as before
+* emrac check also sees the damage (it exits non-zero)
+* that command mends it
+* and the next check finds nothing wrong
+
+(9 checks.)
+
+End-to-end: build tools left behind by an AUR build (dev/e2e/buildtools.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A local checkout posing as an AUR package has a build-only dependency and a
+runtime one; emrac must offer to remove exactly what the build added and
+nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 passed.
+
+* fixture: neither figlet nor tree is installed
+* never: the build installs its dependencies and says nothing about removing them
+* ask with --yes lists the build tool and the command, and removes nothing
+* the runtime dependency is never offered
+* always removes the build tool after the install
+* the package and its runtime dependency stay
+* the removal is in the history like any other
+* and can be undone
+* a package that was installed before the build is not offered
+
+(9 checks.)
+
+End-to-end: override and divert against pacman (dev/e2e/policy.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A small package is upgraded, reinstalled and removed by real pacman while a
+local file policy is set: ``dev/e2e/run.sh policy``. Last full run: after u8, 47 of 47 passed.
+
+* without a policy pacman resets the mode and owner and replaces the edited file (the problem)
+* override set applies at once and records the policy and a hook
+* the mode and owner survive an upgrade
+* pacman showed the hook and it said what it did
+* and a reinstall of the same version
+* override list says it is in effect
+* check (verify) does not call the overridden mode damage
+* list and status say when it is not in effect
+* policy apply sets it right again
+* a relative path is refused
+* a path with .. is refused
+* a bad mode is refused
+* an override that sets nothing is refused
+* an unknown user is refused
+* a setuid mode without consent changes nothing
+* a file in /proc is refused
+* emrac run from a place root may not trust refuses to write a hook
+* diverting a backup= file is refused and points to pacnew
+* diverting a file no package owns is refused
+* diverting a directory is refused
+* diverting asks first, says it freezes the file and security fixes, and changes nothing without a yes
+* --yes does not answer that question
+* the root helper itself refuses without the consent
+* a compiled program is called out as the kind security fixes ship in
+* divert add keeps your file and records it
+* an unchanged-upstream upgrade keeps your file, content and mode
+* and the package's version is set aside
+* pacman's own output warns that the package's change is NOT in use
+* divert list marks it STALE and says what to do
+* doctor warns about the stale diversion
+* policy status is not all clear while it is stale
+* reviewed clears it, and the next transaction does not warn again
+* divert list says it is in effect
+* a later edit of the diverted file is kept as yours
+* check does not call a diverted file damaged
+* removing the package leaves no stray file, and says your copy waits in the store
+* reinstalling the package works (no conflicting file) and brings your copy back
+* divert remove lets go: the next reinstall replaces the file
+* a deleted hook is reported
+* policy apply writes it again
+* removing the last entry removes both hooks
+* the upgrade plan lists the override it will re-apply
+* and the diverted file, saying the package's changes may not take effect
+* with the package downloaded it is exact, and a warning names the file
+* a missing hook is flagged in the plan: the policy would not be re-applied
+* --json carries the policy
+* upgrading for real keeps the override and your file, and warns
+
+(47 checks.)
 
 End-to-end: emrac updating itself (dev/e2e/self-upgrade.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

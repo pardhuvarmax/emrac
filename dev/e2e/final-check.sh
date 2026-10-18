@@ -5,7 +5,7 @@
 #
 # Each `ck "title" "command"` line is one check; the titles are listed in
 # docs/tests/emrac-tests.rst. Update the next line when you run them all.
-# last full run: after u2 (after r3), 55 of 55 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3, u20 adds 3, u2-after-r3 adds 5)
+# last full run: after u3 (after r3), 59 of 59 passed (u7 adds 4, u8 adds 5, u9 adds 2, u10 adds 3, u11 adds 2, u16 adds 2, u19 adds 3, u20 adds 3, u2-after-r3 adds 5, u3-after-r3 adds 4)
 e=/usr/local/bin/emrac
 export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 n=0; bad=0
@@ -49,6 +49,11 @@ ck "build without installing"         "$e build pfetch --skip-pkgbuild </dev/nul
 ck "recommend: an official package, both sides, and --json" "$e recommend tree | grep -q 'Recommendation for tree' && $e recommend source tree | grep -q 'source side' && $e recommend binary tree | grep -q 'binary side' && $e recommend tree --json | grep -q '\"verdict\"'"
 ck "recommend: with Arch's default flags the binary wins and the flags are the reason" "rm -f \$HOME/.makepkg.conf; $e recommend tree | grep -q 'Recommendation for tree: binary' && $e recommend tree | grep -q 'defaults'"
 ck "recommend: -march=native in ~/.makepkg.conf is read and counts as a gain" "echo 'CFLAGS=\"-march=native -O2 -pipe\"' > \$HOME/.makepkg.conf; $e recommend tree | grep -q 'flags target native'; rc=\$?; rm -f \$HOME/.makepkg.conf; [ \$rc -eq 0 ]"
+# explain (u3)
+ck "explain: every rule with its points and where its input came from" "rm -f \$HOME/.makepkg.conf; $e explain tree >/tmp/ex 2>&1; grep -q 'Recommendation for tree' /tmp/ex && grep -q ' start  ' /tmp/ex && grep -q 'from: ' /tmp/ex && grep -q 'of 100' /tmp/ex"
+ck "explain: with the repository's flags the cap is shown and -march=native is what would change it" "rm -f \$HOME/.makepkg.conf; $e explain tree | grep -q 'capped at 30' && $e explain tree | grep -q 'march=native.*the score would be'"
+ck "explain: it says what recommend says" "a=\$($e recommend tree | sed -n 's/^Recommendation for tree: //p'); b=\$($e explain tree | sed -n 's/^Recommendation for tree: \([a-z ()]*\)    confidence.*/\1/p'); [ -n \"\$a\" ] && [ \"\$a\" = \"\$b\" ]"
+ck "explain --json carries the rules and the alternatives" "$e explain tree --json | grep -q '\"rules\"' && $e explain tree --json | grep -q '\"alternatives\"'"
 ck "recommend: an architecture-independent package has nothing to compile" "$e recommend ttf-dejavu | grep -q 'nothing is compiled'"
 ck "recommend: a build is timed and the next recommend uses the measurement" "grep -q '\"name\":\"pfetch\"' \$HOME/.local/share/emrac/build-times.jsonl && $e recommend pfetch --json | grep -q '\"build_basis\": \"measured\"'"
 ck "rebuild builds an installed AUR package again" "b1=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p'); sleep 2; $e rebuild pfetch --yes --skip-pkgbuild </dev/null >/tmp/rb 2>&1; rc=\$?; tail -6 /tmp/rb; [ \$rc -eq 0 ] && b2=\$(pacman -Qi pfetch | sed -n 's/^Build Date *: //p') && [ \"\$b1\" != \"\$b2\" ] && $e history | grep -q pfetch"

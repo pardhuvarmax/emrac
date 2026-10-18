@@ -166,6 +166,10 @@ pub struct BuildConfig {
     /// Size cap for the build's `/tmp` and `$HOME`, in GiB.
     #[serde(default = "default_tmpfs_gib")]
     pub tmpfs_gib: u32,
+    /// What to do with the packages a build installed only to build:
+    /// `ask`, `always` or `never` remove them.
+    #[serde(default = "default_remove_make_deps")]
+    pub remove_make_deps: String,
 }
 
 fn default_timeout_minutes() -> u32 {
@@ -180,6 +184,9 @@ fn default_max_tasks() -> u32 {
 fn default_tmpfs_gib() -> u32 {
     8
 }
+fn default_remove_make_deps() -> String {
+    "ask".to_string()
+}
 
 impl Default for BuildConfig {
     fn default() -> Self {
@@ -188,6 +195,7 @@ impl Default for BuildConfig {
             memory_percent: default_memory_percent(),
             max_tasks: default_max_tasks(),
             tmpfs_gib: default_tmpfs_gib(),
+            remove_make_deps: default_remove_make_deps(),
         }
     }
 }
@@ -308,6 +316,7 @@ impl Config {
             "build.memory_percent" => self.build.memory_percent.to_string(),
             "build.max_tasks" => self.build.max_tasks.to_string(),
             "build.tmpfs_gib" => self.build.tmpfs_gib.to_string(),
+            "build.remove_make_deps" => self.build.remove_make_deps.clone(),
             "cache.policy" => self.cache.policy.clone(),
             "cache.keep_days" => self.cache.keep_days.to_string(),
             "safety.preflight" => self.safety.preflight.clone(),
@@ -368,6 +377,12 @@ impl Config {
             }
             "build.tmpfs_gib" => {
                 self.build.tmpfs_gib = value.parse().map_err(|_| invalid())?;
+            }
+            "build.remove_make_deps" => {
+                if !matches!(value, "ask" | "always" | "never") {
+                    return Err(invalid());
+                }
+                self.build.remove_make_deps = value.to_string();
             }
             "cache.policy" => {
                 if !matches!(value, "standard" | "lean") {
@@ -451,6 +466,7 @@ impl Config {
             "build.memory_percent" => self.build.memory_percent = default_memory_percent(),
             "build.max_tasks" => self.build.max_tasks = default_max_tasks(),
             "build.tmpfs_gib" => self.build.tmpfs_gib = default_tmpfs_gib(),
+            "build.remove_make_deps" => self.build.remove_make_deps = default_remove_make_deps(),
             "cache.policy" => self.cache.policy = default_cache_policy(),
             "cache.keep_days" => self.cache.keep_days = default_keep_days(),
             "safety.preflight" => self.safety.preflight = default_preflight(),
@@ -646,6 +662,23 @@ mod tests {
             empty.build.timeout_minutes, 120,
             "no [build] section at all"
         );
+    }
+
+    #[test]
+    fn removing_build_tools_is_ask_always_or_never() {
+        let mut config = Config::default();
+        assert_eq!(config.get("build.remove_make_deps").unwrap(), "ask");
+        for value in ["always", "never", "ask"] {
+            config.set("build.remove_make_deps", value).unwrap();
+            assert_eq!(config.get("build.remove_make_deps").unwrap(), value);
+        }
+        assert!(config.set("build.remove_make_deps", "yes").is_err());
+        assert!(config.set("build.remove_make_deps", "").is_err());
+        config.set("build.remove_make_deps", "never").unwrap();
+        config.unset("build.remove_make_deps").unwrap();
+        assert_eq!(config.get("build.remove_make_deps").unwrap(), "ask");
+        let empty: Config = toml::from_str("").unwrap();
+        assert_eq!(empty.build.remove_make_deps, "ask");
     }
 
     #[test]

@@ -8,8 +8,10 @@ use crate::backend::{
     version_is_newer, AlpmBackend, ArchiveBackend, AurBackend, AurBuildBackend, AurSyncOutcome,
     BuildOptions, FreshDb, InstalledSource, PacmanBackend, ResolvedPackage, SimOp, Simulation,
 };
+use crate::build_tools::{self, BuildTool};
 use crate::cache;
 use crate::config::Config;
+use crate::config_preview::{self, ConfigEffect, ConfigPreview};
 use crate::deps::{
     self, DepsReport, GraphReport, ImpactItem, Orphan, RdepsReport, RemoveImpactReport, TreeReport,
     UnitFact, WhyReport,
@@ -18,11 +20,13 @@ use crate::doctor::{self, DiskFact, DoctorInputs, DoctorReport, ReportEnv, ToolF
 use crate::downgrade::{self, DowngradePlan, VersionList};
 use crate::error::{Error, Result};
 use crate::history::{now, History, TxStatus};
+use crate::hooks::{self, HookPreview};
 use crate::manifest::{self, Manifest};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::pacnew::{self, Class, Merge, Pending, Texts};
 use crate::pins::{self, Pin, PinStore};
 use crate::plan::{Plan, PlanAction, PlannedPackage, PlannedRemoval, ProviderChoice};
+use crate::plan_preview::PlanPreview;
 use crate::purge::PurgePlan;
 use crate::reinstall::{self, ReinstallItem, ReinstallPlan, ReinstallSource};
 use crate::rollback::{self, Download, RemoteFile, RollbackPlan};
@@ -1225,6 +1229,212 @@ impl Sources {
         Ok(build_plan(PlanAction::Remove, pkgs, resolved, -1))
     }
 
+    /// The names of everything installed right now, read fresh (a handle opened
+    /// earlier does not see what pacman changed since). Empty if pacman's
+    /// configuration cannot be read; callers must treat that as "unknown".
+    pub fn installed_names_set(&self) -> HashSet<String> {
+        AlpmBackend::init()
+            .map(|alpm| alpm.installed_names().into_iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// The tools a build left behind: packages installed since `before` as
+    /// dependencies that nothing else needs (`docs/plan/r3/u7-build-tools.md`).
+    /// Nothing is proposed when `before` is empty, because then nothing is
+    /// known about what was there.
+    pub fn build_tools_since(&self, before: &HashSet<String>) -> Vec<BuildTool> {
+        if before.is_empty() {
+            return Vec::new();
+        }
+        match AlpmBackend::init() {
+            Ok(alpm) => build_tools::removable(&alpm.new_dependencies_since(before)),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    /// Everything worth knowing about a plan beyond its packages: the hooks it
+    /// runs and the config files it leaves as `.pacnew` or `.pacsave`.
+    pub fn preview(&self, plan: &Plan) -> PlanPreview {
+        PlanPreview {
+            hooks: self.hook_preview(plan),
+            config: self.config_preview(plan),
+            policy: self.policy_preview(plan),
+        }
+    }
+
+    /// The files under your local file policy (`override`, `divert`) that the
+    /// plan's packages touch, and what will happen to them. For a diversion,
+    /// whether the new package changes the file is exact when that package is
+    /// already in the cache, otherwise a maybe. Read-only.
+    pub fn policy_preview(&self, plan: &Plan) -> crate::policy_preview::PolicyPreview {
+        use crate::hooks::Operation;
+        use crate::policy_preview::{effects, PolicyPreview, Touch};
+        if plan.is_empty() {
+            return PolicyPreview::default();
+        }
+        let policy = crate::policy::load(Path::new(crate::policy::POLICY_FILE)).unwrap_or_default();
+        if policy.is_empty() {
+            return PolicyPreview::default();
+        }
+        let touches: Vec<Touch> = self
+            .alpm
+            .hook_facts(plan)
+            .into_iter()
+            .map(|fact| {
+                let mut files = fact.files.clone().unwrap_or_default();
+                if fact.operation != Operation::Remove {
+                    files.extend(fact.old_files.iter().cloned());
+                }
+                Touch {
+                    package: fact.name,
+                    operation: fact.operation,
+                    files,
+                }
+            })
+            .collect();
+        let cache_dirs = self.pacman.cache_dirs().unwrap_or_default();
+        let versions: std::collections::HashMap<&str, &str> = plan
+            .packages
+            .iter()
+            .map(|p| (p.name.as_str(), p.version.as_str()))
+            .collect();
+        // The sha256 of a file inside the package that is about to be installed.
+        let package_sha = |package: &str, rel: &str| -> Option<String> {
+            let version = versions.get(package)?;
+            let file = rollback::find_package_file(&cache_dirs, package, version)?;
+            let extracted = crate::backend::Extracted::new(&file, &[rel.to_string()]).ok()?;
+            crate::policy::sha256_file(&extracted.path(rel)?).ok()
+        };
+        let found = effects(&policy, &touches, &package_sha);
+        let hook_problem = if found.is_empty() {
+            None
+        } else {
+            crate::policy_ops::Paths::system()
+                .and_then(|paths| crate::policy_ops::status(&paths))
+                .ok()
+                .and_then(|status| status.hook_note)
+        };
+        PolicyPreview {
+            effects: found,
+            hook_problem,
+        }
+    }
+
+    /// The config files of the plan's packages that you changed and what
+    /// pacman will do with them (`.pacnew` beside yours, `.pacsave` on
+    /// removal). When the new package is already in the cache its files are
+    /// compared exactly; otherwise an edited file is reported as a maybe.
+    /// Read-only; needs no root, except that a file only root can read is a maybe.
+    pub fn config_preview(&self, plan: &Plan) -> ConfigPreview {
+        if plan.is_empty() {
+            return ConfigPreview::default();
+        }
+        let inputs = self.alpm.config_inputs(plan);
+        if inputs.is_empty() {
+            return ConfigPreview::default();
+        }
+        let no_upgrade = AlpmBackend::no_upgrade_patterns();
+        let cache_dirs = self.pacman.cache_dirs().unwrap_or_default();
+
+        // The md5 of each edited file in the new package, when that package is
+        // in the cache: one extraction per package.
+        let mut new_md5: std::collections::HashMap<(String, String), String> =
+            std::collections::HashMap::new();
+        let mut packages: Vec<(&str, &str)> = inputs
+            .iter()
+            .filter(|i| i.new_version.is_some())
+            .map(|i| (i.package.as_str(), i.new_version.as_deref().unwrap_or("")))
+            .collect();
+        packages.sort();
+        packages.dedup();
+        for (name, version) in packages {
+            let edited: Vec<String> = inputs
+                .iter()
+                .filter(|i| i.package == name)
+                .filter(
+                    |i| matches!(&i.observed, crate::purge::Observed::Hash(h) if *h != i.original),
+                )
+                .map(|i| i.rel.clone())
+                .collect();
+            if edited.is_empty() {
+                continue;
+            }
+            let Some(file) = rollback::find_package_file(&cache_dirs, name, version) else {
+                continue;
+            };
+            let Ok(extracted) = crate::backend::Extracted::new(&file, &edited) else {
+                continue;
+            };
+            for rel in edited {
+                if let Some(path) = extracted.path(&rel) {
+                    if let Ok(md5) = alpm::compute_md5sum(path.display().to_string()) {
+                        new_md5.insert((name.to_string(), rel), md5);
+                    }
+                }
+            }
+        }
+
+        let mut effects = Vec::new();
+        for input in &inputs {
+            let verdict = if input.new_version.is_none() {
+                config_preview::on_removal(&input.original, &input.observed)
+            } else {
+                let listed = no_upgrade
+                    .iter()
+                    .any(|pattern| hooks::glob_match(pattern, &input.rel));
+                let shipped = input
+                    .new_files
+                    .as_ref()
+                    .map(|files| files.contains(&input.rel));
+                config_preview::on_upgrade(
+                    &input.original,
+                    &input.observed,
+                    new_md5
+                        .get(&(input.package.clone(), input.rel.clone()))
+                        .map(String::as_str),
+                    shipped,
+                    listed,
+                )
+            };
+            if let Some((effect, reason)) = verdict {
+                effects.push(ConfigEffect {
+                    package: input.package.clone(),
+                    path: input.path.clone(),
+                    effect,
+                    reason: reason.to_string(),
+                });
+            }
+        }
+        effects.sort_by(|a, b| (&a.package, &a.path).cmp(&(&b.package, &b.path)));
+        ConfigPreview { effects }
+    }
+
+    /// The pacman hooks `plan` will run, in the order pacman runs them, and
+    /// which of them would stop the transaction. Read-only; needs no root. A
+    /// hook directory that cannot be read is skipped, so an unusual setup gives
+    /// a shorter list, never an error.
+    pub fn hook_preview(&self, plan: &Plan) -> HookPreview {
+        if plan.is_empty() {
+            return HookPreview::default();
+        }
+        let dirs = AlpmBackend::hook_dirs().unwrap_or_default();
+        let loaded = hooks::load_hooks(&dirs);
+        let facts = self.alpm.hook_facts(plan);
+        let coming: Vec<String> = if matches!(plan.action, PlanAction::Remove | PlanAction::Purge) {
+            Vec::new()
+        } else {
+            plan.packages.iter().map(|p| p.name.clone()).collect()
+        };
+        let mut preview = hooks::plan_hooks(
+            &loaded.hooks,
+            &facts,
+            &|dep| self.alpm.hook_dependency_met(dep, &coming),
+            &|path| self.alpm.root_has(path),
+        );
+        preview.unusable = loaded.unusable;
+        preview
+    }
+
     /// Verifies the installed files of each named package against pacman's
     /// record of them. Read-only; no root. Names that aren't installed are
     /// an error, reported together.
@@ -1245,10 +1455,16 @@ impl Sources {
         }
 
         let no_extract = self.pacman.no_extract()?;
-        let packages = names
+        let mut packages = names
             .into_iter()
             .map(|name| self.alpm.verify_installed(name, &no_extract))
             .collect::<Result<Vec<_>>>()?;
+        // What your own file policy explains (an overridden mode, a diverted
+        // file's content) is not damage.
+        let policy = crate::policy::load(Path::new(crate::policy::POLICY_FILE)).unwrap_or_default();
+        for report in &mut packages {
+            crate::verify::explain_by_policy(report, &policy);
+        }
         Ok(VerifyReport { packages })
     }
 
@@ -1958,6 +2174,28 @@ impl Sources {
             required,
         };
 
+        // The local file policy (u8): diversions the package has moved on from,
+        // and anything not in effect.
+        let (stale_diversions, policy_drift) = match crate::policy_ops::Paths::system()
+            .and_then(|paths| crate::policy_ops::status(&paths))
+        {
+            Ok(status) => {
+                use crate::policy_ops::LineState;
+                let stale = crate::policy_ops::stale_diversions(&status)
+                    .into_iter()
+                    .map(|l| l.path.clone())
+                    .collect();
+                let mut drift: Vec<String> = status
+                    .lines
+                    .iter()
+                    .filter(|l| l.state == LineState::Drift)
+                    .map(|l| format!("{} {}: {}", l.kind, l.path, l.text))
+                    .collect();
+                drift.extend(status.hook_note.clone());
+                (stale, drift)
+            }
+            Err(_) => (Vec::new(), Vec::new()),
+        };
         DoctorInputs {
             unsatisfied: self.alpm.unsatisfied_dependencies(),
             lock_present: db_path.join("db.lck").exists(),
@@ -1985,6 +2223,8 @@ impl Sources {
             orphan_count: orphans.len(),
             orphan_bytes: orphans.iter().map(|o| o.installed_size).sum(),
             expired_pins,
+            stale_diversions,
+            policy_drift,
             recent_failed_transactions,
             stale_broken,
             stale_binary,

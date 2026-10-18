@@ -347,6 +347,13 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// How the recommendation for a package was reached, rule by rule, and
+    /// what would change it
+    Explain {
+        /// The package to explain the recommendation for
+        pkg: String,
+    },
+
     /// What a change to a package would affect (default: removing it)
     Impact {
         pkg: String,
@@ -523,6 +530,32 @@ pub enum Commands {
     Ledger {
         #[command(subcommand)]
         command: LedgerCommand,
+    },
+
+    /// Keep the mode and owner of a packaged file across upgrades
+    Override {
+        #[command(subcommand)]
+        command: OverrideCommand,
+    },
+
+    /// Keep your own version of a packaged file across upgrades
+    Divert {
+        #[command(subcommand)]
+        command: DivertCommand,
+    },
+
+    /// The local file policy (overrides and diversions): is it in effect?
+    Policy {
+        #[command(subcommand)]
+        command: PolicyCommand,
+    },
+
+    /// (Internal) change or apply the local file policy as root; run through
+    /// sudo by emrac itself, and by the pacman hook it installs
+    #[command(hide = true)]
+    PolicyHelper {
+        #[command(subcommand)]
+        verb: PolicyHelperVerb,
     },
 
     /// (Internal) append history lines read from stdin to the root-owned ledger;
@@ -828,4 +861,117 @@ pub enum ConfigCommand {
 
     /// Check that the config file parses
     Validate,
+}
+
+#[derive(Subcommand)]
+pub enum OverrideCommand {
+    /// Set the mode and/or owner a packaged file keeps after every upgrade
+    Set {
+        /// The file, as an absolute path
+        path: String,
+
+        /// Octal, like 755 or 4750
+        #[arg(long)]
+        mode: Option<String>,
+
+        /// A user name or number
+        #[arg(long)]
+        owner: Option<String>,
+
+        /// A group name or number
+        #[arg(long)]
+        group: Option<String>,
+
+        /// Why (shown in the list)
+        #[arg(long)]
+        note: Option<String>,
+
+        /// Allow a mode with the setuid or setgid bit without asking
+        #[arg(long)]
+        allow_setuid: bool,
+    },
+
+    /// The overrides and whether each is in effect now
+    List,
+
+    /// Stop keeping a file's mode and owner
+    Remove { path: String },
+}
+
+#[derive(Subcommand)]
+pub enum DivertCommand {
+    /// Keep the file as it is now: upgrades set the package's version aside
+    Add {
+        /// The file, as an absolute path
+        path: String,
+
+        /// Why (shown in the list)
+        #[arg(long)]
+        note: Option<String>,
+
+        /// Divert without asking: you know the package's later versions of
+        /// this file, security fixes included, will not take effect
+        #[arg(long)]
+        allow_stale: bool,
+    },
+
+    /// The diversions and whether each is in effect now
+    List,
+
+    /// Stop keeping your version (the file is left as it is)
+    Remove { path: String },
+
+    /// Your version against the package's version that an upgrade set aside
+    Diff { path: String },
+
+    /// You have looked at the package's changes and keep your version:
+    /// warn again only if the package changes the file again
+    Reviewed { path: String },
+}
+
+#[derive(Subcommand)]
+pub enum PolicyCommand {
+    /// What is configured, and whether it is in effect and will stay so
+    Status,
+
+    /// Apply the policy now (the pacman hook does this after each transaction)
+    Apply,
+}
+
+#[derive(Subcommand)]
+pub enum PolicyHelperVerb {
+    Apply,
+    Capture,
+    SetOverride {
+        path: String,
+        #[arg(long)]
+        mode: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        group: Option<String>,
+        #[arg(long)]
+        note: Option<String>,
+        #[arg(long)]
+        allow_setuid: bool,
+    },
+    RemoveOverride {
+        path: String,
+    },
+    AddDivert {
+        path: String,
+        #[arg(long)]
+        note: Option<String>,
+        #[arg(long)]
+        allow_stale: bool,
+    },
+    Reviewed {
+        path: String,
+    },
+    RemoveDivert {
+        path: String,
+    },
+    Diff {
+        path: String,
+    },
 }

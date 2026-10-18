@@ -16,6 +16,10 @@ podman build -t emrac-test -f dev/container/Containerfile dev/container
 # dev/e2e/run.sh          the end-to-end checks of the binary
 # dev/e2e/run.sh install  the checks of the root install.sh
 # dev/e2e/run.sh preflight  a pending upgrade and a fake kernel: the partial-upgrade gate and the kernel checks
+# dev/e2e/run.sh preview  what emrac says a plan will do (config files, hooks) against what pacman does
+# dev/e2e/run.sh recovery pacman fails mid-install (injected): what emrac finds and how it mends it
+# dev/e2e/run.sh buildtools an AUR build with a build-only dependency: what emrac offers to remove
+# dev/e2e/run.sh policy   override and divert: what survives upgrades, reinstalls and removals
 # dev/e2e/run.sh self     builds two releases and runs self upgrade / downgrade for real
 case "${1:-}" in
 self)
@@ -52,6 +56,34 @@ preflight)
     podman run --rm --user root \
         -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
         -v "$repo_root/dev/e2e/preflight.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+preview)
+    echo "==> Running the plan preview checks (config files and hooks against pacman)"
+    podman run --rm --user root --security-opt 'unmask=/proc/*' \
+        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/preview.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+recovery)
+    echo "==> Running the recovery checks (a full disk, simulated, in the middle of an install)"
+    podman run --rm --user root --security-opt 'unmask=/proc/*' \
+        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/recovery.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+buildtools)
+    echo "==> Running the build tool removal checks (an AUR build with a build-only dependency)"
+    podman run --rm --security-opt 'unmask=/proc/*' \
+        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/buildtools.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+policy)
+    echo "==> Running the local file policy checks (override and divert against real pacman)"
+    podman run --rm --user root --security-opt 'unmask=/proc/*' \
+        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/policy.sh:/t.sh:ro" \
         emrac-test bash /t.sh
     ;;
 install)

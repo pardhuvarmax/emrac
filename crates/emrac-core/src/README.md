@@ -32,6 +32,14 @@
 - [`deps.rs`](./deps.rs) — dependency, reverse-dependency, "why" and orphan reports; the tree, graph, cycles and removal impact.
 
 **Before and after a transaction**
+- [`config_preview.rs`](./config_preview.rs) — which config files a plan leaves as `.pacnew` (new version beside your edits) or `.pacsave` (kept on removal), by pacman's three-way rule.
+- [`plan_preview.rs`](./plan_preview.rs) — what a plan does beyond its packages (hooks, config files), shown under it and kept out of the plan id.
+- [`hooks.rs`](./hooks.rs) — reading pacman hooks and working out which ones a plan will run, in pacman's order, and which would stop the transaction.
+- [`build_tools.rs`](./build_tools.rs) — which packages an AUR build installed only to build and nothing needs any more (the fixpoint that decides).
+- [`policy.rs`](./policy.rs) — the local file policy (`override`, `divert`): its file, validation, the three-checksum decision for a diverted file, applying it, the pacman hooks, the trust and location guards.
+- [`policy_ops.rs`](./policy_ops.rs) — what the root helper does: change the policy, keep the hooks in step, apply, status, review.
+- [`policy_preview.rs`](./policy_preview.rs) — what a plan does to files under your policy (a diversion the package changes is a warning).
+- [`reconcile.rs`](./reconcile.rs) — after a transaction that failed or was cut off: packages pacman still lists whose files are missing, and the command that mends each.
 - [`preflight.rs`](./preflight.rs) — space, `/boot`, power, mirrors, the kernel safety net, the partial-upgrade and older-version gates, pacman's lock.
 - [`pacman_db.rs`](./pacman_db.rs) — the backup of pacman's local database and `pacman -Dk`.
 - [`repo_trust.rs`](./repo_trust.rs) — repository databases older than one seen; an older version than installed.

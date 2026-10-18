@@ -117,6 +117,15 @@ impl Extracted {
         Ok(this)
     }
 
+    /// Where an extracted member lives, if it was extracted as a regular file.
+    pub fn path(&self, member: &str) -> Option<PathBuf> {
+        let path = self.dir.join(member);
+        fs::symlink_metadata(&path)
+            .ok()
+            .filter(|m| m.is_file())
+            .map(|_| path)
+    }
+
     /// An extracted member's text (lossy), or `None` if it wasn't extracted
     /// or isn't a regular file.
     pub fn read(&self, member: &str) -> Option<String> {

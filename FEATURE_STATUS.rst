@@ -140,6 +140,24 @@ cycle that ended with ``r3``.
    * - ``cache [list|stats|clean|purge|trim]``
      - u28, u29
      - Source, build, binary and pacman caches; ``--lean`` keeps one rollback set; ``cc``/``cs`` shortcuts
+   * - hook preview
+     - u4 after r3
+     - Under every install, remove and upgrade plan: the pacman hooks that will run, before and after, in pacman's order; which one would stop the transaction (``AbortOnFail``, missing ``Depends``); hooks a package brings; ``--json`` has a ``hooks`` object
+   * - config file preview
+     - u5 after r3
+     - Under every install, remove and upgrade plan: the config files you changed that will get a ``.pacnew`` (certain when the new package is cached, otherwise "may") or a ``.pacsave``, by pacman's own three-way rule, ``NoUpgrade`` included; ``--json`` has a ``config`` list
+   * - after a failed transaction
+     - u6 after r3
+     - A package pacman still lists with files missing (what a failed or cut-off install or removal leaves behind, seen with a full disk) is reported with the command that mends it (``emrac reinstall`` / ``remove``); also after ``history recover``
+   * - build tools left by AUR builds
+     - u7 after r3
+     - After a run that built AUR packages: the packages the builds installed only to build, that nothing needs, are listed and removed or left as ``build.remove_make_deps`` (ask / always / never) says; the removal is recorded in the history and can be undone
+   * - ``explain <pkg>``
+     - u3 after r3
+     - How ``recommend`` reached its answer, rule by rule (points, cap, source of each input), the score before and after the cap, and the alternatives that would change the score, verdict or confidence; ``--json`` has the same
+   * - ``override`` / ``divert`` / ``policy``
+     - u8 after r3
+     - Keep the mode and owner of a packaged file (``override``) or your own version of it (``divert``) across upgrades and reinstalls, by a pacman hook; a diversion freezes the file, so it asks first, records what it diverted from, warns after every transaction that changes the file, and shows in plans, ``list``, ``status`` and ``doctor`` as STALE; ``policy status`` / ``apply``
    * - ``self check``
      - u11
      - Read-only check of emrac's own installation (binary, how it was installed, config, history, journal, ledger helper); needs no pacman, network or root
@@ -278,8 +296,8 @@ here are not slippage, they are on schedule.
      - The preview shows packages, download size and installed-size delta, what the transaction will also remove (conflicts, replacements), provider choices and warnings, computed from freshly synced repositories, a plan id, an update risk (LOW/MEDIUM/HIGH with reasons) for an upgrade, and the pre-flight checks (disk space, ``/boot``, power, network, kernel safety net); ``impact`` adds the services and desktop entries a removal would take. No compile time
    * - 2
      - Explain Decisions
-     - Not started
-     - No ``explain`` command; no source/binary recommendation logic exists yet
+     - Partial
+     - ``emrac explain <pkg>`` (u3 after r3): every rule of the source-or-binary recommendation with its points, its cap and where its input came from, the total, and what would change the answer (the engine run again with one input changed). Only the source-or-binary decision is explained; plans and other decisions are not
    * - 3
      - Package Score
      - Not started

@@ -7,6 +7,26 @@ use crate::cli::AurReviewFlags;
 use crate::output;
 use crate::prompt::confirm_default_no;
 
+/// What to do with the packages a build installed only to build.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum RemoveTools {
+    /// List them and ask (never answered by `--yes`).
+    #[default]
+    Ask,
+    Always,
+    Never,
+}
+
+impl RemoveTools {
+    pub fn from_config(build: &BuildConfig) -> Self {
+        match build.remove_make_deps.as_str() {
+            "always" => Self::Always,
+            "never" => Self::Never,
+            _ => Self::Ask,
+        }
+    }
+}
+
 /// The safety switches that apply when an AUR package is built and installed.
 #[derive(Clone, Copy, Default)]
 pub struct BuildChoice {
@@ -22,6 +42,8 @@ pub struct BuildChoice {
     pub interactive: bool,
     /// Build again although a package file for this version exists.
     pub force: bool,
+    /// The build tools it leaves behind: ask, remove, or leave.
+    pub remove_tools: RemoveTools,
 }
 
 impl BuildChoice {
@@ -33,6 +55,7 @@ impl BuildChoice {
             no_sandbox: flags.no_sandbox,
             allow_network: flags.allow_network,
             force: false,
+            remove_tools: RemoveTools::from_config(build),
         }
     }
 }
@@ -133,6 +156,12 @@ pub fn build_with_retry(
 /// already confirmed the install.
 pub fn build_and_install(sources: &Sources, name: &str, choice: BuildChoice) -> Result<()> {
     let accept_risks = choice.accept_risks;
+    // What is installed before the build, to tell afterwards what the build added.
+    let before = if choice.remove_tools == RemoveTools::Never {
+        std::collections::HashSet::new()
+    } else {
+        sources.installed_names_set()
+    };
     let opts = build_options(sources, name, sources.predicts_network(name), choice)?;
     let files = build_with_retry(sources, name, opts)?;
 
@@ -180,5 +209,97 @@ pub fn build_and_install(sources: &Sources, name: &str, choice: BuildChoice) -> 
 
     sources.install_built(&files)?;
     sources.aur_trust_commit(name);
+    note_build(name, before, choice);
     Ok(())
+}
+
+/// What the builds of this run added, kept until the run's transactions are
+/// finished: the removal is a transaction of its own and cannot start inside
+/// another one (the journal allows one at a time).
+struct PendingTools {
+    /// Installed before the first build of this run.
+    before: std::collections::HashSet<String>,
+    built: Vec<String>,
+    mode: RemoveTools,
+    interactive: bool,
+}
+
+static PENDING_TOOLS: std::sync::Mutex<Option<PendingTools>> = std::sync::Mutex::new(None);
+
+/// Remembers that `name` was just built and installed.
+fn note_build(name: &str, before: std::collections::HashSet<String>, choice: BuildChoice) {
+    if choice.remove_tools == RemoveTools::Never {
+        return;
+    }
+    let mut pending = PENDING_TOOLS.lock().unwrap();
+    match pending.as_mut() {
+        // Several packages in one run: the earliest snapshot covers all of them.
+        Some(p) => p.built.push(name.to_string()),
+        None => {
+            *pending = Some(PendingTools {
+                before,
+                built: vec![name.to_string()],
+                mode: choice.remove_tools,
+                interactive: choice.interactive,
+            })
+        }
+    }
+}
+
+/// At the end of a run that built AUR packages: the packages the builds added
+/// as dependencies that nothing needs any more (compilers, `cmake`, ...). Asks,
+/// removes or says nothing, as `build.remove_make_deps` says. The removal is an
+/// ordinary `emrac remove` (plan, pre-flight, journal, history), and a problem
+/// with it never fails the run, which already worked.
+pub fn offer_build_tool_removal() {
+    let Some(pending) = PENDING_TOOLS.lock().unwrap().take() else {
+        return;
+    };
+    // A fresh `Sources`: the one the run used read pacman's database before
+    // the builds and does not know the packages they installed.
+    let Ok(sources) = Sources::init() else {
+        return;
+    };
+    let tools = sources.build_tools_since(&pending.before);
+    if tools.is_empty() {
+        return;
+    }
+    let names: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
+    let size: u64 = tools.iter().map(|t| t.size).sum();
+    let built = pending
+        .built
+        .iter()
+        .map(|b| format!("'{b}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    say!(
+        Voice::Notes,
+        "{} installed only to build {built}, and nothing needs {} now: {} ({}).",
+        if names.len() == 1 {
+            "1 package was".to_string()
+        } else {
+            format!("{} packages were", names.len())
+        },
+        if names.len() == 1 { "it" } else { "them" },
+        names.join(", "),
+        output::human_size(size)
+    );
+    let remove = match pending.mode {
+        RemoveTools::Always => true,
+        RemoveTools::Ask => pending.interactive && confirm_default_no("Remove them now?"),
+        RemoveTools::Never => false,
+    };
+    if !remove {
+        say!(
+            Voice::Suggests,
+            "to remove them: emrac remove {}   (`emrac config set build.remove_make_deps always` does it after every build)",
+            names.join(" ")
+        );
+        return;
+    }
+    if let Err(err) =
+        crate::commands::remove::run(&sources, &names, false, false, false, true, false, None)
+    {
+        say!(Voice::Warns, "couldn't remove the build tools: {err}");
+    }
 }

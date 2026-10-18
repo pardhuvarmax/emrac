@@ -188,4 +188,42 @@ mod tests {
             ]
         );
     }
+
+    /// Pairs observed from the installed `vercmp` (see research/vercmp.md).
+    /// `~` and `^` are plain separators in pacman, unlike dpkg and rpm.
+    #[test]
+    fn vercmp_matches_the_pacman_truth_table() {
+        use std::cmp::Ordering::{Equal, Greater, Less};
+        let table = [
+            ("1.0", "1.0", Equal),
+            ("1.0", "1.0-1", Equal),
+            ("1.0-1", "1.0-2", Less),
+            ("1.0-1", "1.0", Equal),
+            ("1:1.0", "2.0", Greater),
+            ("1:1.0", "0:2.0", Greater),
+            ("0:1.0", "1.0", Equal),
+            (":1.0", "1.0", Equal),
+            ("1.0a", "1.0", Less),
+            ("1.0a", "1.0b", Less),
+            ("1.0a", "1.0.1", Less),
+            ("1.0", "1.0.1", Less),
+            ("1.0alpha", "1.0", Less),
+            ("1.0rc1", "1.0", Less),
+            ("1.0~rc1", "1.0", Greater),
+            ("1.0~rc1", "1.0~rc2", Less),
+            ("1.0^git1", "1.0", Greater),
+            ("1.0^git1", "1.0.git1", Equal),
+            ("1.0_1", "1.0.1", Equal),
+            ("1.0+1", "1.0.1", Equal),
+            ("1.01", "1.1", Equal),
+            ("1.0", "1.00", Equal),
+            ("1.10", "1.9", Greater),
+            ("a", "1", Less),
+            ("1", "a", Greater),
+            ("1.0.", "1.0", Greater),
+        ];
+        for (a, b, want) in table {
+            assert_eq!(vercmp(a, b), want, "vercmp({a:?}, {b:?})");
+        }
+    }
 }

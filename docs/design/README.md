@@ -9,3 +9,8 @@ Design documents that settle how a part of emrac works before or while it is bui
 - [`trust.md`](./trust.md) — AUR trust signals, the Arch news gate, update risk and the after-upgrade report, pacman database backups, repository trust.
 - [`releasing.md`](./releasing.md) — how a small update is published (`dev/release.sh`) and received (`self sync`, `self news`, `self upgrade`), what makes a release an update, the limits.
 - [`recommend.md`](./recommend.md) — `emrac recommend`: source or binary from stated rules, the inputs, the score and the constants.
+- [`hook-preview.md`](./hook-preview.md) — the pacman hooks a plan will run, in order, which would stop the transaction, and what the preview cannot know.
+- [`local-file-policy.md`](./local-file-policy.md) — `override` and `divert`: mode and owner, or your own version of a packaged file, kept across upgrades; the risk of a frozen file and the guards.
+- [`build-tools.md`](./build-tools.md) — the packages an AUR build installed only to build, how emrac tells them from the rest, and why the offer comes at the end of the run.
+- [`reconcile.md`](./reconcile.md) — what pacman leaves behind when a transaction fails (a package recorded with files missing), how emrac finds it, what it does not cover.
+- [`config-preview.md`](./config-preview.md) — the config files a plan leaves as `.pacnew` or `.pacsave`: pacman's three-way rule as observed, what is certain and what is a maybe.

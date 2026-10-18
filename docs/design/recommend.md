@@ -56,6 +56,8 @@ The score is the Source Suitability Score, 0 to 100. It starts at **50**.
 Verdict: **65 or more: source; 35 or less: binary; in between: either** (the binary is the default
 if a command ever has to choose). The dependency tree is shown as a note, not scored.
 
+`emrac explain <pkg>` shows all of this at once: every rule with its points, its cap and the source of its input, the total before and after the cap, and *what would change this* (below). It reads the same `evaluate` result; nothing is computed twice.
+
 The gain is a possibility, not a measurement: it says the local build *can* use instructions the
 repository's generic build cannot. `emrac benchmark` (u6) is what will measure it.
 
@@ -93,3 +95,36 @@ An estimate from size cannot know that a small Rust program pulls in hundreds of
 the floors exist and why a measured build replaces the estimate at once. Official packages have no
 `makedepends` in the sync database, so their toolchain is a guess from the dependencies. The update
 rate counts only what emrac itself did. None of this reads the package's own PKGBUILD yet.
+
+## `emrac explain`
+
+`emrac explain <pkg>` (u3, [`../plan/r3/u3-explain.md`](../plan/r3/u3-explain.md)) prints the reasoning behind `recommend` (real output, on a machine with `-march=native` in `makepkg.conf`):
+
+```
+Recommendation for ripgrep: source    confidence: medium — the build time is only estimated, but the verdict is the same at half and at double the estimate
+
+  ✓ start                                   50
+  ✓ your flags target this CPU             +25
+      your makepkg flags target native: a local build can use instructions the repository's generic build cannot (a possible gain, not a measured one; `emrac benchmark` will measure it)
+      from: CFLAGS `-march=native -mtune=native -O2 -pipe -fno-plt -fexceptions -Wp,-D_FORTIFY_SOURCE=3 -Wforma…
+  ✓ build time                               0
+      a build here takes about 45 s, between 22 s and 2 min (estimated: its dependencies say only that it is a native program (C, Rust or Go))
+      from: its dependencies say only that it is a native program (C, Rust or Go), 24 cores
+  ✗ official binary is signed               -5
+      the official binary is signed by Arch's keys; a source build is as trusted as its audit
+      from: the package comes from an official repository
+
+  Score 70 of 100 → source (65 or more)
+  Note: 3 direct and 13 transitive dependencies
+
+What would change this (the engine run again with only that changed):
+  - `-O3` in makepkg.conf: the score would be 75 (source)
+  - three builds of this package measured here: the confidence would be high
+```
+
+Every rule that applied is listed, in the order the engine applied it; ✓ marks a rule that adds or is neutral, ✗ one that
+costs points or caps the score. **What would change this** is not a second set of rules: for each input that is not at its
+best, a copy of the facts with that one input changed goes through `evaluate`, and only the changes that alter the score, the
+verdict or the confidence are shown (so `-O3` is not offered while the cap holds the score where it is). The alternatives are
+`-march=native`, `-O3`, a quick build, a package that changes rarely, enough memory and disk, and three measured builds.
+`--json` carries the facts, the rules and the alternatives. `emrac recommend` ends its list with a pointer to `explain`.

@@ -137,6 +137,10 @@ pub enum Error {
     #[error("{0}")]
     Recommend(String),
 
+    /// A problem with the local file policy (`override`, `divert`).
+    #[error("{0}")]
+    Policy(String),
+
     /// The backup or check of pacman's own database failed.
     #[error("{0}")]
     PacmanDb(String),
@@ -378,6 +382,7 @@ impl Error {
             | Error::PlanChanged(_)
             | Error::Rebuild(_)
             | Error::Recommend(_)
+            | Error::Policy(_)
             | Error::News(_)
             | Error::PacmanDb(_)
             | Error::NoTransactionToRollBack

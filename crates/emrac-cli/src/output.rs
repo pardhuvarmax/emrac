@@ -1,3 +1,7 @@
+use emrac_core::config_preview::{ConfigPreview, Effect};
+use emrac_core::hooks::{HookPreview, When};
+use emrac_core::plan_preview::PlanPreview;
+use emrac_core::policy_preview::{Effect as PolicyEffectKind, PolicyPreview};
 use emrac_core::{say, Voice};
 use std::collections::HashMap;
 use std::io::Write;
@@ -77,10 +81,22 @@ pub fn print_package_details(pkg: &PackageDetails, json: bool) {
 }
 
 pub fn print_plan(plan: &Plan, json: bool) {
+    print_plan_with_preview(plan, &PlanPreview::default(), json);
+}
+
+/// The plan, then what it will do beyond its packages (`Sources::preview`):
+/// the pacman hooks it runs and the config files it leaves beside your edits.
+/// None of that is part of the plan or its id: it depends on the system.
+pub fn print_plan_with_preview(plan: &Plan, preview: &PlanPreview, json: bool) {
     if json {
         // The plan, plus its digest: `--expect-plan <digest>` runs exactly this.
         let mut value = serde_json::to_value(plan).unwrap();
         value["digest"] = serde_json::Value::String(plan.digest());
+        if let serde_json::Value::Object(extra) = serde_json::to_value(preview).unwrap() {
+            for (key, part) in extra {
+                value[key] = part;
+            }
+        }
         println!("{}", serde_json::to_string_pretty(&value).unwrap());
         return;
     }
@@ -147,6 +163,9 @@ pub fn print_plan(plan: &Plan, json: bool) {
     for warning in &plan.warnings {
         say!(Voice::Warns, "{warning}");
     }
+    print_config_effects(&preview.config);
+    print_policy(&preview.policy);
+    print_hooks(&preview.hooks);
 
     if plan.total_download_size > 0 {
         println!(
@@ -169,6 +188,109 @@ pub fn print_plan(plan: &Plan, json: bool) {
         plan.short_digest(),
         plan.short_digest()
     );
+}
+
+/// The config files you changed that this plan will leave beside your edits.
+fn print_config_effects(config: &ConfigPreview) {
+    if config.effects.is_empty() {
+        return;
+    }
+    println!("Config files you changed that this plan touches:");
+    for e in &config.effects {
+        let what = match e.effect {
+            Effect::Pacnew => "the new version will be written as <file>.pacnew; yours stays",
+            Effect::MaybePacnew => "may get a <file>.pacnew; yours stays",
+            Effect::Pacsave => "will be kept as <file>.pacsave",
+            Effect::MaybePacsave => "may be kept as <file>.pacsave",
+        };
+        println!("  {}  {}  {what} ({})", e.package, e.path, e.reason);
+    }
+    println!("  `emrac pacnew` helps with them afterwards.");
+    println!();
+}
+
+/// Your overrides and diversions that this plan's packages touch. A diversion
+/// the new package changes is a warning: those changes will not take effect.
+fn print_policy(policy: &PolicyPreview) {
+    if policy.effects.is_empty() {
+        return;
+    }
+    println!("Your local file policy that this plan touches:");
+    for e in &policy.effects {
+        println!("  {} {}  ({})  {}", e.kind, e.path, e.package, e.text);
+    }
+    println!();
+    for e in policy.missed_changes() {
+        if e.effect == PolicyEffectKind::DivertMissesChanges {
+            say!(
+                Voice::Warns,
+                "{}: the package changes a file you diverted; the change will not be in use (`emrac divert diff {}` after the upgrade, then merge it, `emrac divert reviewed`, or `emrac divert remove` first)",
+                e.package,
+                e.path
+            );
+        }
+    }
+    if let Some(problem) = &policy.hook_problem {
+        say!(
+            Voice::Warns,
+            "{problem}: the policy above will NOT be re-applied after this transaction (`emrac policy apply` sets it right)"
+        );
+    }
+}
+
+/// The hooks of a plan, before the transaction and after it, each in the
+/// order pacman runs it; then what would go wrong.
+fn print_hooks(hooks: &HookPreview) {
+    if !hooks.hooks.is_empty() {
+        println!("Hooks pacman will run ({}):", hooks.hooks.len());
+        for hook in &hooks.hooks {
+            let when = match hook.when {
+                When::Pre => "before",
+                When::Post => "after ",
+            };
+            let name = hook.file.strip_suffix(".hook").unwrap_or(&hook.file);
+            let what = hook.description.as_deref().unwrap_or(&hook.exec);
+            let mut marks = String::new();
+            if hook.abort_on_fail {
+                marks.push_str("  [stops the transaction if it fails]");
+            }
+            println!("  {when} {name}  {what}{marks}");
+        }
+        println!();
+    }
+    for hook in hooks.hooks.iter().filter(|h| !h.missing_depends.is_empty()) {
+        let consequence = if hook.would_abort() {
+            "pacman will stop the transaction"
+        } else {
+            "pacman reports it as failed and goes on"
+        };
+        say!(
+            Voice::Warns,
+            "hook {} needs {}, which is not installed: {consequence}",
+            hook.file,
+            hook.missing_depends.join(", ")
+        );
+    }
+    if !hooks.unchecked.is_empty() {
+        say!(
+            Voice::Notes,
+            "hooks that watch files could not be checked for {} (no file list: `pacman -Fy` fetches them)",
+            hooks.unchecked.join(", ")
+        );
+    }
+    if !hooks.shipped.is_empty() {
+        say!(
+            Voice::Notes,
+            "packages in this plan bring hooks of their own, which also run afterwards: {}",
+            hooks.shipped.join(", ")
+        );
+    }
+    for (file, why) in &hooks.unusable {
+        say!(
+            Voice::Warns,
+            "hook {file} is unusable and pacman will refuse it: {why}"
+        );
+    }
 }
 
 pub fn print_pkgbuild(pkg: &str, content: &str) {
@@ -233,6 +355,9 @@ pub fn print_verify(report: &VerifyReport, json: bool) {
         }
         for path in &pkg.modified_config {
             println!("    config edited      {path}");
+        }
+        for path in &pkg.by_policy {
+            println!("    by your policy     {path}");
         }
     }
 

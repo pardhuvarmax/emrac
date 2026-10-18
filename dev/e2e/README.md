@@ -15,4 +15,12 @@ dev/e2e/run.sh
 
 `dev/e2e/run.sh self` runs [`self-upgrade.sh`](./self-upgrade.sh): it builds a 0.8.0 and a 0.9.0 release from the committed source, installs 0.8.0 as a real package, then checks `self sync`, a tampered tarball refused, an upgrade killed half way, a real `self upgrade` to 0.9.0 and a real `self downgrade` back, then the same on a copy placed by hand in `~/.local/bin` (updated in place, the old file kept; it compiles emrac three times, so it takes several minutes).
 
+`dev/e2e/run.sh preview` runs [`preview.sh`](./preview.sh) as root: what emrac says a plan will do beyond its packages is compared with what pacman then does. Probe hooks are placed next to the system ones and the hooks emrac lists are compared, pass by pass and in order, with the ones pacman runs for an install, a removal and a full upgrade; a small local repository with real `backup=` files shows which config files become `.pacnew` or `.pacsave`.
+
+`dev/e2e/run.sh recovery` runs [`recovery.sh`](./recovery.sh) as root: pacman is made to fail the way a full disk does in the middle of an install (strace fault injection), then emrac must notice the package pacman still lists with a file missing, name the command that mends it, and that command must mend it.
+
+`dev/e2e/run.sh buildtools` runs [`buildtools.sh`](./buildtools.sh) as the ordinary user: a local checkout posing as an AUR package has a build-only dependency and a runtime one; after the build emrac must offer to remove exactly what the build added and nothing needs, in each of the `build.remove_make_deps` modes.
+
+`dev/e2e/run.sh policy` runs [`policy.sh`](./policy.sh) as root: a small package is upgraded, reinstalled and removed by real pacman while an override and a diversion are set; it shows what pacman does without the policy, what survives with it, the refusals, the warnings about a frozen file, the untrusted-executable refusal, and the plan preview.
+
 Needs podman and network access, so CI does not run these. The check titles are listed in [`docs/tests/emrac-tests.rst`](../../docs/tests/emrac-tests.rst), which `dev/gen-tests-doc.sh` regenerates.

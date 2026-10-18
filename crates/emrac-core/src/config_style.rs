@@ -116,6 +116,7 @@ const SECTIONS: &[Section] = &[
             key("memory_percent", Kind::Number, "memory ceiling as a percentage of total RAM; swap is not allowed", "0 to 100; 0 turns the limit off"),
             key("max_tasks", Kind::Number, "most processes and threads a build may have", NUM),
             key("tmpfs_gib", Kind::Number, "size cap of the build's /tmp and $HOME, in GiB", NUM),
+            key("remove_make_deps", Kind::Text, "what to do with the packages an AUR build installed only to build (compilers, cmake, ...) once nothing needs them: ask lists them and asks, always removes them, never leaves them", "\"ask\" | \"always\" | \"never\""),
         ],
     },
     Section {
@@ -364,6 +365,7 @@ mod tests {
             ("build.memory_percent", "50"),
             ("build.max_tasks", "100"),
             ("build.tmpfs_gib", "2"),
+            ("build.remove_make_deps", "never"),
             ("cache.policy", "lean"),
             ("cache.keep_days", "3"),
             ("safety.preflight", "warn"),
@@ -379,7 +381,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 26, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 27, "{text}");
     }
 
     #[test]

@@ -1,3 +1,4 @@
+use emrac_core::reconcile;
 use emrac_core::{say, Voice};
 use std::collections::HashMap;
 
@@ -489,6 +490,19 @@ fn log_step(plan: &Plan, outcome: &Result<()>, rollback_of: Option<&str>) {
         Ok(_) => super::ledger::sync_after(),
         Err(err) => say!(Voice::Warns, "couldn't record this in your history — {err}"),
     }
+    if outcome.is_err() {
+        report_damage(plan);
+    }
+}
+
+/// After a transaction that failed or was cut off: the packages it named that
+/// pacman still lists although files are missing, and the command that mends
+/// each. pacman does not say; the package just misbehaves later.
+fn report_damage(plan: &Plan) {
+    for damaged in reconcile::after_failure(plan) {
+        say!(Voice::Warns, "{}", damaged.headline());
+        say!(Voice::Suggests, "to mend it: {}", damaged.fix());
+    }
 }
 
 /// Starts the journal for a transaction that is about to run. A cut-off
@@ -601,6 +615,7 @@ fn recover_found(found: journal::Interrupted, dry_run: bool, json: bool) -> Resu
     match History::record_interrupted(&entry, &assessment) {
         Ok(record) => {
             super::ledger::sync_after();
+            report_damage(&entry.plan());
             if !json {
                 say!(
                     Voice::Remembers,

@@ -23,7 +23,7 @@ pub fn run(
     expect_plan: Option<&str>,
 ) -> Result<()> {
     let plan = sources.plan_install(pkgs, offline)?;
-    output::print_plan(&plan, json);
+    output::print_plan_with_preview(&plan, &sources.preview(&plan), json);
     crate::commands::plan_check::expect(&plan, expect_plan)?;
     let shown = crate::commands::plan_check::Shown::new(&plan);
 

@@ -9,7 +9,9 @@ use alpm::{Alpm, PrepareData, Question, SigLevel, TransFlag};
 
 use crate::deps::{DepEntry, Orphan};
 use crate::error::{Error, Result};
+use crate::hooks::{Operation, PackageFact};
 use crate::package::{PackageDetails, PackageSummary};
+use crate::plan::{Plan, PlanAction};
 use crate::purge::{classify, ConfigFile, Observed};
 use crate::snapshot::SnapshotPackage;
 use crate::verify::{self, PackageReport};
@@ -624,6 +626,254 @@ impl AlpmBackend {
         ))
     }
 
+    /// The hook directories in priority order, lowest first: pacman's own
+    /// (`/usr/share/libalpm/hooks`), then the `HookDir` entries of
+    /// `pacman.conf`, a later one replacing an earlier one.
+    pub fn hook_dirs() -> Result<Vec<std::path::PathBuf>> {
+        let mut dirs = vec![std::path::PathBuf::from("/usr/share/libalpm/hooks")];
+        for dir in pacman_conf_list("HookDir")? {
+            dirs.push(std::path::PathBuf::from(dir));
+        }
+        Ok(dirs)
+    }
+
+    /// What `plan` does to each package, with the files libalpm knows: the
+    /// local database for what is installed (what a removal takes off, what an
+    /// upgrade replaces) and the repositories' file lists for what is coming
+    /// (only present after `pacman -Fy`; otherwise `None`, never a guess).
+    pub fn hook_facts(&self, plan: &Plan) -> Vec<PackageFact> {
+        let local = self.handle.localdb();
+        let files_of = |pkg: &alpm::Package| -> Vec<String> {
+            pkg.files()
+                .files()
+                .iter()
+                .map(|f| String::from_utf8_lossy(f.name()).into_owned())
+                .collect()
+        };
+        let mut facts = Vec::new();
+        let removing = matches!(plan.action, PlanAction::Remove | PlanAction::Purge);
+        let file_lists = if removing {
+            None
+        } else {
+            Self::file_list_handle()
+        };
+        for planned in &plan.packages {
+            let installed = local.pkg(planned.name.as_str()).ok();
+            if removing {
+                facts.push(PackageFact {
+                    name: planned.name.clone(),
+                    operation: Operation::Remove,
+                    files: installed.map(files_of),
+                    old_files: Vec::new(),
+                });
+                continue;
+            }
+            let incoming = file_lists
+                .as_ref()
+                .and_then(|h| h.syncdbs().iter().find(|db| db.name() == planned.repo))
+                .and_then(|db| db.pkg(planned.name.as_str()).ok())
+                .map(files_of)
+                .filter(|files| !files.is_empty());
+            facts.push(PackageFact {
+                name: planned.name.clone(),
+                operation: if installed.is_some() {
+                    Operation::Upgrade
+                } else {
+                    Operation::Install
+                },
+                files: incoming,
+                old_files: installed.map(files_of).unwrap_or_default(),
+            });
+        }
+        // Packages pacman removes on the side (conflicts, replacements).
+        for removal in &plan.removals {
+            if let Ok(pkg) = local.pkg(removal.name.as_str()) {
+                facts.push(PackageFact {
+                    name: removal.name.clone(),
+                    operation: Operation::Remove,
+                    files: Some(files_of(pkg)),
+                    old_files: Vec::new(),
+                });
+            }
+        }
+        facts
+    }
+
+    /// A handle that reads the repositories' file lists (`<repo>.files`, what
+    /// `pacman -Fy` downloads) the way `pacman -F` does, by naming that
+    /// extension before the databases are registered. `None` when pacman's
+    /// configuration cannot be read.
+    fn file_list_handle() -> Option<Alpm> {
+        let root = pacman_conf("RootDir").ok()?;
+        let db_path = pacman_conf("DBPath").ok()?;
+        let mut handle = Alpm::new(root, db_path).ok()?;
+        handle.set_dbext(".files");
+        for repo in pacman_conf_list("--repo-list").ok()? {
+            handle.register_syncdb(repo, SigLevel::USE_DEFAULT).ok()?;
+        }
+        Some(handle)
+    }
+
+    /// The config files (`backup=()`) of the packages a plan upgrades or
+    /// removes, each looked at on disk, with what is known about the new
+    /// version: its file list, from the repositories' `.files` databases.
+    pub fn config_inputs(&self, plan: &Plan) -> Vec<ConfigInput> {
+        if plan.action == PlanAction::Purge {
+            // `purge` shows its own list of what it discards.
+            return Vec::new();
+        }
+        let root = self.handle.root().to_string();
+        let local = self.handle.localdb();
+        let removing = plan.action == PlanAction::Remove;
+        let file_lists = if removing {
+            None
+        } else {
+            Self::file_list_handle()
+        };
+        let mut out = Vec::new();
+        let mut take = |name: &str, new_version: Option<&str>, repo: Option<&str>| {
+            let Ok(pkg) = local.pkg(name) else {
+                return;
+            };
+            let new_files: Option<Vec<String>> = repo.and_then(|repo| {
+                let handle = file_lists.as_ref()?;
+                let db = handle.syncdbs().iter().find(|db| db.name() == repo)?;
+                let files: Vec<String> = db
+                    .pkg(name)
+                    .ok()?
+                    .files()
+                    .files()
+                    .iter()
+                    .map(|f| String::from_utf8_lossy(f.name()).into_owned())
+                    .collect();
+                (!files.is_empty()).then_some(files)
+            });
+            for backup in pkg.backup() {
+                out.push(ConfigInput {
+                    package: name.to_string(),
+                    rel: backup.name().to_string(),
+                    path: Path::new(&root).join(backup.name()).display().to_string(),
+                    original: backup.hash().to_string(),
+                    observed: observe(&root, backup.name()),
+                    new_version: new_version.map(str::to_string),
+                    new_files: new_files.clone(),
+                });
+            }
+        };
+        for planned in &plan.packages {
+            if removing {
+                take(&planned.name, None, None);
+            } else {
+                take(&planned.name, Some(&planned.version), Some(&planned.repo));
+            }
+        }
+        for removal in &plan.removals {
+            take(&removal.name, None, None);
+        }
+        out
+    }
+
+    /// The root pacman installs into (`/` on a normal system).
+    pub fn root(&self) -> String {
+        self.handle.root().to_string()
+    }
+
+    /// What pacman's database says an installed package consists of: its
+    /// version, its files (directories with a trailing `/`) and which of them
+    /// are `backup=()` config files. `None` when it is not installed.
+    pub fn recorded_files(&self, name: &str) -> Option<RecordedFiles> {
+        let pkg = self.handle.localdb().pkg(name).ok()?;
+        Some(RecordedFiles {
+            version: pkg.version().to_string(),
+            files: pkg
+                .files()
+                .files()
+                .iter()
+                .map(|f| String::from_utf8_lossy(f.name()).into_owned())
+                .collect(),
+            backup: pkg.backup().iter().map(|b| b.name().to_string()).collect(),
+        })
+    }
+
+    /// Packages that are installed now, were not in `before`, and were installed
+    /// as dependencies, each with the installed packages that still need it.
+    pub(crate) fn new_dependencies_since(
+        &self,
+        before: &HashSet<String>,
+    ) -> Vec<crate::build_tools::NewDependency> {
+        self.handle
+            .localdb()
+            .pkgs()
+            .into_iter()
+            .filter(|p| !before.contains(p.name()))
+            .filter(|p| p.reason() == alpm::PackageReason::Depend)
+            .map(|p| crate::build_tools::NewDependency {
+                name: p.name().to_string(),
+                version: p.version().to_string(),
+                size: p.isize().max(0) as u64,
+                dependents: p
+                    .required_by()
+                    .iter()
+                    .chain(p.optional_for().iter())
+                    .map(str::to_string)
+                    .collect(),
+            })
+            .collect()
+    }
+
+    /// What pacman's database says about the file at `rel` (no leading `/`): the
+    /// package that owns it, whether it is a `backup=()` file, and what the
+    /// package's `mtree` records for it.
+    pub fn file_record(&self, rel: &str) -> Option<FileRecord> {
+        let local = self.handle.localdb();
+        let pkg = local
+            .pkgs()
+            .into_iter()
+            .find(|p| p.files().contains(rel).is_some())?;
+        let backup = pkg.backup().iter().any(|b| b.name() == rel);
+        let version = pkg.version().to_string();
+        let mtree_path = verify::mtree_path(self.handle.dbpath(), pkg.name(), &version);
+        let entry = verify::read_mtree(&mtree_path).ok().and_then(|text| {
+            verify::parse_mtree(&text)
+                .into_iter()
+                .find(|e| e.path == rel)
+        });
+        Some(FileRecord {
+            package: pkg.name().to_string(),
+            version,
+            backup,
+            is_regular_file: entry
+                .as_ref()
+                .is_some_and(|e| e.kind == verify::EntryKind::File),
+            sha256: entry.and_then(|e| e.sha256),
+        })
+    }
+
+    /// The `NoUpgrade` patterns of `pacman.conf`, as paths without a leading `/`.
+    pub fn no_upgrade_patterns() -> Vec<String> {
+        pacman_conf_list("NoUpgrade")
+            .unwrap_or_default()
+            .into_iter()
+            .map(|p| p.trim_start_matches('/').to_string())
+            .collect()
+    }
+
+    /// Whether `dep` (a package name, maybe with a version) is provided by an
+    /// installed package or by one of the packages coming with this plan.
+    pub fn hook_dependency_met(&self, dep: &str, coming: &[String]) -> bool {
+        let name = dep.split(['<', '>', '=']).next().unwrap_or(dep);
+        coming.iter().any(|c| c == name)
+            || self.handle.localdb().pkgs().find_satisfier(dep).is_some()
+    }
+
+    /// Whether `path` (relative to the root, no leading `/`) is on the system.
+    pub fn root_has(&self, path: &str) -> bool {
+        Path::new(self.handle.root())
+            .join(path)
+            .symlink_metadata()
+            .is_ok()
+    }
+
     /// The currently installed version of `name`, if it is installed.
     pub fn installed_version(&self, name: &str) -> Option<String> {
         self.handle
@@ -932,6 +1182,40 @@ pub enum InstalledSource {
 /// naive string comparison).
 pub fn version_is_newer(current: &str, candidate: &str) -> bool {
     alpm::vercmp(candidate, current) == std::cmp::Ordering::Greater
+}
+
+/// One installed file as pacman's database records it.
+pub struct FileRecord {
+    pub package: String,
+    pub version: String,
+    pub backup: bool,
+    /// The package's `mtree` lists it as a regular file (not a link or directory).
+    pub is_regular_file: bool,
+    /// The sha256 recorded when the package was installed.
+    pub sha256: Option<String>,
+}
+
+/// An installed package as pacman's database records it.
+pub struct RecordedFiles {
+    pub version: String,
+    pub files: Vec<String>,
+    pub backup: Vec<String>,
+}
+
+/// One config file of a package a plan upgrades or removes.
+pub struct ConfigInput {
+    pub package: String,
+    /// Relative to the root, as pacman records it.
+    pub rel: String,
+    /// The live path.
+    pub path: String,
+    /// The md5 recorded when the installed version was installed.
+    pub original: String,
+    pub observed: Observed,
+    /// The version the plan installs; `None` for a removal.
+    pub new_version: Option<String>,
+    /// Every file of the new version, if the repositories' file lists are there.
+    pub new_files: Option<Vec<String>>,
 }
 
 /// Looks at `rel` (a path relative to the root, as pacman records it).

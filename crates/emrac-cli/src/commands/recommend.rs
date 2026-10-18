@@ -135,7 +135,11 @@ pub fn print_report(facts: &Facts, report: &Report, view: View) {
             println!("    - {} ({pts})", r.text);
         }
         if shown.len() > 3 {
-            println!("    ... {} more", shown.len() - 3);
+            println!(
+                "    ... {} more (`emrac explain {}` shows every rule and what would change the answer)",
+                shown.len() - 3,
+                report.name
+            );
         }
         if view != View::Both {
             println!(
