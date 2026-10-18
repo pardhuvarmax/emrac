@@ -145,6 +145,10 @@ pub enum Error {
     #[error("{0}")]
     PacmanDb(String),
 
+    /// A benchmark could not run or be stored.
+    #[error("{0}")]
+    Benchmark(String),
+
     #[error("'{0}' isn't a date I understand — use YYYY-MM-DD, like 2026-10-11")]
     InvalidDate(String),
 
@@ -385,6 +389,7 @@ impl Error {
             | Error::Policy(_)
             | Error::News(_)
             | Error::PacmanDb(_)
+            | Error::Benchmark(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

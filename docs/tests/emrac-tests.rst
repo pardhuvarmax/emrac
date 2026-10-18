@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 487
+     - 502
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 17
@@ -31,9 +31,9 @@ Totals
      - 31
    * - **Automated total**
      -
-     - **535**
+     - **550**
 
-emrac-core library (487)
+emrac-core library (502)
 ------------------------
 
 ``arch_news::tests`` (7)
@@ -149,6 +149,29 @@ emrac-core library (487)
 * ``non_interactive_takes_noconfirm_and_interactive_lets_pacman_ask``
 * ``the_default_is_the_old_non_interactive_behaviour``
 * ``the_rest_of_each_command_is_identical_either_way``
+
+``benchmark::tests`` (8)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_missing_program_is_an_error``
+* ``a_program_that_never_finishes_is_killed_and_no_time_is_invented``
+* ``a_program_that_rejects_the_flag_is_flagged_but_still_timed``
+* ``a_quick_program_gets_a_first_and_a_warm_time``
+* ``it_runs_in_an_empty_directory_with_closed_input``
+* ``only_executables_directly_in_the_bin_directories_are_runnable``
+* ``the_median_of_odd_even_and_no_values``
+* ``the_store_appends_caps_and_reads_back_by_package``
+
+``build_stats::tests`` (7)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``failed_builds_count_but_are_left_out_of_the_times``
+* ``nothing_recorded_gives_zeros_and_no_first_date``
+* ``only_failed_builds_have_no_average``
+* ``since_accepts_units_and_a_bare_number_of_days``
+* ``since_drops_older_records_from_both_sources``
+* ``the_most_built_list_is_ordered_and_cut``
+* ``transactions_are_split_by_kind_and_the_aur_share_is_counted``
 
 ``build_tools::tests`` (6)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -986,6 +1009,34 @@ nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 pa
 * a package that was installed before the build is not offered
 
 (9 checks.)
+
+End-to-end: statistics and benchmark (dev/e2e/stats.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``emrac stats`` reads a build-times file and the history; ``emrac benchmark``
+runs the programs of an installed package after asking: ``dev/e2e/run.sh stats``.
+Last full run: after u9, 18 of 18 passed.
+
+* stats with nothing recorded says so
+* all time counts 4 builds, 1 failed, 3 packages
+* --since 30d leaves the old build out
+* the average leaves the failed build out
+* the most built package is listed with its count
+* stats --json is valid JSON
+* it says no saved-hours figure is invented
+* a bad period is refused
+* benchmark without an answer runs nothing
+* benchmark lists what it will run before it runs it
+* benchmark --yes measures a program of the package
+* the result is kept and shown by --history
+* benchmark --json gives the record
+* a package with no programs is refused
+* an executable the package does not have is refused
+* a package that is not installed is refused
+* --runs 0 is refused
+* stats still reads the history after these
+
+(18 checks.)
 
 End-to-end: override and divert against pacman (dev/e2e/policy.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

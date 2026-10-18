@@ -387,9 +387,9 @@ Signature & Advanced Features
      - ``docs/feats/SPEC.md`` IV.6
    * - 7
      - Build Benchmark
-     - Not started
-     - Nothing built yet.
-     - ``docs/feats/SPEC.md`` IV.7
+     - Partial
+     - ``emrac benchmark <pkg>`` runs the package's programs with ``--version`` (after asking) and records the first run, the warm median, the executable size and a memory figure when it is above the launcher floor. CPU time, a cold-cache run and feeding the results to ``recommend`` are not built
+     - ``docs/feats/SPEC.md`` IV.7; ``docs/plan/r3/u9-stats-benchmark.md``
    * - 8
      - Build Cache Explorer
      - Partial
@@ -442,9 +442,9 @@ Signature & Advanced Features
      - ``docs/feats/SPEC.md`` IV.17; ``docs/plan/r1/u13-pin.md``
    * - 18
      - Build Statistics
-     - Not started
-     - Nothing built yet.
-     - ``docs/feats/SPEC.md`` IV.18
+     - Partial
+     - ``emrac stats`` shows builds (count, failures, time, longest, most built) and transactions by kind with the AUR share. Hours and storage saved are not shown: emrac measures builds only, so they would be guesses
+     - ``docs/feats/SPEC.md`` IV.18; ``docs/plan/r3/u9-stats-benchmark.md``
    * - 19
      - Package Collections
      - Not started
@@ -537,7 +537,7 @@ Part V is the command surface of features covered above.
      - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
      - ``docs/feats/SPEC.md`` Part V
 
-Core scope: 59 tracked: 5 done, 30 partial, 24 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
+Core scope: 59 tracked: 5 done, 32 partial, 22 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
 
 Extended scope
 ----------------
@@ -1575,8 +1575,8 @@ Totals
      - Total
    * - Core
      - 5
-     - 30
-     - 24
+     - 32
+     - 22
      - 0
      - 59
    * - Extended
@@ -1593,8 +1593,8 @@ Totals
      - 77
    * - **All**
      - **35**
-     - **53**
-     - **32**
+     - **55**
+     - **30**
      - **151**
      - **271**
 

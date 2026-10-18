@@ -1238,6 +1238,34 @@ impl Sources {
             .unwrap_or_default()
     }
 
+    /// Build and transaction statistics for `emrac stats`.
+    pub fn stats(&self, since_secs: Option<u64>) -> crate::build_stats::Stats {
+        let history = History::all().unwrap_or_default();
+        crate::build_stats::compute(
+            &crate::recommend::read_builds(),
+            &history,
+            since_secs,
+            now(),
+        )
+    }
+
+    /// What `emrac benchmark` may run for an installed package: its version,
+    /// installed size and the executables it owns in `/usr/bin` and `/usr/sbin`.
+    pub fn benchmark_targets(&self, name: &str) -> Result<BenchmarkTargets> {
+        let alpm = AlpmBackend::init()?;
+        let recorded = alpm.recorded_files(name).ok_or_else(|| {
+            Error::Benchmark(format!(
+                "'{name}' isn't installed, so there is nothing to measure"
+            ))
+        })?;
+        let root = alpm.root();
+        Ok(BenchmarkTargets {
+            version: recorded.version.clone(),
+            installed_size: alpm.installed_size(name).unwrap_or(0),
+            executables: crate::benchmark::runnable(&recorded.files, std::path::Path::new(&root)),
+        })
+    }
+
     /// The tools a build left behind: packages installed since `before` as
     /// dependencies that nothing else needs (`docs/plan/r3/u7-build-tools.md`).
     /// Nothing is proposed when `before` is empty, because then nothing is
@@ -3468,4 +3496,12 @@ mod removal_tests {
             assert!(json.get(field).is_none(), "{field}: {json}");
         }
     }
+}
+
+/// The part of an installed package that `emrac benchmark` can run.
+#[derive(Debug, Clone)]
+pub struct BenchmarkTargets {
+    pub version: String,
+    pub installed_size: u64,
+    pub executables: Vec<std::path::PathBuf>,
 }

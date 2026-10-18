@@ -347,6 +347,32 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// What emrac has built and installed here, and how long builds took
+    Stats {
+        /// Only the last period: a number with m, h, d or w (for example 30d)
+        #[arg(long, value_name = "PERIOD")]
+        since: Option<String>,
+    },
+
+    /// Measure what an installed package costs to start (runs its programs
+    /// with `--version`, after asking)
+    Benchmark {
+        /// The installed package
+        pkg: String,
+
+        /// Only this executable of the package
+        #[arg(long, value_name = "NAME")]
+        exe: Option<String>,
+
+        /// Runs after the first one (1 to 50)
+        #[arg(long, default_value_t = 5)]
+        runs: u32,
+
+        /// Show earlier results for the package instead of running
+        #[arg(long)]
+        history: bool,
+    },
+
     /// How the recommendation for a package was reached, rule by rule, and
     /// what would change it
     Explain {

@@ -339,6 +339,7 @@ version = "0.3.0"
 dependencies = [
  "alpm",
  "flate2",
+ "libc",
  "serde",
  "serde_json",
  "sha2",

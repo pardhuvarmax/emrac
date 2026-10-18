@@ -2,6 +2,8 @@ pub mod arch_news;
 mod audit;
 pub mod aur_trust;
 mod backend;
+pub mod benchmark;
+pub mod build_stats;
 pub mod build_tools;
 mod cache;
 mod config;
@@ -89,8 +91,8 @@ pub use snapshot::{
     SnapshotStore,
 };
 pub use sources::{
-    audit_path, inspect_package, package_list_state, OfficialInspection, PackageList,
-    SearchResults, SearchScope, Sources, UpgradePlan,
+    audit_path, inspect_package, package_list_state, BenchmarkTargets, OfficialInspection,
+    PackageList, SearchResults, SearchScope, Sources, UpgradePlan,
 };
 pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};
 pub use voice::Voice;

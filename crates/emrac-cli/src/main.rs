@@ -355,6 +355,13 @@ fn run(cli: &Cli) -> Result<()> {
         } => commands::deps::impact(&sources, pkg, *install, *upgrade, offline, json),
         Commands::Cycles => commands::deps::cycles(&sources, json),
         Commands::Recommend { args } => commands::recommend::run(&sources, args, offline, json),
+        Commands::Stats { since } => commands::stats::run(&sources, since.as_deref(), json),
+        Commands::Benchmark {
+            pkg,
+            exe,
+            runs,
+            history,
+        } => commands::benchmark::run(&sources, pkg, exe.as_deref(), *runs, *history, yes, json),
         Commands::Explain { pkg } => commands::explain::run(&sources, pkg, offline, json),
         Commands::Report => commands::report::run(&sources, json),
         Commands::Snapshot { command } => {

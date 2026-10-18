@@ -20,7 +20,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | Section | Built | Partial | Specified | Idea | Research | Not planned | Total |
 |---|---|---|---|---|---|---|---|
 | 1. Built: what works today | 56 | 0 | 0 | 0 | 0 | 0 | 56 |
-| 2. The specification (SPEC.md): catalogue and signature features | 0 | 29 | 27 | 0 | 0 | 0 | 56 |
+| 2. The specification (SPEC.md): catalogue and signature features | 0 | 31 | 25 | 0 | 0 | 0 | 56 |
 | 3. Ideas from additions.md (A, B, C) | 13 | 8 | 0 | 18 | 0 | 0 | 39 |
 | 4. Ideas from ideas.md | 10 | 7 | 1 | 38 | 0 | 0 | 56 |
 | 5. Wandrover: cross-distribution package resolution | 0 | 0 | 0 | 9 | 0 | 0 | 9 |
@@ -31,7 +31,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
 | 11. Newer ideas (not yet in the other documents) | 0 | 1 | 0 | 26 | 0 | 0 | 27 |
 | 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **86** | **52** | **29** | **139** | **9** | **3** | **318** |
+| **All** | **86** | **54** | **27** | **139** | **9** | **3** | **318** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -147,7 +147,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | IV.4 Build Profiles with Inheritance | Specified | Profiles that extend other profiles. |  |
 | IV.5 Build Recipes | Specified | `recipe save\|apply`: a concrete, shareable snapshot of compiler, flags, environment, hooks, profile. |  |
 | IV.6 Build Diff | Partial | PKGBUILD diff on rebuild exists; `diff-build` (binary vs source runtime comparison) does not. |  |
-| IV.7 Build Benchmark | Specified | `benchmark <pkg>`: startup, RSS, CPU, size, cold/warm launch, stored for the engine. |  |
+| IV.7 Build Benchmark | Partial | `benchmark <pkg>` (u9): first run, warm median, size and memory above the launcher floor, stored in `benchmarks.jsonl`. No CPU time, no cold-cache run, not yet read by `recommend`. | `docs/plan/r3/u9-stats-benchmark.md` |
 | IV.8 Build Cache Explorer | Partial | Per-package sizes in `cache list`; no browsing or selective deletion by name. |  |
 | IV.9 Timeline | Specified | History grouped chronologically ("Yesterday: installed ..., rollback point created"). |  |
 | IV.10 Rollback Snapshots | Partial | Package-set snapshots and per-transaction rollback; no Btrfs/ZFS filesystem snapshots. |  |
@@ -158,7 +158,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | IV.15 Build Dashboard | Specified | Live compilation view; needs the TUI. |  |
 | IV.16 Health Center | Partial | `doctor` and `report`; not an interactive center. |  |
 | IV.17 Smart Updates | Partial | Pins with reason and expiry; no rule-based `smart-update` skip logic. |  |
-| IV.18 Build Statistics | Specified | Packages built, hours saved, average compile time. |  |
+| IV.18 Build Statistics | Partial | `stats` (u9): builds, failures, time, longest, most built; transactions by kind and the AUR share. Hours and storage saved are not shown: they would be guesses. | `docs/plan/r3/u9-stats-benchmark.md` |
 | IV.19 Package Collections | Specified | `collection install\|save\|export`: reusable bundles. |  |
 | IV.20 Workspace Mode | Specified | A workspace bundles a profile, repositories, collections and mirrors. |  |
 | IV+ Package Advisor | Specified | Warn before packages with unusually large dependency trees or disk impact. |  |

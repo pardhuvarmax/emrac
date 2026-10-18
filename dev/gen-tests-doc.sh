@@ -80,12 +80,15 @@ hk=dev/e2e/preview.sh
 rc=dev/e2e/recovery.sh
 bt=dev/e2e/buildtools.sh
 po=dev/e2e/policy.sh
+st=dev/e2e/stats.sh
 pre_run=$(sed -n 's/^# last full run: *//p' "$pre" | head -1)
 self_run=$(sed -n 's/^# last full run: *//p' "$selfup" | head -1)
 hk_run=$(sed -n 's/^# last full run: *//p' "$hk" | head -1)
 rc_run=$(sed -n 's/^# last full run: *//p' "$rc" | head -1)
 bt_run=$(sed -n 's/^# last full run: *//p' "$bt" | head -1)
 po_run=$(sed -n 's/^# last full run: *//p' "$po" | head -1)
+st_run=$(sed -n 's/^# last full run: *//p' "$st" | head -1)
+sed -n 's/^ck "\([^"]*\)".*/\1/p' "$st" >"$work/e2e_stats.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$po" >"$work/e2e_policy.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$bt" >"$work/e2e_buildtools.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$rc" >"$work/e2e_recovery.txt"
@@ -93,7 +96,7 @@ sed -n 's/^ck "\([^"]*\)".*/\1/p' "$hk" >"$work/e2e_hooks.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$pre" >"$work/e2e_pre.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$selfup" >"$work/e2e_self.txt"
 
-awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" -v hk_file="$work/e2e_hooks.txt" -v hk_run="$hk_run" -v rc_file="$work/e2e_recovery.txt" -v rc_run="$rc_run" -v bt_file="$work/e2e_buildtools.txt" -v bt_run="$bt_run" -v po_file="$work/e2e_policy.txt" -v po_run="$po_run" '
+awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" -v hk_file="$work/e2e_hooks.txt" -v hk_run="$hk_run" -v rc_file="$work/e2e_recovery.txt" -v rc_run="$rc_run" -v bt_file="$work/e2e_buildtools.txt" -v bt_run="$bt_run" -v po_file="$work/e2e_policy.txt" -v po_run="$po_run" -v st_file="$work/e2e_stats.txt" -v st_run="$st_run" '
     function rule(text, ch,   i, line) {
         line = ""
         for (i = 0; i < length(text); i++) line = line ch
@@ -223,6 +226,17 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work
         print ""
         print "(" n " checks.)"
         print ""
+        title("End-to-end: statistics and benchmark (dev/e2e/stats.sh)", "~")
+        print "``emrac stats`` reads a build-times file and the history; ``emrac benchmark``"
+        print "runs the programs of an installed package after asking: ``dev/e2e/run.sh stats``."
+        print "Last full run: " st_run "."
+        print ""
+        n = 0
+        while ((getline t < st_file) > 0) { n++; print "* " t }
+        close(st_file)
+        print ""
+        print "(" n " checks.)"
+        print ""
         title("End-to-end: override and divert against pacman (dev/e2e/policy.sh)", "~")
         print "A small package is upgraded, reinstalled and removed by real pacman while a"
         print "local file policy is set: ``dev/e2e/run.sh policy``. Last full run: " po_run "."
@@ -249,7 +263,7 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work
 case "$mode" in
 write)
     cp "$work/out.rst" "$target"
-    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") + $(wc -l <"$work/e2e_hooks.txt") + $(wc -l <"$work/e2e_recovery.txt") + $(wc -l <"$work/e2e_buildtools.txt") + $(wc -l <"$work/e2e_policy.txt") end-to-end checks)"
+    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") + $(wc -l <"$work/e2e_hooks.txt") + $(wc -l <"$work/e2e_recovery.txt") + $(wc -l <"$work/e2e_buildtools.txt") + $(wc -l <"$work/e2e_policy.txt") + $(wc -l <"$work/e2e_stats.txt") end-to-end checks)"
     ;;
 check)
     if ! diff -u "$target" "$work/out.rst" >"$work/diff.txt"; then

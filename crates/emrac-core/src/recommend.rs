@@ -1058,6 +1058,18 @@ pub fn record_build(name: &str, version: &str, secs: u64, ok: bool) {
     );
 }
 
+/// Every build the build-times file still holds, oldest first.
+pub fn read_builds() -> Vec<BuildTime> {
+    let Ok(path) = build_times_path() else {
+        return Vec::new();
+    };
+    fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| serde_json::from_str::<BuildTime>(l).ok())
+        .collect()
+}
+
 fn secs_for(path: &std::path::Path, name: &str, cores: u32) -> Vec<u64> {
     fs::read_to_string(path)
         .unwrap_or_default()

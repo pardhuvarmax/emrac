@@ -1,6 +1,7 @@
 pub mod audit;
 pub mod aur_install;
 pub mod aur_review;
+pub mod benchmark;
 pub mod build;
 pub mod cache;
 pub mod completion;
@@ -31,5 +32,6 @@ pub mod rollback;
 pub mod search;
 pub mod self_cmd;
 pub mod snapshot;
+pub mod stats;
 pub mod upgrade;
 pub mod verify;

@@ -795,6 +795,13 @@ impl AlpmBackend {
         })
     }
 
+    /// The installed size in bytes of an installed package; `None` when it is
+    /// not installed.
+    pub fn installed_size(&self, name: &str) -> Option<u64> {
+        let pkg = self.handle.localdb().pkg(name).ok()?;
+        Some(pkg.isize().max(0) as u64)
+    }
+
     /// Packages that are installed now, were not in `before`, and were installed
     /// as dependencies, each with the installed packages that still need it.
     pub(crate) fn new_dependencies_since(
