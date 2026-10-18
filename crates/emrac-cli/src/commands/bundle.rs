@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use emrac_core::bundle::{self, Change, ChangeKind, Manifest};
+use emrac_core::style::{Activity, Style};
 use emrac_core::{
     say, version_is_newer, Error, Plan, PlanAction, PlannedPackage, Result, Sources, Voice,
 };
@@ -61,7 +62,15 @@ fn load(dir: &Path) -> Result<(Manifest, Vec<String>)> {
 }
 
 pub fn verify(dir: &str, json: bool) -> Result<()> {
-    let (manifest, problems) = load(Path::new(dir))?;
+    let activity = Activity::spinner("checking the files of the bundle");
+    let loaded = load(Path::new(dir));
+    match &loaded {
+        Ok((m, p)) if p.is_empty() => {
+            activity.finish(&format!("checked {} packages", m.package.len()))
+        }
+        _ => activity.fail("the bundle did not check out"),
+    }
+    let (manifest, problems) = loaded?;
     if json {
         println!(
             "{}",
@@ -111,7 +120,15 @@ fn plan_of(changes: &[&Change], requested: &[String], action: PlanAction) -> Pla
 
 pub fn apply(sources: &Sources, dir: &str, dry_run: bool, yes: bool, json: bool) -> Result<()> {
     let dir_path = std::fs::canonicalize(dir).map_err(|e| io_err(Path::new(dir), e))?;
-    let (manifest, problems) = load(&dir_path)?;
+    let activity = Activity::spinner("checking the files of the bundle");
+    let loaded = load(&dir_path);
+    match &loaded {
+        Ok((m, p)) if p.is_empty() => {
+            activity.finish(&format!("checked {} packages", m.package.len()))
+        }
+        _ => activity.fail("the bundle did not check out"),
+    }
+    let (manifest, problems) = loaded?;
     if !problems.is_empty() {
         for p in &problems {
             say!(Voice::Warns, "{p}");
@@ -141,25 +158,30 @@ pub fn apply(sources: &Sources, dir: &str, dry_run: bool, yes: bool, json: bool)
             "Bundle from {} (emrac {})",
             manifest.meta.created, manifest.meta.emrac
         );
-        for c in &changes {
-            match c.kind {
-                ChangeKind::Install => println!("  install   {} {}", c.name, c.to),
-                ChangeKind::Upgrade => println!(
-                    "  upgrade   {} {} -> {}",
-                    c.name,
-                    c.from.as_deref().unwrap_or("?"),
-                    c.to
-                ),
-                ChangeKind::Same => println!(
-                    "  same      {} {} (already installed, skipped)",
-                    c.name, c.to
-                ),
-                ChangeKind::Older => println!(
-                    "  refused   {} {}: {} is installed, which is newer (never downgraded)",
-                    c.name,
-                    c.to,
-                    c.from.as_deref().unwrap_or("?")
-                ),
+        let st = Style::stdout();
+        if st.fancy {
+            print!("{}", crate::view::bundle_changes_view(&st, &changes));
+        } else {
+            for c in &changes {
+                match c.kind {
+                    ChangeKind::Install => println!("  install   {} {}", c.name, c.to),
+                    ChangeKind::Upgrade => println!(
+                        "  upgrade   {} {} -> {}",
+                        c.name,
+                        c.from.as_deref().unwrap_or("?"),
+                        c.to
+                    ),
+                    ChangeKind::Same => println!(
+                        "  same      {} {} (already installed, skipped)",
+                        c.name, c.to
+                    ),
+                    ChangeKind::Older => println!(
+                        "  refused   {} {}: {} is installed, which is newer (never downgraded)",
+                        c.name,
+                        c.to,
+                        c.from.as_deref().unwrap_or("?")
+                    ),
+                }
             }
         }
     }

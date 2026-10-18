@@ -33,6 +33,8 @@ pub struct BuildStats {
     pub longest: Option<(String, u64)>,
     /// Most built first, at most `TOP`.
     pub most_built: Vec<PackageBuilds>,
+    /// Seconds of the last successful builds, oldest first, at most `RECENT`.
+    pub recent_secs: Vec<u64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
@@ -61,6 +63,7 @@ pub struct Stats {
 }
 
 const TOP: usize = 5;
+const RECENT: usize = 16;
 
 /// `30d`, `12h`, `8w`, `90m` as seconds; a bare number is days.
 pub fn parse_since(text: &str) -> Option<u64> {
@@ -127,6 +130,10 @@ pub fn compute(
     most.sort_by(|a, b| b.builds.cmp(&a.builds).then_with(|| a.name.cmp(&b.name)));
     most.truncate(TOP);
     b.most_built = most;
+    let mut ok_builds: Vec<&&BuildTime> = builds.iter().filter(|b| b.ok).collect();
+    ok_builds.sort_by_key(|b| b.time);
+    let skip = ok_builds.len().saturating_sub(RECENT);
+    b.recent_secs = ok_builds.iter().skip(skip).map(|b| b.secs).collect();
 
     let mut t = TransactionStats::default();
     for r in &history {
@@ -284,6 +291,20 @@ mod tests {
         assert_eq!((t.installs, t.upgrades, t.removals, t.other), (1, 1, 1, 1));
         // only installs and upgrades count packages
         assert_eq!((t.aur_packages, t.repo_packages), (2, 3));
+    }
+
+    #[test]
+    fn the_recent_build_times_are_the_last_successful_ones_oldest_first() {
+        let mut b: Vec<BuildTime> = (1..=20).map(|i| build("a", i * 10, i, true)).collect();
+        b.push(build("x", 999, 25, false));
+        let s = compute(&b, &[], None, 100).builds;
+        assert_eq!(s.recent_secs.len(), 16);
+        assert_eq!(s.recent_secs[0], 50);
+        assert_eq!(
+            *s.recent_secs.last().unwrap(),
+            200,
+            "the failed one is not in it"
+        );
     }
 
     #[test]

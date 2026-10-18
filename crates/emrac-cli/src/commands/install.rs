@@ -1,3 +1,4 @@
+use emrac_core::style::Activity;
 use emrac_core::{say, Voice};
 use emrac_core::{Result, Sources};
 
@@ -22,8 +23,15 @@ pub fn run(
     allow_partial: bool,
     expect_plan: Option<&str>,
 ) -> Result<()> {
-    let plan = sources.plan_install(pkgs, offline)?;
-    output::print_plan_with_preview(&plan, &sources.preview(&plan), json);
+    let activity = Activity::spinner("working out the plan");
+    let planned = sources.plan_install(pkgs, offline);
+    let preview = planned.as_ref().ok().map(|p| sources.preview(p));
+    match &planned {
+        Ok(_) => activity.finish("worked out the plan"),
+        Err(_) => activity.fail("could not work out the plan"),
+    }
+    let plan = planned?;
+    output::print_plan_with_preview(&plan, &preview.unwrap_or_default(), json);
     crate::commands::plan_check::expect(&plan, expect_plan)?;
     let shown = crate::commands::plan_check::Shown::new(&plan);
 

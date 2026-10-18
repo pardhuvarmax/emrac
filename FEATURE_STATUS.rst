@@ -323,7 +323,7 @@ Complete Feature Catalog
    * - 18
      - Unified Interfaces
      - Partial
-     - CLI complete for the 5 MVP commands, ``--json``, ``--dry-run``, ``-y``; ``emrac completion bash|zsh|fish`` (static, no package-name completion); no TUI at all
+     - CLI complete for the 5 MVP commands, ``--json``, ``--dry-run``, ``-y``; ``emrac completion bash|zsh|fish`` (static, no package-name completion); no TUI at all. On a terminal (u17): marks, boxes, tables, bars, four themes, ASCII fallback and optional animations (``clui.animations``); ``emrac ui`` shows them
      - ``docs/feats/SPEC.md`` III.18; ``docs/plan/r1/u2-completion.md``
    * - 19
      - Configuration
@@ -1073,6 +1073,22 @@ Collected after the documents above; tracked in ``docs/feats/feats.md`` section 
      - Idea
      - Offer ``emrac pacnew resolve`` for the files the upgrade just created, using the u5 prediction.
      - ``docs/feats/feats.md``
+   * - Look and feel: marks, boxes, tables, bars, diffs (``style``)
+     - Done
+     - On a terminal: ``✔ ⚠ ✖ ●`` marks with words, plans in a box with a disk bar, aligned tables for history, snapshots, orphans, pins, timeline, stats, mirrors, benchmark and bundle changes, a tree with branches, coloured diffs and versions with the changed part picked out. Piped, ``--json`` and dumb terminals keep the plain text. (u17)
+     - ``docs/feats/feats.md``; ``docs/plan/r3/u17-cli-style.md``
+   * - ``[clui]`` settings and ``--color``
+     - Done
+     - ``clui.animations`` (``regular`` or ``active``), ``clui.color``, ``clui.unicode`` (UTF-8 locale by default, ASCII fallback), ``clui.theme`` (``default``, ``light``, ``mono``, ``high-contrast``; 16, 256 and true colour); ``--color auto|always|never``; ``NO_COLOR`` and ``CLICOLOR_FORCE`` honoured. (u17)
+     - ``docs/feats/feats.md``; ``docs/plan/r3/u17-cli-style.md``
+   * - Animations: spinner and progress bar (``clui.animations active``)
+     - Done
+     - While emrac itself is waiting (plans, search, info, doctor, news, mirror tests, benchmark, bundle checks): a spinner or an ``N of M`` bar on standard error, one result line left behind, the cursor always shown again (also after Ctrl-C). Off by default; never piped, in CI, on a dumb terminal, or with ``--json``/``--quiet``; never over pacman's or a build's own output. (u17)
+     - ``docs/feats/feats.md``; ``docs/plan/r3/u17-cli-style.md``
+   * - ``emrac ui`` (the gallery)
+     - Done
+     - Every element in the current terminal and theme; ``--theme`` previews another; ``--demo`` runs the animations once. (u17)
+     - ``docs/feats/feats.md``; ``docs/plan/r3/u17-cli-style.md``
 
 Package forensics (pkgforensics.md)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1158,7 +1174,7 @@ Self-management service (self-service-feat.md)
      - Phase 5: explicit target, compatibility check.
      - ``docs/feats/self-service-feat.md``; ``docs/plan/r2/u12-self-service.md``; ``docs/design/release-index.md``; ``docs/design/self-upgrade.md``
 
-Extended scope: 135 tracked: 28 done, 19 partial, 88 idea.
+Extended scope: 139 tracked: 32 done, 19 partial, 88 idea.
 
 Future scope
 --------------
@@ -1580,11 +1596,11 @@ Totals
      - 0
      - 59
    * - Extended
-     - 28
+     - 32
      - 19
      - 0
      - 88
-     - 135
+     - 139
    * - Future
      - 2
      - 5
@@ -1592,11 +1608,11 @@ Totals
      - 62
      - 77
    * - **All**
-     - **39**
+     - **43**
      - **57**
      - **25**
      - **150**
-     - **271**
+     - **275**
 
 Some features appear in more than one scope's list (soak time, the offline
 bundle, migration mode); each table counts its own rows. The core catalogue

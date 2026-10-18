@@ -38,5 +38,6 @@ pub mod self_cmd;
 pub mod snapshot;
 pub mod stats;
 pub mod timeline;
+pub mod ui;
 pub mod upgrade;
 pub mod verify;

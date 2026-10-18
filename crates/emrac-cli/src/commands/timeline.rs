@@ -1,6 +1,7 @@
 //! `emrac timeline` (u10): what happened to the system, day by day.
 
 use emrac_core::build_stats::parse_since;
+use emrac_core::style::{Role, Style};
 use emrac_core::timeline::{self, Filter};
 use emrac_core::{parse_date, Error, Result, Sources};
 
@@ -35,6 +36,15 @@ pub fn run(sources: &Sources, since: Option<&str>, pkg: Option<&str>, json: bool
             Some(p) => println!("Nothing recorded for {p} in the period ({since_text})."),
             None => println!("Nothing recorded in the period ({since_text})."),
         }
+        return Ok(());
+    }
+    let st = Style::stdout();
+    if st.fancy {
+        print!("{}", crate::view::timeline_view(&st, events, now));
+        println!(
+            "{}",
+            st.paint(Role::Dim, "Times are UTC. From emrac's own records: transactions, builds, snapshots and config file actions.")
+        );
         return Ok(());
     }
     for (label, day) in timeline::group(events, now) {

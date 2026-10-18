@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 562
+     - 595
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 25
+     - 43
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 32
    * - **Automated total**
      -
-     - **619**
+     - **670**
 
-emrac-core library (562)
+emrac-core library (595)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -182,7 +182,7 @@ emrac-core library (562)
 * ``at_most_three_newest_first_and_only_the_first_line_of_the_error``
 * ``no_failures_says_so``
 
-``build_stats::tests`` (7)
+``build_stats::tests`` (8)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``failed_builds_count_but_are_left_out_of_the_times``
@@ -191,6 +191,7 @@ emrac-core library (562)
 * ``since_accepts_units_and_a_bare_number_of_days``
 * ``since_drops_older_records_from_both_sources``
 * ``the_most_built_list_is_ordered_and_cut``
+* ``the_recent_build_times_are_the_last_successful_ones_oldest_first``
 * ``transactions_are_split_by_kind_and_the_aur_share_is_counted``
 
 ``build_tools::tests`` (6)
@@ -792,6 +793,42 @@ emrac-core library (562)
 * ``the_elf_reader_agrees_with_readelf_on_a_real_binary_and_a_library``
 * ``transaction_starts_are_found_in_the_log``
 
+``style::tests`` (32)
+~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_bar_is_filled_in_proportion_and_a_little_is_not_nothing``
+* ``a_box_has_a_title_and_lines_up_whatever_the_content``
+* ``a_box_never_exceeds_the_terminal``
+* ``a_coloured_table_strips_to_the_plain_one``
+* ``a_diff_line_keeps_its_sign``
+* ``a_heading_is_a_title_and_a_rule``
+* ``a_long_flexible_cell_is_cut_before_a_column_is_dropped``
+* ``a_sparkline_scales_to_the_biggest``
+* ``a_table_lines_its_columns_up``
+* ``a_table_much_narrower_than_its_content_does_not_panic``
+* ``a_table_that_is_too_wide_drops_the_least_important_column_first``
+* ``a_version_change_picks_out_what_changed``
+* ``an_activity_with_animations_off_draws_nothing_and_is_inactive``
+* ``animations_are_off_unless_active_on_a_terminal_and_not_in_ci``
+* ``character_widths_cover_ascii_combining_wide_and_emoji``
+* ``colour_depth_comes_from_colorterm_and_term``
+* ``colour_follows_the_terminal_the_variables_and_the_setting``
+* ``every_theme_styles_every_role_and_strips_to_the_same_text``
+* ``padding_counts_columns``
+* ``paint_does_nothing_without_colour_and_wraps_with_it``
+* ``rows_can_carry_notes_under_them``
+* ``strip_ansi_removes_only_sequences``
+* ``text_is_wrapped_at_spaces_by_columns``
+* ``the_activity_line_and_progress_bar_are_pure``
+* ``the_ascii_set_is_ascii_and_the_unicode_set_is_not``
+* ``the_layout_pieces_need_a_real_terminal``
+* ``the_width_comes_from_the_terminal_then_columns_then_80_and_is_bounded``
+* ``true_colour_uses_24_bit_codes_where_a_theme_has_them_and_never_in_mono``
+* ``truncation_counts_columns_and_ends_in_the_ellipsis``
+* ``typographic_punctuation_becomes_ascii_when_the_marks_are_ascii``
+* ``unicode_is_the_default_and_ascii_the_fallback``
+* ``warn_and_ok_and_problem_do_not_rely_on_red_against_green``
+
 ``timeline::tests`` (8)
 ~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -842,7 +879,7 @@ emrac-core library (562)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (25)
+emrac command line, unit tests (43)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -882,6 +919,13 @@ emrac command line, unit tests (25)
 * ``the_reasons_that_weigh_most_come_first_and_a_side_shows_only_its_own``
 * ``the_side_comes_before_the_package_and_only_two_words_are_sides``
 
+``commands::ui::tests`` (3)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``the_ascii_gallery_is_ascii``
+* ``the_gallery_says_what_regular_means``
+* ``the_gallery_shows_every_part_in_every_theme_and_fits_the_width``
+
 ``output::tests`` (3)
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -897,6 +941,25 @@ emrac command line, unit tests (25)
 * ``anything_else_is_no_even_when_the_default_is_yes``
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
+
+``view::tests`` (15)
+~~~~~~~~~~~~~~~~~~~~
+
+* ``a_long_check_summary_wraps_under_itself_and_never_runs_past_the_width``
+* ``a_plan_box_lines_up_and_marks_dependencies``
+* ``a_tree_has_branches_that_close_where_the_siblings_end``
+* ``an_upgrade_shows_the_old_and_new_version_with_the_change_picked_out``
+* ``ascii_checks_are_ascii_even_when_the_text_has_dashes``
+* ``checks_get_a_mark_a_title_column_and_their_details``
+* ``every_view_fits_a_narrow_terminal``
+* ``narrow_terminals_put_the_summary_under_the_title_and_wrap_the_fix``
+* ``snapshots_orphans_and_pins_are_tables``
+* ``the_benchmark_and_bundle_views``
+* ``the_build_view_shows_a_sparkline_and_a_table``
+* ``the_history_is_a_table_with_marks_and_notes_under_failures``
+* ``the_mirror_views_show_groups_and_a_speed_bar``
+* ``the_summary_has_the_sizes_a_bar_and_the_plan_id``
+* ``the_timeline_groups_by_day_with_a_glyph_for_each_kind``
 
 emrac command line, integration tests (32)
 ------------------------------------------
@@ -1110,6 +1173,63 @@ nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 pa
 * a package that was installed before the build is not offered
 
 (9 checks.)
+
+End-to-end: how emrac looks (dev/e2e/clui.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+emrac under a real pseudo-terminal and piped: marks, boxes, colour, themes, ASCII,
+width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: after u17, 48 of 48 passed.
+
+* the defaults: regular animations, auto colour and unicode, the default theme
+* a value that is not one of the words is refused
+* the config file has a [clui] section
+* doctor on a terminal has marks
+* doctor piped is the plain text it always was
+* a plan on a terminal is a box with a plan id line
+* a plan piped keeps the old lines
+* the disk line has a bar and the share of free space
+* history on a terminal is a table
+* the timeline on a terminal has day headings and glyphs
+* stats on a terminal has headings
+* mirrors on a terminal is a table
+* on a terminal there is colour
+* NO_COLOR removes the colour and keeps the layout
+* --color never removes the colour
+* --color always colours a pipe
+* CLICOLOR_FORCE colours a pipe
+* piped output has no colour
+* --json is plain, JSON, with no escapes
+* a dumb terminal gets plain text
+* true colour only when COLORTERM says so
+* the mono theme uses no colour codes
+* the light theme differs from the default
+* a non-UTF-8 locale gets ASCII only
+* and a box made of + and -
+* clui.unicode never forces ASCII on a UTF-8 terminal
+* the Linux console gets ASCII
+* COLUMNS narrows the layout
+* emrac ui shows every part on a terminal
+* emrac ui --theme previews a theme
+* emrac ui piped says it is plain text
+* emrac ui refuses an unknown theme
+* regular (the default) never hides the cursor
+* regular prints the old progress line
+* active hides the cursor, draws a spinner and shows the cursor again
+* active leaves one result line in the scrollback
+* active does not print the old progress line
+* active piped draws nothing
+* active under CI draws nothing
+* active on a dumb terminal draws nothing
+* active with --json draws nothing
+* active with --quiet draws nothing
+* the ASCII spinner is ASCII
+* Ctrl-C shows the cursor again
+* doctor with active animations shows the spinner result and then the report
+* emrac ui --demo runs both animations even when set to regular
+* the plan id of a plan does not depend on how it is shown
+* a real install on a terminal still works
+
+(48 checks.)
 
 End-to-end: Mirror Intelligence (dev/e2e/mirrors.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

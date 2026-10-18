@@ -20,6 +20,7 @@ podman build -t emrac-test -f dev/container/Containerfile dev/container
 # dev/e2e/run.sh recovery pacman fails mid-install (injected): what emrac finds and how it mends it
 # dev/e2e/run.sh buildtools an AUR build with a build-only dependency: what emrac offers to remove
 # dev/e2e/run.sh stats    emrac stats from a build-times file, emrac benchmark of an installed package
+# dev/e2e/run.sh clui     how emrac looks under a pseudo-terminal and piped: marks, colour, ASCII, animations
 # dev/e2e/run.sh mirrors  Mirror Intelligence: measure, rank, write, apply (as root)
 # dev/e2e/run.sh advisor  the Package Advisor: advice under a big plan
 # dev/e2e/run.sh bundle   offline bundles: create, verify, damage, apply, a bad signature
@@ -85,6 +86,13 @@ buildtools)
     podman run --rm --security-opt 'unmask=/proc/*' \
         -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
         -v "$repo_root/dev/e2e/buildtools.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+clui)
+    echo "==> Running the look-and-feel checks (a pseudo-terminal; real mirrors for one of them)"
+    podman run --rm \
+        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/clui.sh:/t.sh:ro" \
         emrac-test bash /t.sh
     ;;
 mirrors)

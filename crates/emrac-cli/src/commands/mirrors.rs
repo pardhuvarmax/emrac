@@ -6,6 +6,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use emrac_core::mirrors::{self, Group, Ranked, Sample, Stats};
+use emrac_core::style::{Activity, Style};
 use emrac_core::{Error, Result};
 
 use crate::prompt;
@@ -107,7 +108,12 @@ pub fn list(file: &str, json: bool) -> Result<()> {
         history.len()
     );
     println!();
-    print_table(&in_file_order);
+    let st = Style::stdout();
+    if st.fancy {
+        print!("{}", crate::view::mirrors_view(&st, &in_file_order));
+    } else {
+        print_table(&in_file_order);
+    }
     println!();
     if history.is_empty() {
         println!("Nothing measured yet: `emrac mirrors test` measures them, `emrac mirrors rank` orders them.");
@@ -118,7 +124,7 @@ pub fn list(file: &str, json: bool) -> Result<()> {
 }
 
 /// Measures `urls` with up to `jobs` at a time; results in the order given.
-fn measure_all(urls: &[String], jobs: usize) -> Vec<Sample> {
+fn measure_all(urls: &[String], jobs: usize, activity: &Activity) -> Vec<Sample> {
     let t = now();
     let arch = std::env::consts::ARCH;
     let mut out: Vec<Option<Sample>> = vec![None; urls.len()];
@@ -134,11 +140,15 @@ fn measure_all(urls: &[String], jobs: usize) -> Vec<Sample> {
         for (i, r) in results.into_iter().enumerate() {
             out[ci * chunk + i] = Some(r);
         }
-        eprintln!(
-            "measured {} of {}",
-            ((ci + 1) * chunk).min(urls.len()),
-            urls.len()
-        );
+        let done = ((ci + 1) * chunk).min(urls.len());
+        if activity.is_active() {
+            activity.set(
+                done,
+                &crate::view::short_url(batch.last().map_or("", |u| u.as_str())),
+            );
+        } else {
+            eprintln!("measured {done} of {}", urls.len());
+        }
     }
     out.into_iter().flatten().collect()
 }
@@ -146,10 +156,23 @@ fn measure_all(urls: &[String], jobs: usize) -> Vec<Sample> {
 pub fn test(file: &str, limit: usize, jobs: usize, json: bool) -> Result<()> {
     let (_, active) = read_list(file)?;
     let urls: Vec<String> = active.into_iter().take(limit).collect();
-    let samples = measure_all(&urls, jobs);
+    let activity = Activity::progress("measuring mirrors", urls.len());
+    let samples = measure_all(&urls, jobs, &activity);
+    activity.finish(&format!("measured {} mirrors", samples.len()));
     mirrors::record(&samples)?;
     if json {
         println!("{}", serde_json::to_string_pretty(&samples).unwrap());
+        return Ok(());
+    }
+    let st = Style::stdout();
+    if st.fancy {
+        print!("{}", crate::view::mirror_test_view(&st, &samples));
+        let ok = samples.iter().filter(|s| s.ok).count();
+        println!();
+        println!(
+            "{ok} of {} answered. Recorded in the history; `emrac mirrors rank` uses it.",
+            samples.len()
+        );
         return Ok(());
     }
     println!(
@@ -209,7 +232,12 @@ pub fn rank(
     if json {
         println!("{}", serde_json::to_string_pretty(&ranked).unwrap());
     } else {
-        print_table(&ranked);
+        let st = Style::stdout();
+        if st.fancy {
+            print!("{}", crate::view::mirrors_view(&st, &ranked));
+        } else {
+            print_table(&ranked);
+        }
         println!();
         println!("Order: good (fastest first), stale (more than a day behind Arch), unreliable (fewer than 8 of the last 10 worked, or the last failed), untested.");
         if order == active && keep.is_none_or(|k| k >= order.len()) {

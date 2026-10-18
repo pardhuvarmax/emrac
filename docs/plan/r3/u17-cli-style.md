@@ -1,6 +1,6 @@
 # Slice u17 (after r3) — a better-looking command line: styles, marks, bars, animations
 
-**Status: decided and being built (all of it in this one slice).**
+**Status: built (all of it in this one slice).**
 
 Decisions: one slice for everything (A to E); animations are a setting with two values, `regular` (the default: nothing moves, as
 now) and `active`; Unicode by default with an automatic ASCII fallback when the locale is not UTF-8; a built-in width table, no new
@@ -181,3 +181,12 @@ A and B and C are one slice (u17); D and E could be u18 if you would rather keep
    sound-free "done" notifications, a colour you want for the brand?
 
 Package Score (the slice that was u17) moves down by one or two numbers.
+
+
+## What was built, and what was left (written after the build)
+
+Built as planned: parts A to E, true colour as well as 16 and 256, the setting `clui.animations` with the values `regular` and `active`.
+Differences from the plan above: the settings live in a section called `[clui]` (not `[ui]`); the animation values are `regular` and
+`active` (not `auto|on|off`); in `regular` nothing is added at all, so the old `measured N of M` lines remain; the audit findings and the
+remaining plain sections of a plan (hooks, `.pacnew` effects, advice) were not converted and keep their plain headings, though their
+text is unchanged.

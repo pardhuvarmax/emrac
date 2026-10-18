@@ -177,6 +177,7 @@ impl Env {
 pub enum Depth {
     Basic,
     Color256,
+    TrueColor,
 }
 
 /// How things look on one stream right now.
@@ -229,7 +230,13 @@ impl Style {
             .or(env.columns)
             .unwrap_or(80)
             .clamp(40, 240);
-        let depth = if env.colorterm.is_some()
+        let depth = if env
+            .colorterm
+            .as_deref()
+            .is_some_and(|c| c == "truecolor" || c == "24bit")
+        {
+            Depth::TrueColor
+        } else if env.colorterm.is_some()
             || env.term.as_deref().is_some_and(|t| t.contains("256color"))
         {
             Depth::Color256
@@ -258,6 +265,17 @@ impl Style {
         Style::for_stream(true)
     }
 
+    /// `text` for this terminal: when the marks are ASCII, the typographic
+    /// dashes, arrows and ellipses in it become ASCII too. Letters are left as
+    /// they are (a package may have any name).
+    pub fn text(&self, text: &str) -> String {
+        if self.unicode {
+            text.to_string()
+        } else {
+            asciify(text)
+        }
+    }
+
     pub fn glyphs(&self) -> &'static Glyphs {
         if self.unicode {
             &UNICODE
@@ -275,8 +293,14 @@ impl Style {
     }
 
     fn code(&self, role: Role) -> Option<&'static str> {
-        let c256 = self.depth == Depth::Color256;
         use Role::*;
+        if self.depth == Depth::TrueColor {
+            if let Some(code) = self.true_color(role) {
+                return Some(code);
+            }
+        }
+        // 256 colours are also there on a true-colour terminal
+        let c256 = self.depth != Depth::Basic;
         match self.theme {
             Theme::Default => match role {
                 Heading => Some("1"),
@@ -348,6 +372,52 @@ impl Style {
     }
 }
 
+impl Style {
+    /// The 24-bit colours of the themes that have a palette of their own.
+    /// `mono` has none, and the roles not listed keep their 16-colour code.
+    fn true_color(&self, role: Role) -> Option<&'static str> {
+        use Role::*;
+        match self.theme {
+            Theme::Default => match role {
+                Ok | Added | Command => Some("38;2;110;210;130"),
+                Warn => Some("38;2;240;190;70"),
+                Problem => Some("1;38;2;245;100;100"),
+                Note | Version => Some("38;2;100;200;230"),
+                Size => Some("38;2;235;185;90"),
+                Accent => Some("38;2;200;130;230"),
+                Removed => Some("38;2;240;110;110"),
+                Brand => Some("1;38;2;90;210;240"),
+                Question => Some("38;2;120;160;245"),
+                _ => None,
+            },
+            Theme::Light => match role {
+                Ok | Added | Command => Some("38;2;20;120;50"),
+                Warn => Some("38;2;170;95;0"),
+                Problem => Some("1;38;2;185;30;30"),
+                Note | Version => Some("38;2;20;90;160"),
+                Size => Some("38;2;150;90;0"),
+                Accent => Some("38;2;130;50;160"),
+                Removed => Some("38;2;180;40;40"),
+                Brand => Some("1;38;2;20;80;150"),
+                Question => Some("38;2;40;70;170"),
+                Dim => Some("38;2;110;110;110"),
+                _ => None,
+            },
+            Theme::HighContrast => match role {
+                Ok | Added | Command => Some("1;38;2;90;255;130"),
+                Warn | Size => Some("1;38;2;255;220;60"),
+                Problem => Some("1;38;2;255;255;255;48;2;190;0;0"),
+                Note | Version | Brand => Some("1;38;2;80;235;255"),
+                Accent => Some("1;38;2;255;130;255"),
+                Removed => Some("1;38;2;255;110;110"),
+                Question => Some("1;38;2;130;170;255"),
+                _ => None,
+            },
+            Theme::Mono => None,
+        }
+    }
+}
+
 /// What a piece of text is, so the theme can colour it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -378,6 +448,8 @@ pub struct Glyphs {
     pub problem: &'static str,
     pub note: &'static str,
     pub arrow: &'static str,
+    pub up: &'static str,
+    pub down: &'static str,
     pub ellipsis: &'static str,
     pub bullet: &'static str,
     pub h: &'static str,
@@ -403,6 +475,8 @@ pub static UNICODE: Glyphs = Glyphs {
     problem: "\u{2716}",
     note: "\u{25cf}",
     arrow: "\u{2192}",
+    up: "\u{2191}",
+    down: "\u{2193}",
     ellipsis: "\u{2026}",
     bullet: "\u{b7}",
     h: "\u{2500}",
@@ -434,6 +508,8 @@ pub static ASCII: Glyphs = Glyphs {
     problem: "x",
     note: "*",
     arrow: "->",
+    up: "^",
+    down: "v",
     ellipsis: "...",
     bullet: "-",
     h: "-",
@@ -505,6 +581,28 @@ pub fn char_width(c: char) -> usize {
     }
 }
 
+/// Typographic punctuation as plain ASCII.
+pub fn asciify(text: &str) -> String {
+    text.replace(" \u{2014} ", " - ").chars().fold(
+        String::with_capacity(text.len()),
+        |mut out, c| {
+            match c {
+                '\u{2014}' => out.push_str(" - "),
+                '\u{2013}' => out.push('-'),
+                '\u{2026}' => out.push_str("..."),
+                '\u{2192}' => out.push_str("->"),
+                '\u{2190}' => out.push_str("<-"),
+                '\u{b7}' | '\u{2022}' => out.push('-'),
+                '\u{2018}' | '\u{2019}' => out.push('\''),
+                '\u{201c}' | '\u{201d}' => out.push('"'),
+                '\u{a0}' => out.push(' '),
+                _ => out.push(c),
+            }
+            out
+        },
+    )
+}
+
 /// `text` without its ANSI colour sequences.
 pub fn strip_ansi(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -549,6 +647,32 @@ pub fn truncate(st: &Style, text: &str, max: usize) -> String {
     }
     out.push_str(ell);
     out
+}
+
+/// `text` broken at spaces into lines of at most `width` columns (a word
+/// longer than that is left whole). For plain text.
+pub fn wrap(text: &str, width: usize) -> Vec<String> {
+    let width = width.max(8);
+    let mut lines: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    for word in text.split_whitespace() {
+        if cur.is_empty() {
+            cur = word.to_string();
+        } else if display_width(&cur) + 1 + display_width(word) <= width {
+            cur.push(' ');
+            cur.push_str(word);
+        } else {
+            lines.push(std::mem::take(&mut cur));
+            cur = word.to_string();
+        }
+    }
+    if !cur.is_empty() {
+        lines.push(cur);
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
 }
 
 pub fn pad_right(text: &str, width: usize) -> String {
@@ -807,6 +931,8 @@ impl Column {
 pub struct Table {
     pub columns: Vec<Column>,
     pub rows: Vec<Vec<Line>>,
+    /// Lines shown under a row, indented (`notes[i]` belongs to `rows[i]`).
+    pub notes: Vec<Vec<Line>>,
 }
 
 const GAP: usize = 2;
@@ -816,11 +942,19 @@ impl Table {
         Table {
             columns,
             rows: Vec::new(),
+            notes: Vec::new(),
         }
     }
 
     pub fn row(&mut self, cells: Vec<Line>) {
         self.rows.push(cells);
+        self.notes.push(Vec::new());
+    }
+
+    /// A row with lines under it.
+    pub fn row_with_notes(&mut self, cells: Vec<Line>, notes: Vec<Line>) {
+        self.rows.push(cells);
+        self.notes.push(notes);
     }
 
     /// The table as text no wider than `max_width`: widths from the content, the
@@ -850,7 +984,7 @@ impl Table {
             match victim {
                 Some(i) => {
                     let excess = total(&shown, &widths) - max_width;
-                    widths[i] = (widths[i] - excess).max(12);
+                    widths[i] = widths[i].saturating_sub(excess).max(12);
                     if total(&shown, &widths) <= max_width {
                         break;
                     }
@@ -884,12 +1018,12 @@ impl Table {
             .collect();
         out.push_str(&st.paint(Role::Dim, &header.join(&" ".repeat(GAP))));
         out.push('\n');
-        for row in &self.rows {
+        for (ri, row) in self.rows.iter().enumerate() {
             let mut cells = Vec::new();
             for &i in &shown {
                 let empty: Line = Vec::new();
                 let line = truncate_line(st, row.get(i).unwrap_or(&empty), widths[i]);
-                let pad = widths[i] - line_width(&line);
+                let pad = widths[i].saturating_sub(line_width(&line));
                 let body = render_line(st, &line);
                 cells.push(match self.columns[i].align {
                     Align::Left => format!("{body}{}", " ".repeat(pad)),
@@ -898,6 +1032,12 @@ impl Table {
             }
             out.push_str(cells.join(&" ".repeat(GAP)).trim_end());
             out.push('\n');
+            for note in self.notes.get(ri).into_iter().flatten() {
+                let line = truncate_line(st, note, max_width.saturating_sub(4));
+                out.push_str("    ");
+                out.push_str(&render_line(st, &line));
+                out.push('\n');
+            }
         }
         out
     }
@@ -1037,7 +1177,7 @@ fn install_signal_guard() {
 }
 
 impl Activity {
-    fn start(label: &str, total: Option<usize>) -> Activity {
+    fn start(label: &str, total: Option<usize>, force: bool) -> Activity {
         let st = Style::stderr();
         let stop = Arc::new(AtomicBool::new(false));
         let shared = Arc::new(Mutex::new(Shared {
@@ -1047,7 +1187,13 @@ impl Activity {
             total,
         }));
         let mut handle = None;
-        if animations_on() {
+        let allowed = if force {
+            let env = Env::current(true);
+            env.is_terminal && !env.dumb()
+        } else {
+            animations_on()
+        };
+        if allowed {
             install_signal_guard();
             CURSOR_HIDDEN.store(true, Ordering::SeqCst);
             let _ = write!(std::io::stderr(), "\x1b[?25l");
@@ -1077,12 +1223,17 @@ impl Activity {
 
     /// A wait of unknown length.
     pub fn spinner(label: &str) -> Activity {
-        Activity::start(label, None)
+        Activity::start(label, None, false)
     }
 
     /// A wait of `total` steps.
     pub fn progress(label: &str, total: usize) -> Activity {
-        Activity::start(label, Some(total))
+        Activity::start(label, Some(total), false)
+    }
+
+    /// For `emrac ui --demo`: drawn on a terminal whatever `clui.animations` says.
+    pub fn demo(label: &str, total: Option<usize>) -> Activity {
+        Activity::start(label, total, true)
     }
 
     /// Whether anything is being drawn.
@@ -1360,7 +1511,7 @@ mod tests {
             Role::Brand,
         ];
         for theme in Theme::ALL {
-            for depth in [Depth::Basic, Depth::Color256] {
+            for depth in [Depth::Basic, Depth::Color256, Depth::TrueColor] {
                 let st = Style {
                     theme,
                     depth,
@@ -1396,6 +1547,53 @@ mod tests {
         };
         assert!(light256.paint(Role::Warn, "x").contains("38;5;"));
         assert!(!light16.paint(Role::Warn, "x").contains("38;5;"));
+    }
+
+    #[test]
+    fn colour_depth_comes_from_colorterm_and_term() {
+        let s = Settings::default();
+        let depth = |term: &str, colorterm: Option<&str>| {
+            let mut e = env(true);
+            e.term = Some(term.into());
+            e.colorterm = colorterm.map(str::to_string);
+            Style::resolve(&s, &e).depth
+        };
+        assert_eq!(depth("xterm", None), Depth::Basic);
+        assert_eq!(depth("xterm-256color", None), Depth::Color256);
+        assert_eq!(depth("xterm", Some("yes")), Depth::Color256);
+        assert_eq!(depth("xterm", Some("truecolor")), Depth::TrueColor);
+        assert_eq!(depth("xterm-256color", Some("24bit")), Depth::TrueColor);
+    }
+
+    #[test]
+    fn true_colour_uses_24_bit_codes_where_a_theme_has_them_and_never_in_mono() {
+        let tc = Style {
+            depth: Depth::TrueColor,
+            ..fancy()
+        };
+        assert!(tc.paint(Role::Ok, "x").contains("38;2;"));
+        assert!(
+            tc.paint(Role::Heading, "x").contains("\x1b[1m"),
+            "roles without a palette keep their code"
+        );
+        let mono = Style {
+            theme: Theme::Mono,
+            depth: Depth::TrueColor,
+            ..fancy()
+        };
+        assert!(!mono.paint(Role::Ok, "x").contains("38;2;"));
+        let light = Style {
+            theme: Theme::Light,
+            depth: Depth::TrueColor,
+            ..fancy()
+        };
+        assert!(light.paint(Role::Warn, "x").contains("38;2;170;95;0"));
+        // on a 256-colour terminal there is no 24-bit code
+        let c256 = Style {
+            depth: Depth::Color256,
+            ..fancy()
+        };
+        assert!(!c256.paint(Role::Ok, "x").contains("38;2;"));
     }
 
     #[test]
@@ -1441,6 +1639,19 @@ mod tests {
             "colour sequences take none"
         );
         assert_eq!(display_width(""), 0);
+    }
+
+    #[test]
+    fn typographic_punctuation_becomes_ascii_when_the_marks_are_ascii() {
+        assert_eq!(asciify("pacdiff \u{2014} needed"), "pacdiff - needed");
+        assert_eq!(
+            asciify("wait\u{2026} a \u{2192} b \u{2018}x\u{2019} \u{201c}y\u{201d}"),
+            "wait... a -> b 'x' \"y\""
+        );
+        assert_eq!(asciify("plain"), "plain");
+        assert_eq!(asciify("na\u{ef}ve"), "na\u{ef}ve", "letters stay");
+        assert_eq!(plain_unicode().text("a \u{2014} b"), "a \u{2014} b");
+        assert_eq!(ascii().text("a \u{2014} b"), "a - b");
     }
 
     #[test]
@@ -1662,6 +1873,50 @@ mod tests {
         assert!(out.contains('\u{2026}') && out.contains("1 MiB"));
         for l in out.lines() {
             assert!(display_width(l) <= 30, "{l:?}");
+        }
+    }
+
+    #[test]
+    fn rows_can_carry_notes_under_them() {
+        let mut t = Table::new(vec![Column::new("id"), Column::new("what")]);
+        t.row_with_notes(
+            vec![cell("tx-1", Role::Plain), cell("install", Role::Plain)],
+            vec![cell("error: it broke", Role::Problem)],
+        );
+        t.row(vec![cell("tx-2", Role::Plain), cell("remove", Role::Plain)]);
+        let out = t.render(&plain_unicode(), 40);
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[1], "tx-1  install");
+        assert_eq!(lines[2], "    error: it broke");
+        assert_eq!(lines[3], "tx-2  remove");
+    }
+
+    #[test]
+    fn text_is_wrapped_at_spaces_by_columns() {
+        assert_eq!(wrap("one two three four", 9), ["one two", "three", "four"]);
+        assert_eq!(wrap("", 20), [""]);
+        assert_eq!(
+            wrap("averyveryverylongword short", 10),
+            ["averyveryverylongword", "short"]
+        );
+        for l in wrap("a b c d e f g h i j k l m n o p", 11) {
+            assert!(display_width(&l) <= 11);
+        }
+    }
+
+    #[test]
+    fn a_table_much_narrower_than_its_content_does_not_panic() {
+        let mut t = Table::new(vec![
+            Column::new("name").flex(),
+            Column::new("size").right().keep(9),
+        ]);
+        t.row(vec![
+            cell("a".repeat(200), Role::Plain),
+            cell("1 MiB", Role::Size),
+        ]);
+        for w in [0, 1, 5, 10, 20] {
+            let out = t.render(&plain_unicode(), w);
+            assert!(out.lines().count() >= 2, "width {w}");
         }
     }
 

@@ -1,6 +1,7 @@
 //! `emrac news` and the news gate in `upgrade` (u20, part 2).
 
 use emrac_core::arch_news::{self, Item, Loaded, Reason};
+use emrac_core::style::Activity;
 use emrac_core::{say, Config, Error, Result, Voice};
 
 fn now() -> u64 {
@@ -30,12 +31,22 @@ fn reasons_text(item: &Item) -> String {
 
 fn print_item(item: &Item, unread: bool) {
     let critical = arch_news::is_critical(item);
+    let st = emrac_core::style::Style::stdout();
+    use emrac_core::style::Role;
     println!(
         "[{}] {}{}{}",
-        emrac_core::format_utc_date(item.published),
-        item.title,
-        if unread { "  [unread]" } else { "" },
-        if critical { "  [CRITICAL]" } else { "" }
+        st.paint(Role::Dim, &emrac_core::format_utc_date(item.published)),
+        st.paint(Role::Package, &item.title),
+        if unread {
+            st.paint(Role::Accent, "  [unread]")
+        } else {
+            String::new()
+        },
+        if critical {
+            st.paint(Role::Problem, "  [CRITICAL]")
+        } else {
+            String::new()
+        }
     );
     if critical {
         println!("  Why:    {}", reasons_text(item));
@@ -45,7 +56,9 @@ fn print_item(item: &Item, unread: bool) {
 
 /// `emrac news`.
 pub fn show(all: bool, offline: bool, json: bool) -> Result<()> {
+    let activity = Activity::spinner("reading the Arch news");
     let loaded = arch_news::load_fresh(offline, now());
+    activity.finish("read the Arch news");
     let seen = arch_news::effective_seen(&loaded.state, last_upgrade(), now());
     let (age, stale) = arch_news::age_label(loaded.state.fetched_at, now());
     if json {

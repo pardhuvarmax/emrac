@@ -1,3 +1,4 @@
+use emrac_core::style::Activity;
 use emrac_core::{say, Voice};
 use emrac_core::{Result, SearchScope, Sources};
 
@@ -26,7 +27,17 @@ pub fn run(
         scope.aur = false;
     }
 
-    let results = sources.search(query, scope, limit)?;
+    let activity = Activity::spinner(if scope.aur {
+        "searching the repositories and the AUR"
+    } else {
+        "searching the repositories"
+    });
+    let found = sources.search(query, scope, limit);
+    match &found {
+        Ok(r) => activity.finish(&format!("searched: {} found", r.packages.len())),
+        Err(_) => activity.fail("the search failed"),
+    }
+    let results = found?;
 
     if let Some(warning) = &results.aur_warning {
         if !quiet {

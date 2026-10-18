@@ -29,9 +29,9 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | 8. Package forensics (proposed) | 0 | 2 | 0 | 7 | 0 | 0 | 9 |
 | 9. Plugin system (proposed) | 0 | 0 | 1 | 16 | 0 | 0 | 17 |
 | 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
-| 11. Newer ideas (not yet in the other documents) | 0 | 2 | 0 | 25 | 0 | 0 | 27 |
+| 11. Newer ideas (not yet in the other documents) | 4 | 2 | 0 | 25 | 0 | 0 | 31 |
 | 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **90** | **56** | **22** | **138** | **9** | **3** | **318** |
+| **All** | **94** | **56** | **22** | **138** | **9** | **3** | **322** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -137,7 +137,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | III.15 Security & Integrity | Partial | Audit, manifest, sandbox, limits, trust signals, repository trust, database protection. Signature checks themselves stay pacman's and makepkg's. |  |
 | III.16 Package Health | Partial | `doctor` and `report`. Not yet: duplicate package/library detection, mirror health. |  |
 | III.17 Analytics | Specified | Build statistics, success rates, downloads, cache usage, resource reports. |  |
-| III.18 Unified Interfaces | Partial | CLI with `--json`, `--dry-run`, `--yes`, completion. No TUI at all (browser, inspector, queue and build monitors, log viewer, news reader, history browser, command palette). |  |
+| III.18 Unified Interfaces | Partial | CLI with `--json`, `--dry-run`, `--yes`, completion, and (u17) marks, boxes, tables, themes and optional animations on a terminal. No TUI at all (browser, inspector, queue and build monitors, log viewer, news reader, history browser, command palette). |  |
 | III.19 Configuration | Partial | TOML user config. Not yet: system-wide config, repository and profile config, themes, keybindings, aliases, environment profiles. |  |
 | III.20 Performance | Partial | Fast by construction. Not yet: a deliberate index/cache layer, parallel downloads. |  |
 | III.21 Extensibility (future) | Specified | Plugin system, public API, remote build workers, distributed compilation, reproducible-build verification, binary cache servers, team build profiles, benchmark database. The plugin system is WASM-sandboxed with enforcement and security checks (see section 9). AI-assisted items in the spec are excluded by the no-AI decision. | `SPEC.md` |
@@ -442,6 +442,10 @@ Collected after the documents above. Everything here is deterministic and local;
 | `emrac query --format` | Idea | Filter and format installed packages by size, install date, reason, repository (rpm `-q --qf`, `dpkg-query -W -f`). |  |
 | Optional-dependency suggestions | Idea | After a transaction, which optional dependencies are unmet and what each adds (rpm weak dependencies). |  |
 | `.pacnew` resolution offered right after an upgrade | Idea | Offer `emrac pacnew resolve` for the files the upgrade just created, using the u5 prediction. |  |
+| Look and feel: marks, boxes, tables, bars, diffs (`style`) | Built | On a terminal: `✔ ⚠ ✖ ●` marks with words, plans in a box with a disk bar, aligned tables for history, snapshots, orphans, pins, timeline, stats, mirrors, benchmark and bundle changes, a tree with branches, coloured diffs and versions with the changed part picked out. Piped, `--json` and dumb terminals keep the plain text. (u17) | `docs/plan/r3/u17-cli-style.md` |
+| `[clui]` settings and `--color` | Built | `clui.animations` (`regular` or `active`), `clui.color`, `clui.unicode` (UTF-8 locale by default, ASCII fallback), `clui.theme` (`default`, `light`, `mono`, `high-contrast`; 16, 256 and true colour); `--color auto\|always\|never`; `NO_COLOR` and `CLICOLOR_FORCE` honoured. (u17) | `docs/plan/r3/u17-cli-style.md` |
+| Animations: spinner and progress bar (`clui.animations active`) | Built | While emrac itself is waiting (plans, search, info, doctor, news, mirror tests, benchmark, bundle checks): a spinner or an `N of M` bar on standard error, one result line left behind, the cursor always shown again (also after Ctrl-C). Off by default; never piped, in CI, on a dumb terminal, or with `--json`/`--quiet`; never over pacman's or a build's own output. (u17) | `docs/plan/r3/u17-cli-style.md` |
+| `emrac ui` (the gallery) | Built | Every element in the current terminal and theme; `--theme` previews another; `--demo` runs the animations once. (u17) | `docs/plan/r3/u17-cli-style.md` |
 
 ## 12. Decided against, or far future
 

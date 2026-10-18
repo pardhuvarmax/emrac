@@ -162,6 +162,14 @@ fn page(cmd: &clap::Command, top: bool, top_level: &[String]) -> Result<Vec<u8>>
                     "~/.local/share/emrac/pacman-db/",
                     "Backups of pacman's own database, made before each transaction.",
                 ),
+                (
+                    "~/.local/share/emrac/mirrors.jsonl",
+                    "What emrac measured about each mirror (emrac mirrors).",
+                ),
+                (
+                    "~/.local/share/emrac/mirrorlist-backups/",
+                    "The mirror list as it was before emrac mirrors rank --apply.",
+                ),
                 ("~/.cache/emrac/", "AUR checkouts and built packages."),
                 (
                     "/etc/emrac/policy.toml",

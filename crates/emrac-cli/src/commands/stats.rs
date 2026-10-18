@@ -1,6 +1,7 @@
 //! `emrac stats` (u9): what emrac has built and installed here.
 
 use emrac_core::build_stats::{self, Stats};
+use emrac_core::style::{heading, Role, Style};
 use emrac_core::{format_utc_date, Error, Result, Sources};
 
 fn duration(secs: u64) -> String {
@@ -32,6 +33,11 @@ pub fn run(sources: &Sources, since: Option<&str>, json: bool) -> Result<()> {
 }
 
 fn print_stats(s: &Stats, since: Option<&str>) {
+    let st = Style::stdout();
+    if st.fancy {
+        print_fancy(&st, s, since);
+        return;
+    }
     match (since, s.first) {
         (Some(p), _) => println!("Period       : the last {p}"),
         (None, Some(first)) => println!(
@@ -95,5 +101,62 @@ fn print_stats(s: &Stats, since: Option<&str>) {
     println!(
         "Not shown: hours or storage saved by installing binaries instead of building. emrac measures \
          builds only, so a figure for the other side would be a guess."
+    );
+}
+
+fn print_fancy(st: &Style, s: &Stats, since: Option<&str>) {
+    let b = &s.builds;
+    let t = &s.transactions;
+    match (since, s.first) {
+        (Some(p), _) => println!("{}", st.paint(Role::Dim, &format!("the last {p}"))),
+        (None, Some(first)) => println!(
+            "{}",
+            st.paint(
+                Role::Dim,
+                &format!("since {} (all that is kept)", format_utc_date(first))
+            )
+        ),
+        (None, None) => {}
+    }
+    if b.total == 0 && t.committed + t.failed == 0 {
+        println!("Nothing recorded for this period yet.");
+        return;
+    }
+    println!("\n{}", heading(st, "Builds"));
+    if b.total == 0 {
+        println!("  none recorded");
+    } else {
+        print!("{}", crate::view::builds_view(st, b));
+    }
+    println!("\n{}", heading(st, "Transactions"));
+    println!(
+        "  {} done ({} installs, {} upgrades, {} removals, {} other), {} failed",
+        st.paint(Role::Size, &t.committed.to_string()),
+        t.installs,
+        t.upgrades,
+        t.removals,
+        t.other,
+        if t.failed > 0 {
+            st.paint(Role::Problem, &t.failed.to_string())
+        } else {
+            t.failed.to_string()
+        }
+    );
+    let pkgs = t.aur_packages + t.repo_packages;
+    if pkgs > 0 {
+        let aur = t.aur_packages as f64 / pkgs as f64;
+        println!(
+            "  {pkgs} packages put on the system: {}  {} from the AUR, {} from the official repositories",
+            emrac_core::style::render_line(st, &emrac_core::style::bar(st, aur, 12)),
+            t.aur_packages,
+            t.repo_packages
+        );
+    }
+    println!(
+        "\n{}",
+        st.paint(
+            Role::Dim,
+            "Not shown: hours or storage saved by installing binaries instead of building. emrac measures builds only, so a figure for the other side would be a guess."
+        )
     );
 }

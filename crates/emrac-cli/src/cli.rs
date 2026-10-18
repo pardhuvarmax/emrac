@@ -389,6 +389,18 @@ pub enum Commands {
         file: Option<String>,
     },
 
+    /// Every element of the look in this terminal and theme: colours, marks,
+    /// boxes, tables, bars, diffs and the voice
+    Ui {
+        /// Preview a theme: default, light, mono or high-contrast
+        #[arg(long, value_name = "THEME")]
+        theme: Option<String>,
+
+        /// Also run a spinner and a progress bar for about three seconds
+        #[arg(long)]
+        demo: bool,
+    },
+
     /// Packages on a drive for a machine without network: create, verify, apply
     ///
     /// A bundle is a folder of the repositories' own package files and their

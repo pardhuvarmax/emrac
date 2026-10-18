@@ -1,9 +1,16 @@
+use emrac_core::style::Activity;
 use emrac_core::{Result, Sources};
 
 use crate::output;
 
 pub fn run(sources: &Sources, pkg: &str, offline: bool, json: bool) -> Result<()> {
-    let details = sources.info(pkg, offline)?;
+    let activity = Activity::spinner(&format!("looking up {pkg}"));
+    let looked = sources.info(pkg, offline);
+    match &looked {
+        Ok(_) => activity.finish(&format!("found {pkg}")),
+        Err(_) => activity.fail(&format!("could not look up {pkg}")),
+    }
+    let details = looked?;
     output::print_package_details(&details, json);
     if details.repo == "aur" && !json {
         println!();

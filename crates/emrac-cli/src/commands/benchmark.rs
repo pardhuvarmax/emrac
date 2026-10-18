@@ -1,6 +1,7 @@
 //! `emrac benchmark` (u9): what an installed package costs to start.
 
 use emrac_core::benchmark::{self, BenchRecord, Measurement};
+use emrac_core::style::{Activity, Style};
 use emrac_core::{format_utc_date, Error, Result, Sources};
 
 use crate::prompt;
@@ -117,7 +118,9 @@ pub fn run(
     }
     let cores = std::thread::available_parallelism().map_or(1, |n| n.get() as u32);
     let mut records = Vec::new();
-    for path in &chosen {
+    let activity = Activity::progress("running the programs", chosen.len());
+    for (i, path) in chosen.iter().enumerate() {
+        activity.set(i, &path.display().to_string());
         let measurement = benchmark::measure(path, runs, benchmark::RUN_LIMIT)?;
         let record = BenchRecord {
             time: std::time::SystemTime::now()
@@ -132,6 +135,7 @@ pub fn run(
         benchmark::record(&record)?;
         records.push(record);
     }
+    activity.finish(&format!("measured {} program(s)", records.len()));
     if json {
         println!("{}", serde_json::to_string_pretty(&records).unwrap());
         return Ok(());
@@ -142,8 +146,13 @@ pub fn run(
         targets.version,
         crate::output::human_size(targets.installed_size)
     );
-    for r in &records {
-        println!("{}", line(&r.measurement));
+    let st = Style::stdout();
+    if st.fancy {
+        print!("{}", crate::view::benchmark_view(&st, &records));
+    } else {
+        for r in &records {
+            println!("{}", line(&r.measurement));
+        }
     }
     println!();
     println!(

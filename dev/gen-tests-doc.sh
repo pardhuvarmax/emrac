@@ -88,6 +88,7 @@ hp=dev/e2e/helppages.sh
 bu=dev/e2e/bundle.sh
 ad=dev/e2e/advisor.sh
 mi=dev/e2e/mirrors.sh
+cl=dev/e2e/clui.sh
 pre_run=$(sed -n 's/^# last full run: *//p' "$pre" | head -1)
 self_run=$(sed -n 's/^# last full run: *//p' "$selfup" | head -1)
 hk_run=$(sed -n 's/^# last full run: *//p' "$hk" | head -1)
@@ -102,6 +103,8 @@ hp_run=$(sed -n 's/^# last full run: *//p' "$hp" | head -1)
 bu_run=$(sed -n 's/^# last full run: *//p' "$bu" | head -1)
 ad_run=$(sed -n 's/^# last full run: *//p' "$ad" | head -1)
 mi_run=$(sed -n 's/^# last full run: *//p' "$mi" | head -1)
+cl_run=$(sed -n 's/^# last full run: *//p' "$cl" | head -1)
+sed -n 's/^ck "\([^"]*\)".*/\1/p' "$cl" >"$work/e2e_clui.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$mi" >"$work/e2e_mirrors.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$ad" >"$work/e2e_advisor.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$bu" >"$work/e2e_bundle.txt"
@@ -117,7 +120,7 @@ sed -n 's/^ck "\([^"]*\)".*/\1/p' "$hk" >"$work/e2e_hooks.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$pre" >"$work/e2e_pre.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$selfup" >"$work/e2e_self.txt"
 
-awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" -v hk_file="$work/e2e_hooks.txt" -v hk_run="$hk_run" -v rc_file="$work/e2e_recovery.txt" -v rc_run="$rc_run" -v bt_file="$work/e2e_buildtools.txt" -v bt_run="$bt_run" -v po_file="$work/e2e_policy.txt" -v po_run="$po_run" -v st_file="$work/e2e_stats.txt" -v st_run="$st_run" -v tl_file="$work/e2e_timeline.txt" -v tl_run="$tl_run" -v gr_file="$work/e2e_graph.txt" -v gr_run="$gr_run" -v xc_file="$work/e2e_exchange.txt" -v xc_run="$xc_run" -v hp_file="$work/e2e_helppages.txt" -v hp_run="$hp_run" -v bu_file="$work/e2e_bundle.txt" -v bu_run="$bu_run" -v ad_file="$work/e2e_advisor.txt" -v ad_run="$ad_run" -v mi_file="$work/e2e_mirrors.txt" -v mi_run="$mi_run" '
+awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" -v hk_file="$work/e2e_hooks.txt" -v hk_run="$hk_run" -v rc_file="$work/e2e_recovery.txt" -v rc_run="$rc_run" -v bt_file="$work/e2e_buildtools.txt" -v bt_run="$bt_run" -v po_file="$work/e2e_policy.txt" -v po_run="$po_run" -v st_file="$work/e2e_stats.txt" -v st_run="$st_run" -v tl_file="$work/e2e_timeline.txt" -v tl_run="$tl_run" -v gr_file="$work/e2e_graph.txt" -v gr_run="$gr_run" -v xc_file="$work/e2e_exchange.txt" -v xc_run="$xc_run" -v hp_file="$work/e2e_helppages.txt" -v hp_run="$hp_run" -v bu_file="$work/e2e_bundle.txt" -v bu_run="$bu_run" -v ad_file="$work/e2e_advisor.txt" -v ad_run="$ad_run" -v mi_file="$work/e2e_mirrors.txt" -v mi_run="$mi_run" -v cl_file="$work/e2e_clui.txt" -v cl_run="$cl_run" '
     function rule(text, ch,   i, line) {
         line = ""
         for (i = 0; i < length(text); i++) line = line ch
@@ -247,6 +250,16 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work
         print ""
         print "(" n " checks.)"
         print ""
+        title("End-to-end: how emrac looks (dev/e2e/clui.sh)", "~")
+        print "emrac under a real pseudo-terminal and piped: marks, boxes, colour, themes, ASCII,"
+        print "width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: " cl_run "."
+        print ""
+        n = 0
+        while ((getline t < cl_file) > 0) { n++; print "* " t }
+        close(cl_file)
+        print ""
+        print "(" n " checks.)"
+        print ""
         title("End-to-end: Mirror Intelligence (dev/e2e/mirrors.sh)", "~")
         print "Real mirrors over the network plus one that cannot be reached; ``--apply`` runs as"
         print "root: ``dev/e2e/run.sh mirrors``. Last full run: " mi_run "."
@@ -355,7 +368,7 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work
 case "$mode" in
 write)
     cp "$work/out.rst" "$target"
-    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") + $(wc -l <"$work/e2e_hooks.txt") + $(wc -l <"$work/e2e_recovery.txt") + $(wc -l <"$work/e2e_buildtools.txt") + $(wc -l <"$work/e2e_policy.txt") + $(wc -l <"$work/e2e_stats.txt") + $(wc -l <"$work/e2e_timeline.txt") + $(wc -l <"$work/e2e_graph.txt") + $(wc -l <"$work/e2e_exchange.txt") + $(wc -l <"$work/e2e_helppages.txt") + $(wc -l <"$work/e2e_bundle.txt") + $(wc -l <"$work/e2e_advisor.txt") + $(wc -l <"$work/e2e_mirrors.txt") end-to-end checks)"
+    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") + $(wc -l <"$work/e2e_hooks.txt") + $(wc -l <"$work/e2e_recovery.txt") + $(wc -l <"$work/e2e_buildtools.txt") + $(wc -l <"$work/e2e_policy.txt") + $(wc -l <"$work/e2e_stats.txt") + $(wc -l <"$work/e2e_timeline.txt") + $(wc -l <"$work/e2e_graph.txt") + $(wc -l <"$work/e2e_exchange.txt") + $(wc -l <"$work/e2e_helppages.txt") + $(wc -l <"$work/e2e_bundle.txt") + $(wc -l <"$work/e2e_advisor.txt") + $(wc -l <"$work/e2e_mirrors.txt") + $(wc -l <"$work/e2e_clui.txt") end-to-end checks)"
     ;;
 check)
     if ! diff -u "$target" "$work/out.rst" >"$work/diff.txt"; then

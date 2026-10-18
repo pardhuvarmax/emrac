@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod output;
 mod prompt;
+mod view;
 
 use emrac_core::{Config, Limits, Result, Sources};
 
@@ -107,6 +108,7 @@ fn run(cli: &Cli) -> Result<()> {
             roff,
             generate,
         } => return commands::helppages::man(command, *roff, generate.as_deref()),
+        Commands::Ui { theme, demo } => return commands::ui::run(theme.as_deref(), *demo),
         Commands::Docs { open } => return commands::helppages::docs(*open),
         Commands::License { full } => {
             commands::helppages::license(*full);
@@ -574,6 +576,7 @@ fn run(cli: &Cli) -> Result<()> {
         | Commands::PolicyHelper { .. }
         | Commands::Man { .. }
         | Commands::Docs { .. }
+        | Commands::Ui { .. }
         | Commands::License { .. }
         | Commands::Credits
         | Commands::Support { .. }

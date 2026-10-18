@@ -147,11 +147,15 @@ fn diff(files: &[PacnewFile], name: &str, json: bool) -> Result<()> {
 }
 
 fn section(title: &str, diff: &str) {
-    println!("{title}:");
+    let st = emrac_core::style::Style::stdout();
+    println!("{}:", st.paint(emrac_core::style::Role::Heading, title));
     if diff.is_empty() {
         println!("  (no changes)\n");
     } else {
-        println!("{diff}");
+        for line in diff.lines() {
+            println!("{}", emrac_core::style::diff_line(&st, line));
+        }
+        println!();
     }
 }
 

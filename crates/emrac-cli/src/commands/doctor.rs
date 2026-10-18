@@ -1,3 +1,4 @@
+use emrac_core::style::Activity;
 use emrac_core::{DoctorStatus, Error, Result, Sources};
 
 use crate::output;
@@ -5,7 +6,17 @@ use crate::output;
 /// `emrac doctor`. Exits 1 when any check found a *problem* (warnings and
 /// notes don't fail a script).
 pub fn run(sources: &Sources, report_for_bug: bool, online: bool, json: bool) -> Result<()> {
-    let report = sources.doctor(online)?;
+    let activity = Activity::spinner(if online {
+        "checking this system and the repositories"
+    } else {
+        "checking this system"
+    });
+    let checked = sources.doctor(online);
+    match &checked {
+        Ok(_) => activity.finish("checked"),
+        Err(_) => activity.fail("the check failed"),
+    }
+    let report = checked?;
 
     if report_for_bug {
         print!("{}", sources.doctor_markdown(&report));

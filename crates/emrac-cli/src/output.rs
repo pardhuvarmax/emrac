@@ -2,7 +2,10 @@ use emrac_core::config_preview::{ConfigPreview, Effect};
 use emrac_core::hooks::{HookPreview, When};
 use emrac_core::plan_preview::PlanPreview;
 use emrac_core::policy_preview::{Effect as PolicyEffectKind, PolicyPreview};
+use emrac_core::style::{Role, Style};
 use emrac_core::{say, Voice};
+
+use crate::view;
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -34,10 +37,22 @@ pub fn print_search_results(query: &str, results: &[PackageSummary], json: bool)
         plural(results.len(), "package")
     );
 
+    let st = Style::stdout();
     for pkg in results {
-        println!("{}/{} {}", pkg.repo, pkg.name, pkg.version);
+        println!(
+            "{}/{} {}",
+            st.paint(Role::Dim, &pkg.repo),
+            st.paint(Role::Package, &pkg.name),
+            st.paint(Role::Version, &pkg.version)
+        );
         if let Some(desc) = pkg.description.as_deref().filter(|d| !d.is_empty()) {
-            println!("    {desc}");
+            if st.fancy {
+                for line in emrac_core::style::wrap(desc, st.width.saturating_sub(6)) {
+                    println!("    {}", st.paint(Role::Dim, &line));
+                }
+            } else {
+                println!("    {desc}");
+            }
         }
     }
 }
@@ -49,20 +64,28 @@ pub fn print_package_details(pkg: &PackageDetails, json: bool) {
     }
 
     say!(Voice::Found, "{} in {}\n", pkg.name, pkg.repo);
+    let st = Style::stdout();
+    let k = |label: &str| st.paint(Role::Dim, label);
 
-    println!("Name            : {}", pkg.name);
-    println!("Version         : {}", pkg.version);
-    println!("Repository      : {}", pkg.repo);
+    println!("{}: {}", k("Name           "), pkg.name);
+    println!("{}: {}", k("Version        "), pkg.version);
+    println!("{}: {}", k("Repository     "), pkg.repo);
     println!(
-        "Description     : {}",
+        "{}: {}",
+        k("Description    "),
         pkg.description.as_deref().unwrap_or("-")
     );
-    println!("URL             : {}", pkg.url.as_deref().unwrap_or("-"));
-    println!("Licenses        : {}", join_or_dash(&pkg.license));
-    println!("Depends On      : {}", join_or_dash(&pkg.depends));
-    println!("Provides        : {}", join_or_dash(&pkg.provides));
     println!(
-        "Installed Size  : {}",
+        "{}: {}",
+        k("URL            "),
+        pkg.url.as_deref().unwrap_or("-")
+    );
+    println!("{}: {}", k("Licenses       "), join_or_dash(&pkg.license));
+    println!("{}: {}", k("Depends On     "), join_or_dash(&pkg.depends));
+    println!("{}: {}", k("Provides       "), join_or_dash(&pkg.provides));
+    println!(
+        "{}: {}",
+        k("Installed Size "),
         pkg.installed_size.map(human_size).as_deref().unwrap_or("-")
     );
 
@@ -123,16 +146,22 @@ pub fn print_plan_with_preview(plan: &Plan, preview: &PlanPreview, json: bool) {
         PlanAction::Purge => "purge",
     };
 
-    say!(
-        Voice::Plans,
-        "{verb} {}\n",
-        plural(plan.packages.len(), "package")
-    );
-    for pkg in &plan.packages {
-        let suffix = if pkg.explicit { "" } else { " (dependency)" };
-        println!("  {}/{} {}{suffix}", pkg.repo, pkg.name, pkg.version);
+    let st = Style::stdout();
+    if st.fancy {
+        print!("{}", view::plan_box(&st, plan));
+        println!();
+    } else {
+        say!(
+            Voice::Plans,
+            "{verb} {}\n",
+            plural(plan.packages.len(), "package")
+        );
+        for pkg in &plan.packages {
+            let suffix = if pkg.explicit { "" } else { " (dependency)" };
+            println!("  {}/{} {}{suffix}", pkg.repo, pkg.name, pkg.version);
+        }
+        println!();
     }
-    println!();
 
     // Removals nobody asked for: the packages pacman removes to resolve
     // conflicts, or because another package replaces them.
@@ -168,6 +197,18 @@ pub fn print_plan_with_preview(plan: &Plan, preview: &PlanPreview, json: bool) {
     print_hooks(&preview.hooks);
     print_advice(&preview.advice);
 
+    if st.fancy {
+        print!(
+            "{}",
+            view::plan_summary(
+                &st,
+                plan,
+                emrac_core::preflight::free_on_root(),
+                &plan.short_digest()
+            )
+        );
+        return;
+    }
     if plan.total_download_size > 0 {
         println!(
             "Download Size    : {}",
@@ -319,7 +360,10 @@ pub fn print_pkgbuild_diff(pkg: &str, diff: &str) {
         Voice::Remembers,
         "PKGBUILD changes for '{pkg}' since your last build:\n"
     );
-    println!("{diff}");
+    let st = Style::stdout();
+    for line in diff.lines() {
+        println!("{}", emrac_core::style::diff_line(&st, line));
+    }
 }
 
 pub fn print_verify(report: &VerifyReport, json: bool) {
@@ -336,21 +380,25 @@ pub fn print_verify(report: &VerifyReport, json: bool) {
         files
     );
 
+    let st = Style::stdout();
     let mut unreadable = 0;
     for pkg in &report.packages {
         unreadable += pkg.unreadable_count();
         let problems = pkg.problem_count();
         if problems == 0 {
             println!(
-                "{} {}: ok ({} files)",
-                pkg.package, pkg.version, pkg.files_checked
+                "{} {}: {} ({} files)",
+                st.paint(Role::Package, &pkg.package),
+                pkg.version,
+                st.paint(Role::Ok, "ok"),
+                pkg.files_checked
             );
         } else {
             println!(
                 "{} {}: {} ({} files)",
-                pkg.package,
+                st.paint(Role::Package, &pkg.package),
                 pkg.version,
-                plural(problems, "problem"),
+                st.paint(Role::Problem, &plural(problems, "problem")),
                 pkg.files_checked
             );
         }
@@ -579,6 +627,14 @@ pub fn print_history(
         );
     }
 
+    let st = Style::stdout();
+    if st.fancy {
+        print!(
+            "{}",
+            view::history_view(&st, records, rolled_back, acknowledged)
+        );
+        return;
+    }
     for record in records {
         let action = match record.action {
             PlanAction::Install => "install",
@@ -694,6 +750,11 @@ pub fn print_snapshots(snapshots: &[Snapshot], json: bool) {
         "{} (times are UTC)\n",
         plural(snapshots.len(), "snapshot")
     );
+    let st = Style::stdout();
+    if st.fancy {
+        print!("{}", view::snapshots_view(&st, snapshots));
+        return;
+    }
     for s in snapshots {
         let note = s
             .note
@@ -1022,21 +1083,27 @@ pub fn print_preflight(checks: &[emrac_core::DoctorCheck], allowed: bool) {
         );
         return;
     }
-    println!("\nPre-flight");
-    for c in checks {
-        let mark = match c.status {
-            S::Ok => "  ok     ",
-            S::Note => "  note   ",
-            S::Warning => "  warning",
-            S::Problem => "  PROBLEM",
-        };
-        println!("{mark}  {}: {}", c.title, c.summary);
-        for d in &c.detail {
-            println!("            - {d}");
-        }
-        if let Some(fix) = &c.fix {
-            if c.status != S::Ok {
-                println!("            {} {fix}", Voice::Suggests.short_for(false));
+    let st = Style::stdout();
+    if st.fancy {
+        println!("\n{}", emrac_core::style::heading(&st, "Pre-flight"));
+        print!("{}", view::checks_view(&st, checks));
+    } else {
+        println!("\nPre-flight");
+        for c in checks {
+            let mark = match c.status {
+                S::Ok => "  ok     ",
+                S::Note => "  note   ",
+                S::Warning => "  warning",
+                S::Problem => "  PROBLEM",
+            };
+            println!("{mark}  {}: {}", c.title, c.summary);
+            for d in &c.detail {
+                println!("            - {d}");
+            }
+            if let Some(fix) = &c.fix {
+                if c.status != S::Ok {
+                    println!("            {} {fix}", Voice::Suggests.short_for(false));
+                }
             }
         }
     }
@@ -1054,12 +1121,23 @@ pub fn print_tree(report: &emrac_core::TreeReport, json: bool) {
         println!("{}", serde_json::to_string_pretty(report).unwrap());
         return;
     }
-    println!("{} {}", report.name, report.version);
+    let st = Style::stdout();
+    println!(
+        "{} {}",
+        st.paint(Role::Package, &report.name),
+        st.paint(Role::Version, &report.version)
+    );
     if report.lines.is_empty() {
         println!("  (no dependencies)");
         return;
     }
-    for l in &report.lines {
+    let depths: Vec<usize> = report.lines.iter().map(|l| l.depth).collect();
+    let prefixes = if st.fancy {
+        Some(view::tree_prefixes(&st, &depths))
+    } else {
+        None
+    };
+    for (i, l) in report.lines.iter().enumerate() {
         let mut tags = Vec::new();
         if l.optional {
             tags.push("optional");
@@ -1075,7 +1153,15 @@ pub fn print_tree(report: &emrac_core::TreeReport, json: bool) {
         } else {
             format!("  ({})", tags.join(", "))
         };
-        println!("{}{}{tag}", "  ".repeat(l.depth), l.name);
+        match &prefixes {
+            Some(p) => println!(
+                "{}{}{}",
+                st.paint(Role::Dim, &p[i]),
+                st.paint(Role::Package, &l.name),
+                st.paint(Role::Dim, &tag)
+            ),
+            None => println!("{}{}{tag}", "  ".repeat(l.depth), l.name),
+        }
     }
 }
 
@@ -1239,6 +1325,13 @@ pub fn print_orphans(orphans: &[Orphan], json: bool) {
         "{} {noun}, which no package needs\n",
         orphans.len()
     );
+    let st = Style::stdout();
+    if st.fancy {
+        print!("{}", view::orphans_view(&st, orphans));
+        let total: u64 = orphans.iter().map(|o| o.installed_size).sum();
+        println!("\n{} in total.", human_size(total));
+        return;
+    }
     for o in orphans {
         println!(
             "  {} {}  ({})",
@@ -1293,6 +1386,10 @@ pub fn print_pins(pins: &[Pin], json: bool) {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
+    if Style::stdout().fancy {
+        print!("{}", view::pins_view(&Style::stdout(), pins, at));
+        return;
+    }
     for pin in pins {
         let state = if pin.is_active(at) { "" } else { "  [expired]" };
         match pin.describe() {
@@ -1565,20 +1662,25 @@ pub fn print_doctor(report: &DoctorReport, json: bool) {
         return;
     }
 
-    for c in &report.checks {
-        let mark = match c.status {
-            DoctorStatus::Ok => "  ok     ",
-            DoctorStatus::Note => "  note   ",
-            DoctorStatus::Warning => "  warning",
-            DoctorStatus::Problem => "  PROBLEM",
-        };
-        println!("{mark}  {}: {}", c.title, c.summary);
-        for d in &c.detail {
-            println!("            - {d}");
-        }
-        if let Some(fix) = &c.fix {
-            if c.status != DoctorStatus::Ok {
-                println!("            {} {fix}", Voice::Suggests.short_for(false));
+    let st = Style::stdout();
+    if st.fancy {
+        print!("{}", view::checks_view(&st, &report.checks));
+    } else {
+        for c in &report.checks {
+            let mark = match c.status {
+                DoctorStatus::Ok => "  ok     ",
+                DoctorStatus::Note => "  note   ",
+                DoctorStatus::Warning => "  warning",
+                DoctorStatus::Problem => "  PROBLEM",
+            };
+            println!("{mark}  {}: {}", c.title, c.summary);
+            for d in &c.detail {
+                println!("            - {d}");
+            }
+            if let Some(fix) = &c.fix {
+                if c.status != DoctorStatus::Ok {
+                    println!("            {} {fix}", Voice::Suggests.short_for(false));
+                }
             }
         }
     }
