@@ -571,6 +571,17 @@ pub enum Commands {
         /// Show the rules behind every number
         #[arg(long)]
         details: bool,
+
+        /// Weights for the overall number, for this run: `security=5,popularity=0`
+        /// (0 leaves a dimension out, 10 is the most, 1 the default; the config
+        /// has `[score]` for the standing ones)
+        #[arg(long, value_name = "LIST")]
+        weights: Option<String>,
+
+        /// Dimensions you care about: they count three times as much
+        /// (`security,maintenance`)
+        #[arg(long, value_name = "LIST")]
+        care: Option<String>,
     },
 
     /// How the recommendation for a package was reached, rule by rule, and

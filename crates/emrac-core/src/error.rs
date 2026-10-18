@@ -145,6 +145,10 @@ pub enum Error {
     #[error("{0}")]
     PacmanDb(String),
 
+    /// The Arch Security Tracker list could not be fetched or read.
+    #[error("{0}")]
+    Security(String),
+
     /// The mirror list could not be measured, ranked or rewritten.
     #[error("{0}")]
     Mirrors(String),
@@ -415,6 +419,7 @@ impl Error {
             | Error::Help(_)
             | Error::Bundle(_)
             | Error::Mirrors(_)
+            | Error::Security(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

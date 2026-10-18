@@ -469,8 +469,25 @@ fn run(cli: &Cli) -> Result<()> {
             runs,
             history,
         } => commands::benchmark::run(&sources, pkg, exe.as_deref(), *runs, *history, yes, json),
-        Commands::Score { pkg, details } => {
-            commands::score::run(&sources, pkg, *details, offline, json)
+        Commands::Score {
+            pkg,
+            details,
+            weights,
+            care,
+        } => {
+            let base = config.score.weights();
+            commands::score::run(
+                &sources,
+                pkg,
+                *details,
+                commands::score::Asked {
+                    base,
+                    weights: weights.as_deref(),
+                    care: care.as_deref(),
+                },
+                offline,
+                json,
+            )
         }
         Commands::Explain { pkg } => commands::explain::run(&sources, pkg, offline, json),
         Commands::Report => commands::report::run(&sources, json),

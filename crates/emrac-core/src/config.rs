@@ -32,6 +32,68 @@ pub struct Config {
     pub advisor: AdvisorConfig,
     #[serde(default)]
     pub clui: ClUiConfig,
+    #[serde(default)]
+    pub score: ScoreConfig,
+}
+
+/// How much each dimension of `emrac score` counts in the overall number
+/// (0 leaves it out, 10 is the most, 1 is the default for all).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoreConfig {
+    #[serde(default = "default_weight")]
+    pub performance: u8,
+    #[serde(default = "default_weight")]
+    pub build_time: u8,
+    #[serde(default = "default_weight")]
+    pub maintenance: u8,
+    #[serde(default = "default_weight")]
+    pub security: u8,
+    #[serde(default = "default_weight")]
+    pub popularity: u8,
+    #[serde(default = "default_weight")]
+    pub source: u8,
+}
+
+fn default_weight() -> u8 {
+    1
+}
+
+impl Default for ScoreConfig {
+    fn default() -> Self {
+        Self {
+            performance: 1,
+            build_time: 1,
+            maintenance: 1,
+            security: 1,
+            popularity: 1,
+            source: 1,
+        }
+    }
+}
+
+impl ScoreConfig {
+    pub fn weights(&self) -> crate::score::Weights {
+        crate::score::Weights {
+            performance: self.performance.min(crate::score::MAX_WEIGHT),
+            build_time: self.build_time.min(crate::score::MAX_WEIGHT),
+            maintenance: self.maintenance.min(crate::score::MAX_WEIGHT),
+            security: self.security.min(crate::score::MAX_WEIGHT),
+            popularity: self.popularity.min(crate::score::MAX_WEIGHT),
+            source: self.source.min(crate::score::MAX_WEIGHT),
+        }
+    }
+
+    fn slot(&mut self, key: &str) -> Option<&mut u8> {
+        Some(match key {
+            "score.performance" => &mut self.performance,
+            "score.build_time" => &mut self.build_time,
+            "score.maintenance" => &mut self.maintenance,
+            "score.security" => &mut self.security,
+            "score.popularity" => &mut self.popularity,
+            "score.source" => &mut self.source,
+            _ => return None,
+        })
+    }
 }
 
 /// How emrac looks and moves (u17). The words are kept as text in the file and
@@ -422,6 +484,12 @@ impl Config {
             "safety.partial_upgrade" => self.safety.partial_upgrade.clone(),
             "safety.arch_news" => self.safety.arch_news.clone(),
             "safety.db_backup" => self.safety.db_backup.clone(),
+            "score.performance" => self.score.performance.to_string(),
+            "score.build_time" => self.score.build_time.to_string(),
+            "score.maintenance" => self.score.maintenance.to_string(),
+            "score.security" => self.score.security.to_string(),
+            "score.popularity" => self.score.popularity.to_string(),
+            "score.source" => self.score.source.to_string(),
             "clui.animations" => self.clui.animations.clone(),
             "clui.color" => self.clui.color.clone(),
             "clui.unicode" => self.clui.unicode.clone(),
@@ -499,6 +567,14 @@ impl Config {
             }
             "cache.keep_days" => {
                 self.cache.keep_days = value.parse().map_err(|_| invalid())?;
+            }
+            k if k.starts_with("score.") && self.score.slot(k).is_some() => {
+                let n: u8 = value
+                    .parse()
+                    .ok()
+                    .filter(|n| *n <= crate::score::MAX_WEIGHT)
+                    .ok_or_else(invalid)?;
+                *self.score.slot(k).expect("checked above") = n;
             }
             "clui.animations" => {
                 crate::style::Animations::parse(value).ok_or_else(invalid)?;
@@ -604,6 +680,9 @@ impl Config {
             "build.remove_make_deps" => self.build.remove_make_deps = default_remove_make_deps(),
             "cache.policy" => self.cache.policy = default_cache_policy(),
             "cache.keep_days" => self.cache.keep_days = default_keep_days(),
+            k if k.starts_with("score.") && self.score.slot(k).is_some() => {
+                *self.score.slot(k).expect("checked above") = default_weight();
+            }
             "clui.animations" => self.clui.animations = default_animations(),
             "clui.color" => self.clui.color = default_auto(),
             "clui.unicode" => self.clui.unicode = default_auto(),
@@ -1025,5 +1104,33 @@ mod tests {
             .save_to(&blocker.join("config.toml"))
             .unwrap_err();
         assert!(matches!(err, Error::ConfigWrite { .. }));
+    }
+
+    #[test]
+    fn score_weights_are_checked_and_reset() {
+        let mut c = Config::default();
+        assert_eq!(c.get("score.security").unwrap(), "1");
+        assert!(c.score.weights().is_default());
+        c.set("score.security", "5").unwrap();
+        c.set("score.popularity", "0").unwrap();
+        assert_eq!(c.get("score.security").unwrap(), "5");
+        let w = c.score.weights();
+        assert_eq!((w.security, w.popularity, w.source), (5, 0, 1));
+        for bad in ["11", "-1", "many", "1.5", ""] {
+            assert!(c.set("score.security", bad).is_err(), "{bad:?}");
+        }
+        assert_eq!(
+            c.get("score.security").unwrap(),
+            "5",
+            "a refused value changes nothing"
+        );
+        assert!(c.set("score.nonsense", "1").is_err());
+        c.unset("score.security").unwrap();
+        assert_eq!(c.get("score.security").unwrap(), "1");
+        let again: Config = toml::from_str(&toml::to_string(&c).unwrap()).unwrap();
+        assert_eq!(again.get("score.popularity").unwrap(), "0");
+        // a hand-edited number over the limit is held at the limit
+        let hand: Config = toml::from_str("[score]\nsecurity = 99\n").unwrap();
+        assert_eq!(hand.score.weights().security, crate::score::MAX_WEIGHT);
     }
 }

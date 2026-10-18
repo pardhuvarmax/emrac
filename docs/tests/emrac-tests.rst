@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 606
+     - 624
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 46
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **684**
+     - **702**
 
-emrac-core library (606)
+emrac-core library (624)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -232,7 +232,7 @@ emrac-core library (606)
 * ``purge_ignores_the_protections_and_trim_stops_at_the_limit``
 * ``the_standard_policy_is_unchanged_by_the_lean_facts``
 
-``config::tests`` (20)
+``config::tests`` (21)
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_partial_build_section_keeps_the_other_defaults``
@@ -247,6 +247,7 @@ emrac-core library (606)
 * ``removing_build_tools_is_ask_always_or_never``
 * ``save_to_creates_parent_dirs_and_load_from_reads_it_back``
 * ``save_to_fails_cleanly_when_parent_is_a_file``
+* ``score_weights_are_checked_and_reset``
 * ``search_limit_accepts_numbers_and_unset``
 * ``set_get_unset_roundtrip_for_every_bool_key``
 * ``the_cache_policy_is_standard_or_lean_and_keeps_at_least_nothing_invalid``
@@ -688,20 +689,41 @@ emrac-core library (606)
 * ``the_timeout_kills_a_run_on_time_and_a_normal_exit_is_reported``
 * ``tmpfs_mounts_get_a_size_cap_when_one_is_set``
 
-``score::tests`` (11)
+``score::tests`` (22)
 ~~~~~~~~~~~~~~~~~~~~~
 
+* ``a_fixed_entry_says_this_version_is_older_than_the_fix``
 * ``a_full_card_and_its_json``
+* ``a_tracker_that_was_not_checked_is_said_not_assumed_clean``
+* ``a_weight_changes_the_overall_in_the_stated_way``
 * ``an_unaudited_aur_package_says_so_instead_of_pretending``
 * ``aur_security_starts_at_80_and_the_audit_and_trust_signals_take_off``
 * ``build_time_bands``
 * ``maintenance_bands_and_the_aur_penalties``
+* ``nothing_known_or_everything_weighted_zero_is_no_overall_number``
 * ``official_security_is_signature_and_news``
 * ``performance_bands_have_inclusive_edges_and_memory_takes_points_off``
 * ``popularity_is_the_average_of_votes_and_popularity_for_the_aur_only``
 * ``source_worthiness_is_the_recommend_score_as_it_is``
-* ``there_are_six_dimensions_in_the_specs_order_and_no_overall``
+* ``the_overall_is_in_the_json``
+* ``the_overall_is_the_mean_of_the_known_dimensions_rounded_and_says_what_it_covers``
+* ``the_overall_rounds_half_up_and_never_leaves_0_to_100``
+* ``the_tracker_cannot_take_off_more_than_60_and_says_so``
+* ``the_tracker_does_not_apply_to_the_aur``
+* ``the_tracker_takes_off_by_severity_and_says_which_entries``
+* ``there_are_six_dimensions_in_the_specs_order``
+* ``weights_are_parsed_strictly_with_friendly_names``
 * ``what_has_no_data_is_unknown_not_a_number``
+
+``security_tracker::tests`` (6)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_group_applies_between_affected_and_fixed_and_only_while_vulnerable``
+* ``matches_come_most_severe_first_then_by_id_and_carry_their_cves``
+* ``severity_words_points_and_order``
+* ``the_cache_is_used_while_fresh_refreshed_when_old_and_kept_when_the_fetch_fails``
+* ``the_real_list_shape_parses_and_a_broken_one_does_not``
+* ``with_no_fix_recorded_every_version_from_affected_on_matches``
 
 ``self_check::tests`` (12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1197,10 +1219,10 @@ End-to-end: the package report card (dev/e2e/score.sh)
 
 ``emrac score`` for an official package and an AUR package: six dimensions from stated
 rules, unknown when there is no data, no overall number: ``dev/e2e/run.sh score``.
-Last full run: after u18, 18 of 18 passed.
+Last full run: after u18, 32 of 32 passed.
 
 * the card has a header and the six dimensions in order
-* there is no overall score
+* the card is six dimensions and an overall that says what it covers
 * an official package's maintenance is its repository build age
 * its security is the signature, with the honest note under --details
 * popularity is unknown for an official package, and says why
@@ -1217,8 +1239,22 @@ Last full run: after u18, 18 of 18 passed.
 * an AUR package is scored from the AUR and its PKGBUILD is audited
 * its popularity comes from the votes
 * its maintenance is when the AUR page last changed
+* there is an overall number that says what it is made of
+* what was left out is named, with the reason
+* --weights changes the overall and shows the weights
+* --care counts the named dimensions three times
+* bad weights are refused with a reason
+* the config keeps standing weights
+* a weight outside 0 to 10 is refused by the config
+* --json carries the overall with its coverage and weights
+* a vulnerable entry for this version takes points off and is named with its CVEs
+* a fixed entry and an entry for another package do not count
+* the list is saved and used again without the address
+* offline with nothing saved says the tracker was not checked, and takes nothing off
+* the real tracker answers for an official package
+* an AUR package says the tracker does not cover it
 
-(18 checks.)
+(32 checks.)
 
 End-to-end: how emrac looks (dev/e2e/clui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

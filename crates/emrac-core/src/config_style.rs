@@ -129,6 +129,19 @@ const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        name: "score",
+        icon: "✓",
+        blurb: "how much each part of `emrac score` counts overall",
+        keys: &[
+            key("performance", Kind::Number, "weight of Performance in the overall number: 0 leaves it out, 10 is the most, 1 is the default", "0 to 10"),
+            key("build_time", Kind::Number, "weight of Build time", "0 to 10"),
+            key("maintenance", Kind::Number, "weight of Maintenance", "0 to 10"),
+            key("security", Kind::Number, "weight of Security", "0 to 10"),
+            key("popularity", Kind::Number, "weight of Popularity", "0 to 10"),
+            key("source", Kind::Number, "weight of Source worthiness", "0 to 10"),
+        ],
+    },
+    Section {
         name: "clui",
         icon: "✦",
         blurb: "how emrac looks and moves",
@@ -390,6 +403,12 @@ mod tests {
             ("build.remove_make_deps", "never"),
             ("cache.policy", "lean"),
             ("cache.keep_days", "3"),
+            ("score.performance", "2"),
+            ("score.build_time", "3"),
+            ("score.maintenance", "4"),
+            ("score.security", "5"),
+            ("score.popularity", "0"),
+            ("score.source", "6"),
             ("clui.animations", "active"),
             ("clui.color", "never"),
             ("clui.unicode", "never"),
@@ -411,7 +430,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 35, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 41, "{text}");
     }
 
     #[test]
@@ -468,6 +487,7 @@ mod tests {
             "[snapshot]",
             "[build]",
             "[cache]",
+            "[score]",
             "[clui]",
             "[advisor]",
             "[safety]",

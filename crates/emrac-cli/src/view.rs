@@ -736,6 +736,7 @@ pub fn score_view(st: &Style, card: &emrac_core::score::Card, details: bool) -> 
             ));
         }
     }
+    out.push_str(&overall_view(st, card));
     for d in &card.dimensions {
         if let Some(h) = &d.hint {
             out.push_str(&format!(
@@ -773,6 +774,61 @@ pub fn score_view(st: &Style, card: &emrac_core::score::Card, details: bool) -> 
     out
 }
 
+/// The overall number: a bar and what it is made of, then what was left out.
+fn overall_view(st: &Style, card: &emrac_core::score::Card) -> String {
+    let o = &card.overall;
+    let mut out = String::from("\n");
+    let title = st.paint(Role::Heading, &pad_right("Overall", 12));
+    match o.score {
+        Some(s) => out.push_str(&format!(
+            "  {title}  {}  {}  {}\n",
+            render_line(st, &bar(st, f64::from(s) / 100.0, 10)),
+            st.paint(Role::Size, &emrac_core::style::pad_left(&s.to_string(), 3)),
+            st.paint(Role::Dim, &overall_words(o))
+        )),
+        None => out.push_str(&format!(
+            "  {title}  {}\n",
+            st.paint(Role::Dim, &overall_none_words(o))
+        )),
+    }
+    if !o.weights.is_default() {
+        out.push_str(&format!(
+            "  {}\n",
+            st.paint(
+                Role::Dim,
+                &format!("weights: {}", o.weights.describe_changes())
+            )
+        ));
+    }
+    if !o.left_out.is_empty() {
+        let names: Vec<String> = o
+            .left_out
+            .iter()
+            .map(|l| format!("{} ({})", l.title, l.why))
+            .collect();
+        out.push_str(&format!(
+            "  {}\n",
+            st.paint(Role::Dim, &format!("left out: {}", names.join(", ")))
+        ));
+    }
+    out
+}
+
+fn overall_words(o: &emrac_core::score::Overall) -> String {
+    format!(
+        "from {} of {} dimensions, {}% of the weight",
+        o.used, o.of, o.coverage_percent
+    )
+}
+
+fn overall_none_words(o: &emrac_core::score::Overall) -> String {
+    if o.of == 0 {
+        "none: every weight is 0".to_string()
+    } else {
+        "none: no dimension with a weight is known".to_string()
+    }
+}
+
 /// The same card as plain text, for a pipe: one line per dimension.
 pub fn score_plain(card: &emrac_core::score::Card, details: bool) -> String {
     let mut out = format!("{}\n", score_header(card));
@@ -785,6 +841,32 @@ pub fn score_plain(card: &emrac_core::score::Card, details: bool) -> String {
                 out.push_str(&format!("      - {}{pts}\n", r.text));
             }
         }
+    }
+    let o = &card.overall;
+    match o.score {
+        Some(sc) => out.push_str(&format!(
+            "  {:<12} {:>3}  {}\n",
+            "Overall",
+            sc,
+            overall_words(o)
+        )),
+        None => out.push_str(&format!(
+            "  {:<12} {:>3}  {}\n",
+            "Overall",
+            "-",
+            overall_none_words(o)
+        )),
+    }
+    if !o.weights.is_default() {
+        out.push_str(&format!("  weights: {}\n", o.weights.describe_changes()));
+    }
+    if !o.left_out.is_empty() {
+        let names: Vec<String> = o
+            .left_out
+            .iter()
+            .map(|l| format!("{} ({})", l.title, l.why))
+            .collect();
+        out.push_str(&format!("  left out: {}\n", names.join(", ")));
     }
     for d in &card.dimensions {
         if let Some(h) = &d.hint {

@@ -1319,6 +1319,27 @@ impl Sources {
                 f.signed = Some(meta.signed);
                 f.dependents = Some(meta.dependents);
             }
+            // the Arch Security Tracker, for the installed version if there is one
+            let checked = self
+                .alpm
+                .installed_version(&details.name)
+                .unwrap_or_else(|| details.version.clone());
+            match crate::security_tracker::load(offline, t) {
+                Ok(list) => {
+                    f.tracker = Some(crate::score::TrackerFact {
+                        matches: crate::security_tracker::matches(
+                            &list.groups,
+                            &details.name,
+                            &checked,
+                            &|a, b| alpm::vercmp(a, b),
+                        ),
+                        version: checked,
+                        list_age_hours: t.saturating_sub(list.fetched_at) / 3600,
+                        stale_note: list.note,
+                    });
+                }
+                Err(e) => f.tracker_note = Some(e.to_string()),
+            }
             // Arch news of the last 90 days that name it (the cached feed only)
             let news = crate::arch_news::load_fresh(true, t);
             let word = details.name.to_lowercase();

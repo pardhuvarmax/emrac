@@ -60,6 +60,21 @@ pub struct Facts {
     /// Arch news items of the last 90 days that name the package.
     pub news_mentions: usize,
     pub source: Option<SourceFact>,
+    /// What the Arch Security Tracker says about the version (official only).
+    pub tracker: Option<TrackerFact>,
+    /// Why the tracker was not checked (offline with nothing saved, no network).
+    pub tracker_note: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrackerFact {
+    /// The version that was checked: the installed one, else the repository's.
+    pub version: String,
+    pub matches: Vec<crate::security_tracker::Match>,
+    /// Hours since the list was fetched.
+    pub list_age_hours: u64,
+    /// Said when the list is older than a refresh would give.
+    pub stale_note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -83,12 +98,198 @@ pub struct Dimension {
     pub hint: Option<String>,
 }
 
+/// How much each dimension counts in the overall number: 0 leaves it out, 1 is
+/// the default for every one, 10 is the most.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+pub struct Weights {
+    pub performance: u8,
+    pub build_time: u8,
+    pub maintenance: u8,
+    pub security: u8,
+    pub popularity: u8,
+    pub source: u8,
+}
+
+impl Default for Weights {
+    fn default() -> Self {
+        Weights {
+            performance: 1,
+            build_time: 1,
+            maintenance: 1,
+            security: 1,
+            popularity: 1,
+            source: 1,
+        }
+    }
+}
+
+pub const MAX_WEIGHT: u8 = 10;
+pub const KEYS: [&str; 6] = [
+    "performance",
+    "build_time",
+    "maintenance",
+    "security",
+    "popularity",
+    "source",
+];
+
+/// A dimension's key from what a person might type.
+pub fn normalize_key(word: &str) -> Option<&'static str> {
+    match word.trim().to_ascii_lowercase().replace('-', "_").as_str() {
+        "performance" | "perf" => Some("performance"),
+        "build_time" | "build" | "buildtime" => Some("build_time"),
+        "maintenance" | "maintained" => Some("maintenance"),
+        "security" | "secure" => Some("security"),
+        "popularity" | "popular" => Some("popularity"),
+        "source" | "source_worthiness" => Some("source"),
+        _ => None,
+    }
+}
+
+impl Weights {
+    pub fn get(&self, key: &str) -> u8 {
+        match key {
+            "performance" => self.performance,
+            "build_time" => self.build_time,
+            "maintenance" => self.maintenance,
+            "security" => self.security,
+            "popularity" => self.popularity,
+            _ => self.source,
+        }
+    }
+
+    pub fn set(&mut self, key: &str, value: u8) {
+        match key {
+            "performance" => self.performance = value,
+            "build_time" => self.build_time = value,
+            "maintenance" => self.maintenance = value,
+            "security" => self.security = value,
+            "popularity" => self.popularity = value,
+            _ => self.source = value,
+        }
+    }
+
+    pub fn is_default(&self) -> bool {
+        *self == Weights::default()
+    }
+
+    /// `security=5,popularity=0` on top of `self`.
+    pub fn with_list(mut self, text: &str) -> std::result::Result<Weights, String> {
+        for part in text.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+            let (k, v) = part
+                .split_once('=')
+                .ok_or_else(|| format!("'{part}' is not name=number, like security=5"))?;
+            let key = normalize_key(k).ok_or_else(|| {
+                format!(
+                    "'{}' is not a dimension; they are {}",
+                    k.trim(),
+                    KEYS.join(", ")
+                )
+            })?;
+            let n: u8 = v
+                .trim()
+                .parse()
+                .ok()
+                .filter(|n| *n <= MAX_WEIGHT)
+                .ok_or_else(|| format!("'{}' is not a weight from 0 to {MAX_WEIGHT}", v.trim()))?;
+            self.set(key, n);
+        }
+        Ok(self)
+    }
+
+    /// The named dimensions count three times as much as the rest.
+    pub fn caring_about(mut self, text: &str) -> std::result::Result<Weights, String> {
+        for word in text.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+            let key = normalize_key(word).ok_or_else(|| {
+                format!("'{word}' is not a dimension; they are {}", KEYS.join(", "))
+            })?;
+            self.set(key, 3);
+        }
+        Ok(self)
+    }
+
+    /// `security 5, popularity 0` for what differs from the default.
+    pub fn describe_changes(&self) -> String {
+        KEYS.iter()
+            .filter(|k| self.get(k) != 1)
+            .map(|k| format!("{} {}", k.replace('_', " "), self.get(k)))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct LeftOut {
+    pub key: &'static str,
+    pub title: &'static str,
+    pub why: &'static str,
+}
+
+/// The weighted mean of the dimensions that are known and have a weight.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Overall {
+    pub score: Option<u8>,
+    /// Dimensions that went into it.
+    pub used: usize,
+    /// Dimensions that have a weight (0 leaves one out).
+    pub of: usize,
+    /// The share of the weight that is known, in percent.
+    pub coverage_percent: u8,
+    pub weights: Weights,
+    pub left_out: Vec<LeftOut>,
+}
+
+pub fn overall(dimensions: &[Dimension], w: &Weights) -> Overall {
+    let (mut num, mut den, mut known_w, mut all_w) = (0u32, 0u32, 0u32, 0u32);
+    let (mut used, mut of) = (0, 0);
+    let mut left_out = Vec::new();
+    for d in dimensions {
+        let weight = u32::from(w.get(d.key));
+        if weight == 0 {
+            left_out.push(LeftOut {
+                key: d.key,
+                title: d.title,
+                why: "its weight is 0",
+            });
+            continue;
+        }
+        of += 1;
+        all_w += weight;
+        match d.score {
+            Some(s) => {
+                used += 1;
+                known_w += weight;
+                num += weight * u32::from(s);
+                den += weight;
+            }
+            None => left_out.push(LeftOut {
+                key: d.key,
+                title: d.title,
+                why: "unknown",
+            }),
+        }
+    }
+    Overall {
+        score: (den > 0).then(|| ((2 * num + den) / (2 * den)) as u8),
+        used,
+        of,
+        coverage_percent: if all_w == 0 {
+            0
+        } else {
+            ((100 * known_w + all_w / 2) / all_w) as u8
+        },
+        weights: *w,
+        left_out,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Card {
     pub name: String,
     pub version: String,
     pub repo: String,
     pub dimensions: Vec<Dimension>,
+    pub overall: Overall,
 }
 
 impl Card {
@@ -338,7 +539,7 @@ fn security(f: &Facts) -> Dimension {
                 f.news_mentions
             ));
         }
-        rules.push(rule("no vulnerability database is consulted (emrac keeps none), so this is not a clean bill", None));
+        tracker_rules(f, &mut points, &mut rules, &mut summary);
         return Dimension {
             key: "security",
             title: "Security",
@@ -415,7 +616,7 @@ fn security(f: &Facts) -> Dimension {
         parts.push(format!("{} trust warning(s)", f.trust_warning));
     }
     rules.push(rule(
-        "no vulnerability database is consulted (emrac keeps none), so this is not a clean bill",
+        "the Arch Security Tracker covers official packages only, so no CVE data was looked at; that is not a clean bill",
         None,
     ));
     Dimension {
@@ -426,6 +627,94 @@ fn security(f: &Facts) -> Dimension {
         rules,
         hint: None,
     }
+}
+
+/// The most the tracker alone can take off a security score.
+pub const TRACKER_CAP: i32 = 60;
+
+/// What the Arch Security Tracker adds to an official package's security.
+fn tracker_rules(f: &Facts, points: &mut i32, rules: &mut Vec<Rule>, summary: &mut String) {
+    let Some(t) = &f.tracker else {
+        let why = f
+            .tracker_note
+            .clone()
+            .unwrap_or_else(|| "no reason given".to_string());
+        rules.push(rule(
+            format!("the Arch Security Tracker was not checked ({why}); that is not a clean bill"),
+            None,
+        ));
+        summary.push_str("; the Arch Security Tracker was not checked");
+        return;
+    };
+    if let Some(note) = &t.stale_note {
+        rules.push(rule(
+            format!("the tracker list is {} h old: {note}", t.list_age_hours),
+            None,
+        ));
+    }
+    if t.matches.is_empty() {
+        rules.push(rule(
+            format!(
+                "the Arch Security Tracker (list {} h old) has no open entry for {}; it lists only what its maintainers recorded, so that is not a clean bill",
+                t.list_age_hours, t.version
+            ),
+            None,
+        ));
+        summary.push_str(&format!(
+            "; no open Arch Security Tracker entry for {}",
+            t.version
+        ));
+        return;
+    }
+    let mut total = 0;
+    for m in &t.matches {
+        let pts = m.severity.points();
+        total += pts;
+        let cves = match m.cves.len() {
+            0 => "no CVE listed".to_string(),
+            1..=3 => m.cves.join(", "),
+            n => format!("{}, and {} more", m.cves[..3].join(", "), n - 3),
+        };
+        let fix = match &m.fixed {
+            Some(v) => format!("fixed in {v}, this version is older"),
+            None => "no fix recorded".to_string(),
+        };
+        rules.push(rule(
+            format!(
+                "{} ({}, affected from {}): {cves}; {fix}",
+                m.id,
+                m.severity.word(),
+                m.affected
+            ),
+            Some(-pts),
+        ));
+    }
+    let cut = total.min(TRACKER_CAP);
+    if total > TRACKER_CAP {
+        rules.push(rule(
+            format!("the tracker takes off at most {TRACKER_CAP} in all ({total} listed)"),
+            Some(total - cut),
+        ));
+    }
+    *points -= cut;
+    let top = t
+        .matches
+        .iter()
+        .take(3)
+        .map(|m| format!("{} {}", m.id, m.severity.word()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    summary.push_str(&format!(
+        "; {} open Arch Security Tracker {} for {}: {top}{}",
+        t.matches.len(),
+        if t.matches.len() == 1 {
+            "entry"
+        } else {
+            "entries"
+        },
+        t.version,
+        if t.matches.len() > 3 { ", ..." } else { "" }
+    ));
 }
 
 pub const VOTE_LIMITS: &[(f64, u8)] = &[(0.0, 10), (9.0, 30), (49.0, 50), (199.0, 70), (999.0, 85)];
@@ -491,20 +780,27 @@ fn source_worthiness(f: &Facts) -> Dimension {
     }
 }
 
-/// The report card of a package.
+/// The report card of a package with every dimension counting the same.
 pub fn card(f: &Facts) -> Card {
+    card_with(f, &Weights::default())
+}
+
+/// The report card, its overall number weighted as asked.
+pub fn card_with(f: &Facts, w: &Weights) -> Card {
+    let dimensions = vec![
+        performance(f),
+        build_time(f),
+        maintenance(f),
+        security(f),
+        popularity(f),
+        source_worthiness(f),
+    ];
     Card {
         name: f.name.clone(),
         version: f.version.clone(),
         repo: f.repo.clone(),
-        dimensions: vec![
-            performance(f),
-            build_time(f),
-            maintenance(f),
-            security(f),
-            popularity(f),
-            source_worthiness(f),
-        ],
+        overall: overall(&dimensions, w),
+        dimensions,
     }
 }
 
@@ -548,7 +844,7 @@ mod tests {
     }
 
     #[test]
-    fn there_are_six_dimensions_in_the_specs_order_and_no_overall() {
+    fn there_are_six_dimensions_in_the_specs_order() {
         let c = card(&official());
         let keys: Vec<&str> = c.dimensions.iter().map(|d| d.key).collect();
         assert_eq!(
@@ -562,8 +858,7 @@ mod tests {
                 "source"
             ]
         );
-        let json = serde_json::to_string(&c).unwrap();
-        assert!(!json.contains("overall") && !json.contains("total"));
+        assert_eq!(keys, KEYS);
     }
 
     #[test]
@@ -980,5 +1275,345 @@ mod tests {
                 assert!(s <= 100);
             }
         }
+    }
+
+    fn full() -> Facts {
+        Facts {
+            bench: Some(Bench {
+                warm_micros: 4300,
+                peak_rss_kib: None,
+                programs: 1,
+                recorded: 1,
+            }),
+            build: Some(BuildFact {
+                secs: 240,
+                measured: true,
+            }),
+            source: Some(SourceFact {
+                score: 20,
+                verdict: "binary".into(),
+            }),
+            ..official()
+        }
+    }
+
+    #[test]
+    fn the_overall_is_the_mean_of_the_known_dimensions_rounded_and_says_what_it_covers() {
+        // performance 100, build 85, maintenance 100, security 95, popularity unknown, source 20
+        let c = card(&full());
+        let o = &c.overall;
+        assert_eq!(o.score, Some(80), "(100 + 85 + 100 + 95 + 20) / 5 = 80");
+        assert_eq!((o.used, o.of), (5, 6));
+        assert_eq!(o.coverage_percent, 83, "5 of 6 equal weights");
+        assert_eq!(o.left_out.len(), 1);
+        assert_eq!(
+            (o.left_out[0].key, o.left_out[0].why),
+            ("popularity", "unknown")
+        );
+        assert!(o.weights.is_default());
+    }
+
+    #[test]
+    fn the_overall_rounds_half_up_and_never_leaves_0_to_100() {
+        let mk = |a: u8, b: u8| {
+            let dims = vec![
+                Dimension {
+                    key: "security",
+                    title: "Security",
+                    score: Some(a),
+                    summary: String::new(),
+                    rules: vec![],
+                    hint: None,
+                },
+                Dimension {
+                    key: "maintenance",
+                    title: "Maintenance",
+                    score: Some(b),
+                    summary: String::new(),
+                    rules: vec![],
+                    hint: None,
+                },
+            ];
+            overall(&dims, &Weights::default()).score
+        };
+        assert_eq!(mk(50, 51), Some(51), "50.5 rounds up");
+        assert_eq!(mk(50, 50), Some(50));
+        assert_eq!(mk(0, 0), Some(0));
+        assert_eq!(mk(100, 100), Some(100));
+    }
+
+    #[test]
+    fn nothing_known_or_everything_weighted_zero_is_no_overall_number() {
+        assert_eq!(
+            card(&Facts {
+                name: "x".into(),
+                official: true,
+                ..Facts::default()
+            })
+            .overall
+            .score,
+            None
+        );
+        let zero = Weights {
+            performance: 0,
+            build_time: 0,
+            maintenance: 0,
+            security: 0,
+            popularity: 0,
+            source: 0,
+        };
+        let c = card_with(&full(), &zero);
+        assert_eq!(c.overall.score, None);
+        assert_eq!(
+            (c.overall.used, c.overall.of, c.overall.coverage_percent),
+            (0, 0, 0)
+        );
+        assert_eq!(c.overall.left_out.len(), 6);
+    }
+
+    #[test]
+    fn a_weight_changes_the_overall_in_the_stated_way() {
+        let f = full();
+        // security counts 5 times: (100 + 85 + 100 + 95*5 + 20) / 9
+        let w = Weights::default().with_list("security=5").unwrap();
+        let c = card_with(&f, &w);
+        assert_eq!(c.overall.score, Some(87), "(100+85+100+475+20)/9 = 86.7");
+        assert_eq!(
+            c.overall.coverage_percent, 90,
+            "9 of 10 of the weight is known (popularity, weight 1, is not)"
+        );
+        // a weight of 0 leaves a dimension out, known or not
+        let no_source = card_with(&f, &Weights::default().with_list("source=0").unwrap());
+        assert_eq!(
+            no_source.overall.score,
+            Some(95),
+            "(100 + 85 + 100 + 95) / 4 = 95"
+        );
+        assert!(no_source
+            .overall
+            .left_out
+            .iter()
+            .any(|l| l.key == "source" && l.why == "its weight is 0"));
+        // popularity is unknown, so its weight cannot move the number
+        let pop = card_with(&f, &Weights::default().with_list("popularity=10").unwrap());
+        assert_eq!(pop.overall.score, Some(80));
+        assert!(
+            pop.overall.coverage_percent < 50,
+            "but the coverage says how little is known"
+        );
+    }
+
+    #[test]
+    fn weights_are_parsed_strictly_with_friendly_names() {
+        let w = Weights::default()
+            .with_list("security=5, popularity=0 ,build-time=2,perf=3")
+            .unwrap();
+        assert_eq!(
+            (w.security, w.popularity, w.build_time, w.performance),
+            (5, 0, 2, 3)
+        );
+        assert_eq!(w.maintenance, 1);
+        for bad in [
+            "security",
+            "security=",
+            "security=11",
+            "security=-1",
+            "security=x",
+            "speed=3",
+            "=3",
+        ] {
+            assert!(Weights::default().with_list(bad).is_err(), "{bad}");
+        }
+        assert!(Weights::default().with_list("").unwrap().is_default());
+        let e = Weights::default().with_list("speed=3").unwrap_err();
+        assert!(
+            e.contains("performance, build_time, maintenance, security, popularity, source"),
+            "{e}"
+        );
+        let c = Weights::default()
+            .caring_about("security, maintenance")
+            .unwrap();
+        assert_eq!((c.security, c.maintenance, c.source), (3, 3, 1));
+        assert!(Weights::default().caring_about("looks").is_err());
+        assert_eq!(
+            w.describe_changes(),
+            "performance 3, build time 2, security 5, popularity 0"
+        );
+        assert_eq!(Weights::default().describe_changes(), "");
+        for k in KEYS {
+            assert_eq!(normalize_key(k), Some(k));
+        }
+    }
+
+    fn open(
+        id: &str,
+        sev: crate::security_tracker::Severity,
+        fixed: Option<&str>,
+    ) -> crate::security_tracker::Match {
+        crate::security_tracker::Match {
+            id: id.into(),
+            severity: sev,
+            cves: vec![
+                "CVE-2026-1".into(),
+                "CVE-2026-2".into(),
+                "CVE-2026-3".into(),
+                "CVE-2026-4".into(),
+            ],
+            affected: "1.0-1".into(),
+            fixed: fixed.map(str::to_string),
+        }
+    }
+
+    fn tracked(matches: Vec<crate::security_tracker::Match>) -> Facts {
+        Facts {
+            tracker: Some(TrackerFact {
+                version: "2.0-1".into(),
+                matches,
+                list_age_hours: 3,
+                stale_note: None,
+            }),
+            ..official()
+        }
+    }
+
+    #[test]
+    fn the_tracker_takes_off_by_severity_and_says_which_entries() {
+        use crate::security_tracker::Severity::*;
+        assert_eq!(score_of(&tracked(vec![]), "security"), Some(95));
+        assert_eq!(
+            score_of(&tracked(vec![open("AVG-1", Low, None)]), "security"),
+            Some(90)
+        );
+        assert_eq!(
+            score_of(&tracked(vec![open("AVG-1", Medium, None)]), "security"),
+            Some(83)
+        );
+        assert_eq!(
+            score_of(
+                &tracked(vec![open("AVG-1", High, Some("3.0-1"))]),
+                "security"
+            ),
+            Some(70)
+        );
+        assert_eq!(
+            score_of(&tracked(vec![open("AVG-1", Critical, None)]), "security"),
+            Some(55)
+        );
+        let two = tracked(vec![open("AVG-1", High, None), open("AVG-2", Medium, None)]);
+        assert_eq!(score_of(&two, "security"), Some(58), "95 - 25 - 12");
+        let d = dim(&card(&two), "security").clone();
+        assert!(
+            d.summary.contains(
+                "2 open Arch Security Tracker entries for 2.0-1: AVG-1 high, AVG-2 medium"
+            ),
+            "{}",
+            d.summary
+        );
+        assert!(d.rules.iter().any(|r| r.text.contains("AVG-1 (high, affected from 1.0-1): CVE-2026-1, CVE-2026-2, CVE-2026-3, and 1 more; no fix recorded") && r.points == Some(-25)), "{:?}", d.rules);
+    }
+
+    #[test]
+    fn the_tracker_cannot_take_off_more_than_60_and_says_so() {
+        use crate::security_tracker::Severity::*;
+        let many = tracked(vec![
+            open("AVG-1", Critical, None),
+            open("AVG-2", Critical, None),
+            open("AVG-3", High, None),
+        ]);
+        assert_eq!(score_of(&many, "security"), Some(35), "95 - 60");
+        let d = dim(&card(&many), "security").clone();
+        assert!(
+            d.rules
+                .iter()
+                .any(|r| r.text.contains("at most 60 in all (105 listed)") && r.points == Some(45)),
+            "{:?}",
+            d.rules
+        );
+        // news and the tracker together can go lower, each with its own cap
+        let both = Facts {
+            news_mentions: 2,
+            ..many
+        };
+        assert_eq!(score_of(&both, "security"), Some(5), "95 - 30 - 60");
+    }
+
+    #[test]
+    fn a_fixed_entry_says_this_version_is_older_than_the_fix() {
+        use crate::security_tracker::Severity::*;
+        let f = tracked(vec![open("AVG-1", High, Some("3.0-1"))]);
+        let d = dim(&card(&f), "security").clone();
+        assert!(
+            d.rules
+                .iter()
+                .any(|r| r.text.contains("fixed in 3.0-1, this version is older")),
+            "{:?}",
+            d.rules
+        );
+    }
+
+    #[test]
+    fn a_tracker_that_was_not_checked_is_said_not_assumed_clean() {
+        let f = Facts {
+            tracker: None,
+            tracker_note: Some("--offline is set and no list has been saved yet".into()),
+            ..official()
+        };
+        let d = dim(&card(&f), "security").clone();
+        assert_eq!(
+            d.score,
+            Some(95),
+            "nothing is taken off for what was not looked at"
+        );
+        assert!(
+            d.summary
+                .contains("the Arch Security Tracker was not checked"),
+            "{}",
+            d.summary
+        );
+        assert!(d.rules.iter().any(|r| r
+            .text
+            .contains("was not checked (--offline is set and no list has been saved yet)")));
+        // a clean answer is not called a clean bill
+        let clean = dim(&card(&tracked(vec![])), "security").clone();
+        assert!(clean
+            .rules
+            .iter()
+            .any(|r| r.text.contains("not a clean bill")));
+        assert!(clean
+            .summary
+            .contains("no open Arch Security Tracker entry for 2.0-1"));
+        // a stale list is said to be old
+        let stale = Facts {
+            tracker: Some(TrackerFact {
+                version: "2-1".into(),
+                matches: vec![],
+                list_age_hours: 90,
+                stale_note: Some("could not refresh (offline); using the saved list".into()),
+            }),
+            ..official()
+        };
+        assert!(dim(&card(&stale), "security")
+            .rules
+            .iter()
+            .any(|r| r.text.contains("90 h old")));
+    }
+
+    #[test]
+    fn the_tracker_does_not_apply_to_the_aur() {
+        let d = dim(&card(&aur()), "security").clone();
+        assert!(d
+            .rules
+            .iter()
+            .any(|r| r.text.contains("covers official packages only")));
+        assert!(!d.rules.iter().any(|r| r.text.contains("was not checked")));
+    }
+
+    #[test]
+    fn the_overall_is_in_the_json() {
+        let v = serde_json::to_value(card(&full())).unwrap();
+        assert_eq!(v["overall"]["score"], 80);
+        assert_eq!(v["overall"]["coverage_percent"], 83);
+        assert_eq!(v["overall"]["weights"]["security"], 1);
+        assert_eq!(v["overall"]["left_out"][0]["key"], "popularity");
     }
 }
