@@ -4,7 +4,7 @@
 # no overall number; the benchmark and your own builds feed it; an AUR package is
 # audited when online.
 #
-# last full run: after u18, 32 of 32 passed
+# last full run: after u19, 48 of 48 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -45,20 +45,51 @@ ck "a weight outside 0 to 10 is refused by the config" "! $e config set score.se
 ck "--json carries the overall with its coverage and weights" "$e score pacman --json | python3 -c 'import sys,json; o=json.load(sys.stdin)[\"overall\"]; assert o[\"coverage_percent\"] > 0 and o[\"weights\"][\"security\"]==1' 2>/dev/null || $e score pacman --json | grep -q '\"coverage_percent\"'"
 
 # --- the Arch Security Tracker (a fixture, so the answer is known)
-cat > /tmp/tracker.json <<'EOT'
+V=$(pacman -Q pacman | cut -d' ' -f2)
+cat > /tmp/tracker.json <<EOT
 [
- {"name":"AVG-9001","packages":["pacman"],"status":"Vulnerable","severity":"High","type":"x","affected":"1.0-1","fixed":null,"ticket":null,"issues":["CVE-2099-1","CVE-2099-2"],"advisories":[]},
+ {"name":"AVG-9001","packages":["pacman"],"status":"Vulnerable","severity":"High","type":"x","affected":"$V","fixed":null,"ticket":null,"issues":["CVE-2099-1","CVE-2099-2"],"advisories":[]},
  {"name":"AVG-9002","packages":["pacman"],"status":"Fixed","severity":"Critical","type":"x","affected":"1.0-1","fixed":"2.0-1","ticket":null,"issues":["CVE-2099-3"],"advisories":["ASA-209901-1"]},
  {"name":"AVG-9003","packages":["curl"],"status":"Vulnerable","severity":"Critical","type":"x","affected":"1.0-1","fixed":null,"ticket":null,"issues":["CVE-2099-4"],"advisories":[]}
 ]
 EOT
 mkdir -p /tmp/h-t1 /tmp/h-t2
-ck "a vulnerable entry for this version takes points off and is named with its CVEs" "HOME=/tmp/h-t1 EMRAC_SECURITY_URL=file:///tmp/tracker.json $e score pacman --details >/tmp/s5.out 2>&1; grep -E '^  Security +70 ' /tmp/s5.out | grep -q '1 open Arch Security Tracker entry for .*: AVG-9001 high' && grep -q 'AVG-9001 (high, affected from 1.0-1): CVE-2099-1, CVE-2099-2; no fix recorded (-25)' /tmp/s5.out"
+ck "a vulnerable entry for this version takes points off and is named with its CVEs" "HOME=/tmp/h-t1 EMRAC_SECURITY_URL=file:///tmp/tracker.json $e score pacman --details >/tmp/s5.out 2>&1; grep -E '^  Security +70 ' /tmp/s5.out | grep -q 'Arch Security Tracker entries for .* (1 open): AVG-9001 high' && grep -q 'AVG-9001 (high, affected from $V; open): CVE-2099-1, CVE-2099-2; no fix is recorded; its newest CVE is from 2099 (-25)' /tmp/s5.out"
 ck "a fixed entry and an entry for another package do not count" "! grep -q 'AVG-9002\|AVG-9003' /tmp/s5.out"
 ck "the list is saved and used again without the address" "HOME=/tmp/h-t1 EMRAC_SECURITY_URL=file:///nonexistent.json $e score pacman | grep -E '^  Security +70 '"
 ck "offline with nothing saved says the tracker was not checked, and takes nothing off" "HOME=/tmp/h-t2 $e --offline score pacman >/tmp/s6.out 2>&1; grep -E '^  Security +95 ' /tmp/s6.out | grep -q 'the Arch Security Tracker was not checked'"
 ck "the real tracker answers for an official package" "mkdir -p /tmp/h-t3; HOME=/tmp/h-t3 $e score pacman | grep -E '^  Security' | grep -q 'Arch Security Tracker'"
 ck "an AUR package says the tracker does not cover it" "$e score yay --details | grep -q 'covers official packages only'"
+
+# --- emrac vulns: standings, the ignore list, the gate (u19)
+TU=file:///tmp/tracker.json
+cat > /tmp/tracker2.json <<EOT
+[
+ {"name":"AVG-9101","packages":["pacman"],"status":"Vulnerable","severity":"Low","type":"x","affected":"$V","fixed":null,"ticket":null,"issues":["CVE-2010-1"],"advisories":[]}
+]
+EOT
+mkdir -p /tmp/h-t4 /tmp/h-t5
+ck "vulns lists a confirmed open entry" "HOME=/tmp/h-t4 EMRAC_SECURITY_URL=\$TU $e vulns >/tmp/v1.out 2>&1; grep -q 'AVG-9001' /tmp/v1.out && grep -q 'no fix recorded' /tmp/v1.out"
+ck "a fixed entry is not listed" "! grep -q 'AVG-9002' /tmp/v1.out"
+ck "--check fails while a confirmed High entry exists" "! HOME=/tmp/h-t4 EMRAC_SECURITY_URL=\$TU $e vulns --check"
+ck "an old entry with no fix is possibly stale: hidden, then shown with --all and its reason" "HOME=/tmp/h-t5 EMRAC_SECURITY_URL=file:///tmp/tracker2.json $e vulns >/tmp/v2.out 2>&1; ! grep -q 'AVG-9101' /tmp/v2.out && grep -q '1 possibly stale or ignored entry is not shown' /tmp/v2.out && HOME=/tmp/h-t5 $e vulns --all | grep -q 'AVG-9101.*possibly stale'"
+ck "a possibly stale entry never fails --check" "HOME=/tmp/h-t5 $e vulns --check"
+ck "ignoring an entry sets it aside and --check passes" "HOME=/tmp/h-t4 $e vulns ignore AVG-9001 --reason 'old report' >/dev/null 2>&1 && HOME=/tmp/h-t4 $e vulns --check && HOME=/tmp/h-t4 $e vulns --all | grep -q 'AVG-9001.*ignored by you'"
+ck "the ignore list shows the reason" "HOME=/tmp/h-t4 $e vulns ignored | grep -q 'AVG-9001  old report'"
+ck "an ignored entry takes nothing off the score" "HOME=/tmp/h-t4 $e score pacman | grep -E '^  Security +95 '"
+ck "unignore counts it again" "HOME=/tmp/h-t4 $e vulns unignore AVG-9001 >/dev/null 2>&1 && ! HOME=/tmp/h-t4 $e vulns --check"
+ck "ids that are not entries are refused" "! HOME=/tmp/h-t4 $e vulns ignore ../etc 2>&1 && ! HOME=/tmp/h-t4 $e vulns ignore AVG-1 2>&1"
+ck "--json is the report" "HOME=/tmp/h-t4 $e vulns --json | grep -q '\"list_age_hours\"'"
+ck "the doctor has a vulnerabilities row" "HOME=/tmp/h-t4 $e doctor 2>&1 | grep -q 'Known vulnerabilities'"
+ck "safety.vulnerabilities is a setting with three values" "$e config set safety.vulnerabilities block >/dev/null && $e config get safety.vulnerabilities | grep -q block && ! $e config set safety.vulnerabilities loud 2>&1; $e config unset safety.vulnerabilities >/dev/null"
+
+# --- the pre-flight gate for a plan
+W=$(pacman -Si figlet | awk '/^Version/{print $3}')
+echo "[{\"name\":\"AVG-9201\",\"packages\":[\"figlet\"],\"status\":\"Vulnerable\",\"severity\":\"Critical\",\"type\":\"x\",\"affected\":\"$W\",\"fixed\":null,\"ticket\":null,\"issues\":[\"CVE-2099-9\"],\"advisories\":[]}]" > /tmp/tracker3.json
+mkdir -p /tmp/h-t6
+ck "a plan that would install a confirmed Critical entry warns by default" "HOME=/tmp/h-t6 EMRAC_SECURITY_URL=file:///tmp/tracker3.json $e install figlet --dry-run 2>&1 | grep -q 'warning  Known vulnerabilities: 1 confirmed open High or Critical'"
+ck "with safety.vulnerabilities block it is a problem and the dry run says it would refuse" "HOME=/tmp/h-t6 $e config set safety.vulnerabilities block >/dev/null && HOME=/tmp/h-t6 EMRAC_SECURITY_URL=file:///tmp/tracker3.json $e install figlet --dry-run 2>&1 | grep -q 'PROBLEM  Known vulnerabilities'"
+ck "with off the check is not made" "HOME=/tmp/h-t6 $e config set safety.vulnerabilities off >/dev/null && ! HOME=/tmp/h-t6 EMRAC_SECURITY_URL=file:///tmp/tracker3.json $e install figlet --dry-run 2>&1 | grep -qi 'vulnerabilities'"
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]

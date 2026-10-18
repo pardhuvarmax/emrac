@@ -489,6 +489,22 @@ fn run(cli: &Cli) -> Result<()> {
                 json,
             )
         }
+        Commands::Vulns {
+            all,
+            fixable,
+            check,
+            command,
+        } => commands::vulns::run(
+            &sources,
+            command.as_ref(),
+            commands::vulns::Options {
+                all: *all,
+                fixable: *fixable,
+                check: *check,
+            },
+            offline,
+            json,
+        ),
         Commands::Explain { pkg } => commands::explain::run(&sources, pkg, offline, json),
         Commands::Report => commands::report::run(&sources, json),
         Commands::Snapshot { command } => {

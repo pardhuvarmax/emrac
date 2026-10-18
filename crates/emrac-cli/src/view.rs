@@ -697,6 +697,19 @@ pub fn score_view(st: &Style, card: &emrac_core::score::Card, details: bool) -> 
         card.known(),
         card.dimensions.len()
     ));
+    for g in &card.gates {
+        out.push_str(&format!(
+            "  {} {}\n",
+            st.paint(
+                Role::Problem,
+                &format!("{} GATE ({})", st.glyphs().problem, g.name)
+            ),
+            st.text(&g.text)
+        ));
+    }
+    if !card.gates.is_empty() {
+        out.push('\n');
+    }
     // title, bar, number, then the summary wrapped under its own column
     let tw = card
         .dimensions
@@ -750,7 +763,11 @@ pub fn score_view(st: &Style, card: &emrac_core::score::Card, details: bool) -> 
             if d.rules.is_empty() {
                 continue;
             }
-            out.push_str(&format!("\n{}\n", heading(st, d.title)));
+            out.push_str(&format!(
+                "\n{} {}\n",
+                heading(st, d.title),
+                st.paint(Role::Dim, &format!("evidence: {}", d.evidence.word()))
+            ));
             for r in &d.rules {
                 let pts = r.points.map_or(String::new(), |p| format!("  ({p:+})"));
                 for (i, l) in wrap(&st.text(&r.text), st.width.saturating_sub(6))
@@ -791,6 +808,9 @@ fn overall_view(st: &Style, card: &emrac_core::score::Card) -> String {
             st.paint(Role::Dim, &overall_none_words(o))
         )),
     }
+    if o.used > 0 {
+        out.push_str(&format!("  {}\n", st.paint(Role::Dim, &evidence_words(o))));
+    }
     if !o.weights.is_default() {
         out.push_str(&format!(
             "  {}\n",
@@ -821,6 +841,14 @@ fn overall_words(o: &emrac_core::score::Overall) -> String {
     )
 }
 
+fn evidence_words(o: &emrac_core::score::Overall) -> String {
+    let e = o.evidence;
+    format!(
+        "evidence: {} authoritative, {} corroborating, {} heuristic",
+        e.authoritative, e.corroborating, e.heuristic
+    )
+}
+
 fn overall_none_words(o: &emrac_core::score::Overall) -> String {
     if o.of == 0 {
         "none: every weight is 0".to_string()
@@ -832,6 +860,9 @@ fn overall_none_words(o: &emrac_core::score::Overall) -> String {
 /// The same card as plain text, for a pipe: one line per dimension.
 pub fn score_plain(card: &emrac_core::score::Card, details: bool) -> String {
     let mut out = format!("{}\n", score_header(card));
+    for g in &card.gates {
+        out.push_str(&format!("  GATE ({}): {}\n", g.name, g.text));
+    }
     for d in &card.dimensions {
         let num = d.score.map_or("-".to_string(), |s| s.to_string());
         out.push_str(&format!("  {:<12} {:>3}  {}\n", d.title, num, d.summary));
@@ -839,6 +870,9 @@ pub fn score_plain(card: &emrac_core::score::Card, details: bool) -> String {
             for r in &d.rules {
                 let pts = r.points.map_or(String::new(), |p| format!(" ({p:+})"));
                 out.push_str(&format!("      - {}{pts}\n", r.text));
+            }
+            if !d.rules.is_empty() {
+                out.push_str(&format!("      (evidence: {})\n", d.evidence.word()));
             }
         }
     }
@@ -856,6 +890,9 @@ pub fn score_plain(card: &emrac_core::score::Card, details: bool) -> String {
             "-",
             overall_none_words(o)
         )),
+    }
+    if o.used > 0 {
+        out.push_str(&format!("  {}\n", evidence_words(o)));
     }
     if !o.weights.is_default() {
         out.push_str(&format!("  weights: {}\n", o.weights.describe_changes()));
@@ -912,6 +949,105 @@ pub fn bundle_changes_view(st: &Style, changes: &[Change]) -> String {
         ]);
     }
     t.render(st, st.width)
+}
+
+/// `emrac vulns`: packages with their tracker entries. Confirmed entries first;
+/// `all` adds the possibly stale and ignored ones, `fixable_only` keeps the
+/// entries whose fix the repositories already have.
+pub fn vulns_view(
+    st: &Style,
+    report: &emrac_core::security_tracker::VulnReport,
+    all: bool,
+    fixable_only: bool,
+) -> String {
+    let mut out = String::new();
+    let cmp = |a: &str, b: &str| {
+        if a == b {
+            std::cmp::Ordering::Equal
+        } else if emrac_core::version_is_newer(b, a) {
+            std::cmp::Ordering::Greater
+        } else {
+            std::cmp::Ordering::Less
+        }
+    };
+    let mut shown = 0usize;
+    for p in &report.packages {
+        let entries: Vec<&emrac_core::security_tracker::Entry> = p
+            .entries
+            .iter()
+            .filter(|e| all || e.standing.confirmed())
+            .filter(|e| !fixable_only || (e.standing.confirmed() && p.fix_in_repos(e, &cmp)))
+            .collect();
+        if entries.is_empty() {
+            continue;
+        }
+        shown += 1;
+        out.push_str(&format!(
+            "{} {}{}\n",
+            st.paint(Role::Package, &p.name),
+            st.paint(Role::Version, &p.version),
+            p.repo_version
+                .as_ref()
+                .map_or(String::new(), |r| format!("  (repositories: {r})"))
+        ));
+        for e in entries {
+            let role = match (e.standing.confirmed(), e.found.severity) {
+                (false, _) => Role::Dim,
+                (true, s) if s >= emrac_core::security_tracker::Severity::High => Role::Problem,
+                (true, _) => Role::Warn,
+            };
+            let fix = match (&e.found.fixed, p.fix_in_repos(e, &cmp)) {
+                (Some(f), true) => format!("fixed in {f}, available now"),
+                (Some(f), false) => format!("fixed in {f}, not in the repositories yet"),
+                (None, _) => "no fix recorded".to_string(),
+            };
+            out.push_str(&format!(
+                "  {} {:<8} {:<14} {}\n",
+                st.paint(role, &e.found.id),
+                e.found.severity.word(),
+                e.standing.word(),
+                fix
+            ));
+            if !e.standing.confirmed()
+                || e.standing == emrac_core::security_tracker::Standing::PossiblyStale
+            {
+                out.push_str(&format!("      {}\n", st.paint(Role::Dim, &e.why)));
+            }
+        }
+    }
+    let hidden = report
+        .packages
+        .iter()
+        .flat_map(|p| &p.entries)
+        .filter(|e| !e.standing.confirmed())
+        .count();
+    if shown == 0 {
+        out.push_str(&format!(
+            "No confirmed open entry for the {} installed packages.\n",
+            report.checked
+        ));
+    }
+    if !all && hidden > 0 {
+        out.push_str(&format!(
+            "{hidden} possibly stale or ignored {} not shown (`emrac vulns --all`).\n",
+            if hidden == 1 {
+                "entry is"
+            } else {
+                "entries are"
+            }
+        ));
+    }
+    out.push_str(&format!(
+        "{} packages checked against {} tracker groups (list {} h old){}\n",
+        report.checked,
+        report.groups,
+        report.list_age_hours,
+        report
+            .note
+            .as_ref()
+            .map_or(String::new(), |n| format!("; {n}"))
+    ));
+    out
 }
 
 #[cfg(test)]
@@ -1804,5 +1940,58 @@ mod tests {
             1,
         );
         fits(&plan_box(&st, &p), 40);
+    }
+
+    fn vuln_fixture() -> emrac_core::security_tracker::VulnReport {
+        use emrac_core::security_tracker::{
+            Entry, Match, Severity, Standing, VulnPackage, VulnReport,
+        };
+        let entry = |id: &str, sev, standing, fixed: Option<&str>| Entry {
+            found: Match {
+                id: id.to_string(),
+                severity: sev,
+                cves: vec!["CVE-2025-1".to_string()],
+                affected: "1.0-1".to_string(),
+                fixed: fixed.map(str::to_string),
+            },
+            standing,
+            why: "why".to_string(),
+        };
+        VulnReport {
+            list_age_hours: 3,
+            note: None,
+            groups: 10,
+            checked: 5,
+            packages: vec![VulnPackage {
+                name: "openssl".to_string(),
+                version: "1.0-1".to_string(),
+                entries: vec![
+                    entry("AVG-1", Severity::High, Standing::FixKnown, Some("1.1-1")),
+                    entry("AVG-2", Severity::Low, Standing::PossiblyStale, None),
+                ],
+                repo_version: Some("1.1-1".to_string()),
+            }],
+        }
+    }
+
+    #[test]
+    fn vulns_view_hides_stale_entries_unless_asked() {
+        let r = vuln_fixture();
+        let plain = vulns_view(&uncoloured(), &r, false, false);
+        assert!(plain.contains("AVG-1") && plain.contains("fixed in 1.1-1, available now"));
+        assert!(!plain.contains("AVG-2"));
+        assert!(plain.contains("1 possibly stale or ignored entry is not shown"));
+        let all = vulns_view(&uncoloured(), &r, true, false);
+        assert!(all.contains("AVG-2") && all.contains("possibly stale"));
+    }
+
+    #[test]
+    fn vulns_view_fixable_keeps_only_entries_with_a_fix_in_the_repositories() {
+        let mut r = vuln_fixture();
+        let only = vulns_view(&uncoloured(), &r, true, true);
+        assert!(only.contains("AVG-1") && !only.contains("AVG-2"));
+        r.packages[0].repo_version = None;
+        let none = vulns_view(&uncoloured(), &r, true, true);
+        assert!(none.contains("No confirmed open entry"));
     }
 }

@@ -27,6 +27,14 @@ pub fn run(sources: &Sources, plan: &Plan, opts: &Options) -> Result<()> {
 
     let mut allowed = false;
     checks.retain_mut(|c| {
+        if c.id == "vulnerabilities" {
+            // `off` never reaches here (the check is not made); `warn`, the
+            // default, tells but does not stop; `block` stops.
+            if safety.vulnerabilities != "block" && c.status == Status::Problem {
+                c.status = Status::Warning;
+            }
+            return true;
+        }
         if c.id != "partial-upgrade" {
             return true;
         }
@@ -72,7 +80,7 @@ pub fn run(sources: &Sources, plan: &Plan, opts: &Options) -> Result<()> {
         return Ok(());
     }
     Err(Error::Preflight(format!(
-        "{}. Nothing was changed. (The settings `safety.preflight` and `safety.partial_upgrade` say how strict this is.)",
+        "{}. Nothing was changed. (The settings `safety.preflight`, `safety.partial_upgrade` and `safety.vulnerabilities` say how strict this is.)",
         problems.join("; ")
     )))
 }

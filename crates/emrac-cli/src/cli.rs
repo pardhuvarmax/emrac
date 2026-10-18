@@ -560,9 +560,10 @@ pub enum Commands {
     /// A report card for a package: performance, build time, maintenance,
     /// security, popularity and source worthiness, each from a stated rule
     ///
-    /// A dimension with no data is shown as unknown, never as a made-up number,
-    /// and there is no overall score on purpose: the six answer different
-    /// questions. `--details` shows every rule and the points it moved.
+    /// A dimension with no data is shown as unknown, never as a made-up number.
+    /// The overall number covers only the known dimensions and says so; a
+    /// security gate is shown apart from it. `--details` shows every rule and
+    /// the points it moved.
     #[command(verbatim_doc_comment)]
     Score {
         /// The package (official or AUR)
@@ -582,6 +583,30 @@ pub enum Commands {
         /// (`security,maintenance`)
         #[arg(long, value_name = "LIST")]
         care: Option<String>,
+    },
+
+    /// Installed packages against the Arch Security Tracker
+    ///
+    /// Only entries that look current count as confirmed. An entry with no
+    /// recorded fix and an old CVE, or for another major version, is shown as
+    /// possibly stale and never blocks anything. `emrac vulns ignore AVG-...`
+    /// sets one aside; it lapses if the entry later records a fix.
+    #[command(verbatim_doc_comment)]
+    Vulns {
+        /// Also show possibly stale and ignored entries
+        #[arg(long)]
+        all: bool,
+
+        /// Only entries whose fix is already in the repositories
+        #[arg(long)]
+        fixable: bool,
+
+        /// Exit with an error when a confirmed High or Critical entry exists
+        #[arg(long)]
+        check: bool,
+
+        #[command(subcommand)]
+        command: Option<VulnsCommand>,
     },
 
     /// How the recommendation for a package was reached, rule by rule, and
@@ -1171,6 +1196,25 @@ pub enum WatchCommand {
     /// Install the audit rules (run as root: sudo emrac ledger watch install;
     /// asks first, --yes does not answer)
     Install,
+}
+
+#[derive(Subcommand)]
+pub enum VulnsCommand {
+    /// Set an entry aside (it lapses if the entry later records a fix)
+    Ignore {
+        /// The entry, like AVG-2765
+        id: String,
+
+        /// Why, for your own memory
+        #[arg(long)]
+        reason: Option<String>,
+    },
+
+    /// Count an ignored entry again
+    Unignore { id: String },
+
+    /// List what is ignored
+    Ignored,
 }
 
 #[derive(Subcommand)]

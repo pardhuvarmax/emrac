@@ -187,6 +187,12 @@ const SECTIONS: &[Section] = &[
                 "\"gate\" | \"warn\" | \"off\"",
             ),
             key(
+                "vulnerabilities",
+                Kind::Text,
+                "what to do when a plan would install a version that has a confirmed open High or Critical entry in the Arch Security Tracker (an entry that looks stale, or that you ignored, never counts): warn shows it, block stops, off does not look",
+                "\"warn\" | \"block\" | \"off\"",
+            ),
+            key(
                 "db_backup",
                 Kind::Text,
                 "on keeps a small backup of pacman's local package database before each transaction (the newest 3, in ~/.local/share/emrac/pacman-db) and checks it before and after with pacman -Dk; off does neither",
@@ -421,6 +427,7 @@ mod tests {
             ("safety.partial_upgrade", "off"),
             ("safety.arch_news", "warn"),
             ("safety.db_backup", "off"),
+            ("safety.vulnerabilities", "block"),
             ("self.source", "file:///tmp/a \"b\"\\c/releases.json"),
             ("self.channel", "prerelease"),
             ("self.require_signature", "true"),
@@ -430,7 +437,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 41, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 42, "{text}");
     }
 
     #[test]

@@ -209,6 +209,14 @@ pub struct SafetyConfig {
     /// checks it before and after (`pacman -Dk`); `"off"` does neither.
     #[serde(default = "default_db_backup")]
     pub db_backup: String,
+    /// What to do when a plan would install a version with a confirmed open High or
+    /// Critical Arch Security Tracker entry: `"warn"` shows it, `"block"` stops, `"off"` does not look.
+    #[serde(default = "default_vulnerabilities")]
+    pub vulnerabilities: String,
+}
+
+fn default_vulnerabilities() -> String {
+    "warn".to_string()
 }
 
 fn default_db_backup() -> String {
@@ -233,6 +241,7 @@ impl Default for SafetyConfig {
             partial_upgrade: default_partial(),
             arch_news: default_news(),
             db_backup: default_db_backup(),
+            vulnerabilities: default_vulnerabilities(),
         }
     }
 }
@@ -484,6 +493,7 @@ impl Config {
             "safety.partial_upgrade" => self.safety.partial_upgrade.clone(),
             "safety.arch_news" => self.safety.arch_news.clone(),
             "safety.db_backup" => self.safety.db_backup.clone(),
+            "safety.vulnerabilities" => self.safety.vulnerabilities.clone(),
             "score.performance" => self.score.performance.to_string(),
             "score.build_time" => self.score.build_time.to_string(),
             "score.maintenance" => self.score.maintenance.to_string(),
@@ -622,6 +632,12 @@ impl Config {
                 }
                 self.safety.db_backup = value.to_string();
             }
+            "safety.vulnerabilities" => {
+                if !matches!(value, "warn" | "block" | "off") {
+                    return Err(invalid());
+                }
+                self.safety.vulnerabilities = value.to_string();
+            }
             "safety.arch_news" => {
                 if !matches!(value, "gate" | "warn" | "off") {
                     return Err(invalid());
@@ -701,6 +717,7 @@ impl Config {
             "safety.partial_upgrade" => self.safety.partial_upgrade = default_partial(),
             "safety.arch_news" => self.safety.arch_news = default_news(),
             "safety.db_backup" => self.safety.db_backup = default_db_backup(),
+            "safety.vulnerabilities" => self.safety.vulnerabilities = default_vulnerabilities(),
             "self.source" => self.self_service.source = default_self_source(),
             "self.channel" => self.self_service.channel = default_self_channel(),
             "self.require_signature" => self.self_service.require_signature = false,

@@ -42,3 +42,4 @@ pub mod timeline;
 pub mod ui;
 pub mod upgrade;
 pub mod verify;
+pub mod vulns;

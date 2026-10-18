@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 624
+     - 640
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 46
+     - 48
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 32
    * - **Automated total**
      -
-     - **702**
+     - **720**
 
-emrac-core library (624)
+emrac-core library (640)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -689,22 +689,27 @@ emrac-core library (624)
 * ``the_timeout_kills_a_run_on_time_and_a_normal_exit_is_reported``
 * ``tmpfs_mounts_get_a_size_cap_when_one_is_set``
 
-``score::tests`` (22)
+``score::tests`` (27)
 ~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_fixed_entry_says_this_version_is_older_than_the_fix``
 * ``a_full_card_and_its_json``
+* ``a_gate_opens_only_for_a_confirmed_high_or_critical_entry``
+* ``a_possibly_stale_entry_counts_half_and_says_why``
 * ``a_tracker_that_was_not_checked_is_said_not_assumed_clean``
 * ``a_weight_changes_the_overall_in_the_stated_way``
+* ``an_ignored_entry_counts_nothing_and_is_still_listed``
 * ``an_unaudited_aur_package_says_so_instead_of_pretending``
 * ``aur_security_starts_at_80_and_the_audit_and_trust_signals_take_off``
 * ``build_time_bands``
+* ``each_dimension_says_how_firm_its_evidence_is``
 * ``maintenance_bands_and_the_aur_penalties``
 * ``nothing_known_or_everything_weighted_zero_is_no_overall_number``
 * ``official_security_is_signature_and_news``
 * ``performance_bands_have_inclusive_edges_and_memory_takes_points_off``
 * ``popularity_is_the_average_of_votes_and_popularity_for_the_aur_only``
 * ``source_worthiness_is_the_recommend_score_as_it_is``
+* ``the_overall_counts_the_evidence_it_rests_on``
 * ``the_overall_is_in_the_json``
 * ``the_overall_is_the_mean_of_the_known_dimensions_rounded_and_says_what_it_covers``
 * ``the_overall_rounds_half_up_and_never_leaves_0_to_100``
@@ -715,15 +720,26 @@ emrac-core library (624)
 * ``weights_are_parsed_strictly_with_friendly_names``
 * ``what_has_no_data_is_unknown_not_a_number``
 
-``security_tracker::tests`` (6)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``security_tracker::tests`` (17)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_group_applies_between_affected_and_fixed_and_only_while_vulnerable``
+* ``a_list_that_is_not_a_tracker_list_or_shrinks_too_much_is_refused``
+* ``a_recorded_fix_is_a_known_fix_whatever_the_age``
+* ``an_entry_about_another_major_series_is_possibly_stale_even_if_recent``
+* ``an_ignore_holds_until_the_entry_records_a_fix``
+* ``an_open_entry_whose_newest_cve_is_over_two_years_old_is_possibly_stale``
+* ``an_open_entry_with_a_recent_cve_in_the_same_series_is_open``
+* ``entries_come_confirmed_first_then_by_severity``
 * ``matches_come_most_severe_first_then_by_id_and_carry_their_cves``
+* ``only_https_is_fetched``
 * ``severity_words_points_and_order``
 * ``the_cache_is_used_while_fresh_refreshed_when_old_and_kept_when_the_fetch_fails``
+* ``the_ignore_list_is_kept_validated_and_sorted``
 * ``the_real_list_shape_parses_and_a_broken_one_does_not``
+* ``the_standing_sets_the_points_and_what_a_gate_may_use``
 * ``with_no_fix_recorded_every_version_from_affected_on_matches``
+* ``years_come_from_the_cve_ids``
 
 ``self_check::tests`` (12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -916,7 +932,7 @@ emrac-core library (624)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (46)
+emrac command line, unit tests (48)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -979,7 +995,7 @@ emrac command line, unit tests (46)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-``view::tests`` (18)
+``view::tests`` (20)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_long_check_summary_wraps_under_itself_and_never_runs_past_the_width``
@@ -1000,6 +1016,8 @@ emrac command line, unit tests (46)
 * ``the_report_card_has_a_bar_and_a_number_for_what_is_known_and_a_dash_for_the_rest``
 * ``the_summary_has_the_sizes_a_bar_and_the_plan_id``
 * ``the_timeline_groups_by_day_with_a_glyph_for_each_kind``
+* ``vulns_view_fixable_keeps_only_entries_with_a_fix_in_the_repositories``
+* ``vulns_view_hides_stale_entries_unless_asked``
 
 emrac command line, integration tests (32)
 ------------------------------------------
@@ -1219,7 +1237,7 @@ End-to-end: the package report card (dev/e2e/score.sh)
 
 ``emrac score`` for an official package and an AUR package: six dimensions from stated
 rules, unknown when there is no data, no overall number: ``dev/e2e/run.sh score``.
-Last full run: after u18, 32 of 32 passed.
+Last full run: after u19, 48 of 48 passed.
 
 * the card has a header and the six dimensions in order
 * the card is six dimensions and an overall that says what it covers
@@ -1253,8 +1271,24 @@ Last full run: after u18, 32 of 32 passed.
 * offline with nothing saved says the tracker was not checked, and takes nothing off
 * the real tracker answers for an official package
 * an AUR package says the tracker does not cover it
+* vulns lists a confirmed open entry
+* a fixed entry is not listed
+* --check fails while a confirmed High entry exists
+* an old entry with no fix is possibly stale: hidden, then shown with --all and its reason
+* a possibly stale entry never fails --check
+* ignoring an entry sets it aside and --check passes
+* the ignore list shows the reason
+* an ignored entry takes nothing off the score
+* unignore counts it again
+* ids that are not entries are refused
+* --json is the report
+* the doctor has a vulnerabilities row
+* safety.vulnerabilities is a setting with three values
+* a plan that would install a confirmed Critical entry warns by default
+* with safety.vulnerabilities block it is a problem and the dry run says it would refuse
+* with off the check is not made
 
-(32 checks.)
+(48 checks.)
 
 End-to-end: how emrac looks (dev/e2e/clui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

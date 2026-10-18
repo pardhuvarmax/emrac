@@ -70,7 +70,7 @@ pub struct Facts {
 pub struct TrackerFact {
     /// The version that was checked: the installed one, else the repository's.
     pub version: String,
-    pub matches: Vec<crate::security_tracker::Match>,
+    pub entries: Vec<crate::security_tracker::Entry>,
     /// Hours since the list was fetched.
     pub list_age_hours: u64,
     /// Said when the list is older than a refresh would give.
@@ -85,6 +85,29 @@ pub struct Rule {
     pub points: Option<i32>,
 }
 
+/// How firm the evidence behind a dimension is: not interchangeable, and the
+/// overall number says how much of it each kind contributed.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Evidence {
+    /// Official metadata, the tracker, a signature in the database.
+    Authoritative,
+    /// Measured on this machine, or emrac's own analysis of what it fetched.
+    Corroborating,
+    /// A proxy: age, votes, an estimate, advice from rules.
+    Heuristic,
+}
+
+impl Evidence {
+    pub fn word(self) -> &'static str {
+        match self {
+            Evidence::Authoritative => "authoritative",
+            Evidence::Corroborating => "corroborating",
+            Evidence::Heuristic => "heuristic",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Dimension {
     pub key: &'static str,
@@ -93,6 +116,7 @@ pub struct Dimension {
     pub score: Option<u8>,
     pub summary: String,
     pub rules: Vec<Rule>,
+    pub evidence: Evidence,
     /// What to run to make an unknown dimension known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hint: Option<String>,
@@ -218,6 +242,21 @@ impl Weights {
     }
 }
 
+/// A hard problem that is shown whatever the numbers average to.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Gate {
+    pub name: &'static str,
+    pub text: String,
+}
+
+/// How many of the dimensions in the overall number rest on each kind of evidence.
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq)]
+pub struct EvidenceMix {
+    pub authoritative: usize,
+    pub corroborating: usize,
+    pub heuristic: usize,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct LeftOut {
     pub key: &'static str,
@@ -237,12 +276,14 @@ pub struct Overall {
     pub coverage_percent: u8,
     pub weights: Weights,
     pub left_out: Vec<LeftOut>,
+    pub evidence: EvidenceMix,
 }
 
 pub fn overall(dimensions: &[Dimension], w: &Weights) -> Overall {
     let (mut num, mut den, mut known_w, mut all_w) = (0u32, 0u32, 0u32, 0u32);
     let (mut used, mut of) = (0, 0);
     let mut left_out = Vec::new();
+    let mut mix = EvidenceMix::default();
     for d in dimensions {
         let weight = u32::from(w.get(d.key));
         if weight == 0 {
@@ -257,6 +298,11 @@ pub fn overall(dimensions: &[Dimension], w: &Weights) -> Overall {
         all_w += weight;
         match d.score {
             Some(s) => {
+                match d.evidence {
+                    Evidence::Authoritative => mix.authoritative += 1,
+                    Evidence::Corroborating => mix.corroborating += 1,
+                    Evidence::Heuristic => mix.heuristic += 1,
+                }
                 used += 1;
                 known_w += weight;
                 num += weight * u32::from(s);
@@ -273,13 +319,10 @@ pub fn overall(dimensions: &[Dimension], w: &Weights) -> Overall {
         score: (den > 0).then(|| ((2 * num + den) / (2 * den)) as u8),
         used,
         of,
-        coverage_percent: if all_w == 0 {
-            0
-        } else {
-            ((100 * known_w + all_w / 2) / all_w) as u8
-        },
+        coverage_percent: (100 * known_w + all_w / 2).checked_div(all_w).unwrap_or(0) as u8,
         weights: *w,
         left_out,
+        evidence: mix,
     }
 }
 
@@ -290,6 +333,8 @@ pub struct Card {
     pub repo: String,
     pub dimensions: Vec<Dimension>,
     pub overall: Overall,
+    /// Hard problems, shown whatever the numbers average to.
+    pub gates: Vec<Gate>,
 }
 
 impl Card {
@@ -349,6 +394,7 @@ fn unknown(
         score: None,
         summary: summary.into(),
         rules: Vec::new(),
+        evidence: Evidence::Heuristic,
         hint,
     }
 }
@@ -415,6 +461,7 @@ fn performance(f: &Facts) -> Dimension {
         ),
         rules,
         hint: None,
+        evidence: Evidence::Heuristic,
     }
 }
 
@@ -453,6 +500,7 @@ fn build_time(f: &Facts) -> Dimension {
             None,
         )],
         hint: None,
+        evidence: Evidence::Heuristic,
     }
 }
 
@@ -497,6 +545,7 @@ fn maintenance(f: &Facts) -> Dimension {
         summary: format!("{what} {days} days ago{extra}"),
         rules,
         hint: None,
+        evidence: Evidence::Heuristic,
     }
 }
 
@@ -547,6 +596,7 @@ fn security(f: &Facts) -> Dimension {
             summary,
             rules,
             hint: None,
+            evidence: Evidence::Heuristic,
         };
     }
     let mut points: i32 = 80;
@@ -626,6 +676,7 @@ fn security(f: &Facts) -> Dimension {
         summary: parts.join("; "),
         rules,
         hint: None,
+        evidence: Evidence::Heuristic,
     }
 }
 
@@ -634,6 +685,7 @@ pub const TRACKER_CAP: i32 = 60;
 
 /// What the Arch Security Tracker adds to an official package's security.
 fn tracker_rules(f: &Facts, points: &mut i32, rules: &mut Vec<Rule>, summary: &mut String) {
+    use crate::security_tracker::Standing;
     let Some(t) = &f.tracker else {
         let why = f
             .tracker_note
@@ -652,7 +704,7 @@ fn tracker_rules(f: &Facts, points: &mut i32, rules: &mut Vec<Rule>, summary: &m
             None,
         ));
     }
-    if t.matches.is_empty() {
+    if t.entries.is_empty() {
         rules.push(rule(
             format!(
                 "the Arch Security Tracker (list {} h old) has no open entry for {}; it lists only what its maintainers recorded, so that is not a clean bill",
@@ -667,26 +719,28 @@ fn tracker_rules(f: &Facts, points: &mut i32, rules: &mut Vec<Rule>, summary: &m
         return;
     }
     let mut total = 0;
-    for m in &t.matches {
-        let pts = m.severity.points();
+    for e in &t.entries {
+        let pts = e.points();
         total += pts;
-        let cves = match m.cves.len() {
+        let cves = match e.found.cves.len() {
             0 => "no CVE listed".to_string(),
-            1..=3 => m.cves.join(", "),
-            n => format!("{}, and {} more", m.cves[..3].join(", "), n - 3),
+            1..=3 => e.found.cves.join(", "),
+            n => format!("{}, and {} more", e.found.cves[..3].join(", "), n - 3),
         };
-        let fix = match &m.fixed {
-            Some(v) => format!("fixed in {v}, this version is older"),
-            None => "no fix recorded".to_string(),
+        let what = match e.standing {
+            Standing::PossiblyStale => format!("{}, counts half", e.standing.word()),
+            Standing::Ignored => format!("{}, counts nothing", e.standing.word()),
+            other => other.word().to_string(),
         };
         rules.push(rule(
             format!(
-                "{} ({}, affected from {}): {cves}; {fix}",
-                m.id,
-                m.severity.word(),
-                m.affected
+                "{} ({}, affected from {}; {what}): {cves}; {}",
+                e.found.id,
+                e.found.severity.word(),
+                e.found.affected,
+                e.why
             ),
-            Some(-pts),
+            (pts != 0).then_some(-pts),
         ));
     }
     let cut = total.min(TRACKER_CAP);
@@ -697,23 +751,35 @@ fn tracker_rules(f: &Facts, points: &mut i32, rules: &mut Vec<Rule>, summary: &m
         ));
     }
     *points -= cut;
+    let confirmed = t.entries.iter().filter(|e| e.standing.confirmed()).count();
+    let stale = t
+        .entries
+        .iter()
+        .filter(|e| e.standing == Standing::PossiblyStale)
+        .count();
+    let ignored = t
+        .entries
+        .iter()
+        .filter(|e| e.standing == Standing::Ignored)
+        .count();
     let top = t
-        .matches
+        .entries
         .iter()
         .take(3)
-        .map(|m| format!("{} {}", m.id, m.severity.word()))
+        .map(|e| format!("{} {}", e.found.id, e.found.severity.word()))
         .collect::<Vec<_>>()
         .join(", ");
+    let mut counts = format!("{confirmed} open");
+    if stale > 0 {
+        counts.push_str(&format!(", {stale} possibly stale"));
+    }
+    if ignored > 0 {
+        counts.push_str(&format!(", {ignored} ignored by you"));
+    }
     summary.push_str(&format!(
-        "; {} open Arch Security Tracker {} for {}: {top}{}",
-        t.matches.len(),
-        if t.matches.len() == 1 {
-            "entry"
-        } else {
-            "entries"
-        },
+        "; Arch Security Tracker entries for {} ({counts}): {top}{}",
         t.version,
-        if t.matches.len() > 3 { ", ..." } else { "" }
+        if t.entries.len() > 3 { ", ..." } else { "" }
     ));
 }
 
@@ -755,6 +821,7 @@ fn popularity(f: &Facts) -> Dimension {
             rule(format!("the average of the two: {score}"), None),
         ],
         hint: None,
+        evidence: Evidence::Heuristic,
     }
 }
 
@@ -770,6 +837,7 @@ fn source_worthiness(f: &Facts) -> Dimension {
             ),
             rules: vec![rule(format!("the Source Suitability Score of `emrac recommend`, as it is: {}", s.score), None)],
             hint: None,
+            evidence: Evidence::Heuristic,
         },
         None => unknown(
             "source",
@@ -787,7 +855,7 @@ pub fn card(f: &Facts) -> Card {
 
 /// The report card, its overall number weighted as asked.
 pub fn card_with(f: &Facts, w: &Weights) -> Card {
-    let dimensions = vec![
+    let mut dimensions = vec![
         performance(f),
         build_time(f),
         maintenance(f),
@@ -795,13 +863,72 @@ pub fn card_with(f: &Facts, w: &Weights) -> Card {
         popularity(f),
         source_worthiness(f),
     ];
+    for d in &mut dimensions {
+        d.evidence = match d.key {
+            "performance" => Evidence::Corroborating,
+            "build_time" if f.build.as_ref().is_some_and(|b| b.measured) => Evidence::Corroborating,
+            "security" if f.official => Evidence::Authoritative,
+            "security" => Evidence::Corroborating,
+            _ => Evidence::Heuristic,
+        };
+    }
     Card {
         name: f.name.clone(),
         version: f.version.clone(),
         repo: f.repo.clone(),
         overall: overall(&dimensions, w),
+        gates: gates(f),
         dimensions,
     }
+}
+
+/// The problems that are shown whatever the average is: a confirmed High or
+/// Critical Arch Security Tracker entry that applies to the version, or a
+/// critical finding in an AUR package's PKGBUILD. Entries that are possibly
+/// stale or that you ignored never open a gate.
+pub fn gates(f: &Facts) -> Vec<Gate> {
+    use crate::security_tracker::Severity;
+    let mut out = Vec::new();
+    if let Some(t) = &f.tracker {
+        let hard: Vec<&crate::security_tracker::Entry> = t
+            .entries
+            .iter()
+            .filter(|e| e.standing.confirmed() && e.found.severity >= Severity::High)
+            .collect();
+        if !hard.is_empty() {
+            let list = hard
+                .iter()
+                .map(|e| format!("{} {}", e.found.id, e.found.severity.word()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let fixes = hard.iter().filter(|e| e.found.fixed.is_some()).count();
+            out.push(Gate {
+                name: "security",
+                text: format!(
+                    "{} confirmed High or Critical Arch Security Tracker {} to {}: {list}{}",
+                    hard.len(),
+                    if hard.len() == 1 {
+                        "entry applies"
+                    } else {
+                        "entries apply"
+                    },
+                    t.version,
+                    if fixes > 0 {
+                        format!("; {fixes} with a fix available")
+                    } else {
+                        String::new()
+                    }
+                ),
+            });
+        }
+    }
+    if f.audit.as_ref().is_some_and(|a| a.critical > 0) {
+        out.push(Gate {
+            name: "pkgbuild",
+            text: "the PKGBUILD audit has a critical finding".to_string(),
+        });
+    }
+    out
 }
 
 #[cfg(test)]
@@ -1324,6 +1451,7 @@ mod tests {
                     summary: String::new(),
                     rules: vec![],
                     hint: None,
+                    evidence: Evidence::Heuristic,
                 },
                 Dimension {
                     key: "maintenance",
@@ -1332,6 +1460,7 @@ mod tests {
                     summary: String::new(),
                     rules: vec![],
                     hint: None,
+                    evidence: Evidence::Heuristic,
                 },
             ];
             overall(&dims, &Weights::default()).score
@@ -1464,11 +1593,30 @@ mod tests {
         }
     }
 
+    fn entry(m: crate::security_tracker::Match) -> crate::security_tracker::Entry {
+        use crate::security_tracker::{Entry, Standing};
+        let (standing, why) = match &m.fixed {
+            Some(f) => (
+                Standing::FixKnown,
+                format!("fixed in {f}, this version is older"),
+            ),
+            None => (
+                Standing::OpenRecent,
+                "no fix is recorded; its newest CVE is from 2026".to_string(),
+            ),
+        };
+        Entry {
+            found: m,
+            standing,
+            why,
+        }
+    }
+
     fn tracked(matches: Vec<crate::security_tracker::Match>) -> Facts {
         Facts {
             tracker: Some(TrackerFact {
                 version: "2.0-1".into(),
-                matches,
+                entries: matches.into_iter().map(entry).collect(),
                 list_age_hours: 3,
                 stale_note: None,
             }),
@@ -1504,12 +1652,12 @@ mod tests {
         let d = dim(&card(&two), "security").clone();
         assert!(
             d.summary.contains(
-                "2 open Arch Security Tracker entries for 2.0-1: AVG-1 high, AVG-2 medium"
+                "Arch Security Tracker entries for 2.0-1 (2 open): AVG-1 high, AVG-2 medium"
             ),
             "{}",
             d.summary
         );
-        assert!(d.rules.iter().any(|r| r.text.contains("AVG-1 (high, affected from 1.0-1): CVE-2026-1, CVE-2026-2, CVE-2026-3, and 1 more; no fix recorded") && r.points == Some(-25)), "{:?}", d.rules);
+        assert!(d.rules.iter().any(|r| r.text.contains("AVG-1 (high, affected from 1.0-1; open): CVE-2026-1, CVE-2026-2, CVE-2026-3, and 1 more; no fix is recorded") && r.points == Some(-25)), "{:?}", d.rules);
     }
 
     #[test]
@@ -1586,7 +1734,7 @@ mod tests {
         let stale = Facts {
             tracker: Some(TrackerFact {
                 version: "2-1".into(),
-                matches: vec![],
+                entries: vec![],
                 list_age_hours: 90,
                 stale_note: Some("could not refresh (offline); using the saved list".into()),
             }),
@@ -1615,5 +1763,173 @@ mod tests {
         assert_eq!(v["overall"]["coverage_percent"], 83);
         assert_eq!(v["overall"]["weights"]["security"], 1);
         assert_eq!(v["overall"]["left_out"][0]["key"], "popularity");
+    }
+
+    fn stale_entry(
+        id: &str,
+        sev: crate::security_tracker::Severity,
+    ) -> crate::security_tracker::Entry {
+        use crate::security_tracker::{Entry, Standing};
+        Entry {
+            found: open(id, sev, None),
+            standing: Standing::PossiblyStale,
+            why: "no fix is recorded and its newest CVE is 4 years old".into(),
+        }
+    }
+
+    fn with_entries(entries: Vec<crate::security_tracker::Entry>) -> Facts {
+        Facts {
+            tracker: Some(TrackerFact {
+                version: "2.0-1".into(),
+                entries,
+                list_age_hours: 1,
+                stale_note: None,
+            }),
+            ..official()
+        }
+    }
+
+    #[test]
+    fn a_possibly_stale_entry_counts_half_and_says_why() {
+        use crate::security_tracker::Severity::*;
+        // a High is 25; stale it is 12
+        let f = with_entries(vec![stale_entry("AVG-1", High)]);
+        assert_eq!(score_of(&f, "security"), Some(83), "95 - 12");
+        let d = dim(&card(&f), "security").clone();
+        assert!(
+            d.summary.contains("(0 open, 1 possibly stale)"),
+            "{}",
+            d.summary
+        );
+        assert!(
+            d.rules
+                .iter()
+                .any(|r| r.text.contains("possibly stale, counts half")
+                    && r.text.contains("4 years old")
+                    && r.points == Some(-12)),
+            "{:?}",
+            d.rules
+        );
+    }
+
+    #[test]
+    fn an_ignored_entry_counts_nothing_and_is_still_listed() {
+        use crate::security_tracker::{Entry, Severity::*, Standing};
+        let ignored = Entry {
+            found: open("AVG-1", Critical, None),
+            standing: Standing::Ignored,
+            why: "you ignored it: disputed".into(),
+        };
+        let f = with_entries(vec![ignored]);
+        assert_eq!(score_of(&f, "security"), Some(95));
+        let d = dim(&card(&f), "security").clone();
+        assert!(d.summary.contains("1 ignored by you"), "{}", d.summary);
+        assert!(
+            d.rules.iter().any(|r| r.text.contains("counts nothing")
+                && r.text.contains("you ignored it: disputed")
+                && r.points.is_none()),
+            "{:?}",
+            d.rules
+        );
+    }
+
+    #[test]
+    fn a_gate_opens_only_for_a_confirmed_high_or_critical_entry() {
+        use crate::security_tracker::{Entry, Severity::*, Standing};
+        assert!(card(&official()).gates.is_empty());
+        assert!(
+            card(&tracked(vec![open("AVG-1", Medium, None)]))
+                .gates
+                .is_empty(),
+            "medium is advice, not a gate"
+        );
+        let g = card(&tracked(vec![open("AVG-1", High, None)])).gates;
+        assert_eq!(g.len(), 1);
+        assert_eq!(g[0].name, "security");
+        assert!(g[0].text.contains("1 confirmed High or Critical Arch Security Tracker entry applies to 2.0-1: AVG-1 high"), "{}", g[0].text);
+        let fixable = card(&tracked(vec![
+            open("AVG-1", Critical, Some("3.0-1")),
+            open("AVG-2", High, None),
+        ]))
+        .gates;
+        assert!(
+            fixable[0].text.contains("2 confirmed")
+                && fixable[0].text.contains("1 with a fix available"),
+            "{}",
+            fixable[0].text
+        );
+        // a possibly stale or ignored one never opens it, however severe
+        let stale = card(&with_entries(vec![stale_entry("AVG-3", Critical)])).gates;
+        assert!(stale.is_empty());
+        let ig = Entry {
+            found: open("AVG-4", Critical, None),
+            standing: Standing::Ignored,
+            why: String::new(),
+        };
+        assert!(card(&with_entries(vec![ig])).gates.is_empty());
+        // and the gate stays whatever the numbers average to
+        let c = card(&Facts {
+            tracker: tracked(vec![open("AVG-1", Critical, None)]).tracker,
+            ..full()
+        });
+        assert!(c.overall.score.unwrap() >= 70, "the average is still high");
+        assert_eq!(c.gates.len(), 1);
+        // a critical PKGBUILD audit finding is a gate too
+        let aur_bad = Facts {
+            audit: Some(AuditCounts {
+                critical: 1,
+                high: 0,
+                warning: 0,
+            }),
+            ..aur()
+        };
+        assert_eq!(card(&aur_bad).gates[0].name, "pkgbuild");
+    }
+
+    #[test]
+    fn each_dimension_says_how_firm_its_evidence_is() {
+        let c = card(&full());
+        let e = |k: &str| dim(&c, k).evidence;
+        assert_eq!(
+            e("security"),
+            Evidence::Authoritative,
+            "official: the tracker and the signature"
+        );
+        assert_eq!(e("performance"), Evidence::Corroborating, "measured here");
+        assert_eq!(e("maintenance"), Evidence::Heuristic);
+        assert_eq!(e("popularity"), Evidence::Heuristic);
+        assert_eq!(e("source"), Evidence::Heuristic);
+        assert_eq!(e("build_time"), Evidence::Corroborating, "measured builds");
+        let est = Facts {
+            build: Some(BuildFact {
+                secs: 100,
+                measured: false,
+            }),
+            ..full()
+        };
+        assert_eq!(
+            dim(&card(&est), "build_time").evidence,
+            Evidence::Heuristic,
+            "an estimate is a proxy"
+        );
+        assert_eq!(
+            dim(&card(&aur()), "security").evidence,
+            Evidence::Corroborating,
+            "emrac's own analysis of a PKGBUILD"
+        );
+        assert_eq!(Evidence::Authoritative.word(), "authoritative");
+    }
+
+    #[test]
+    fn the_overall_counts_the_evidence_it_rests_on() {
+        let c = card(&full());
+        // performance (corroborating), build (corroborating), maintenance (heuristic),
+        // security (authoritative), source (heuristic); popularity is unknown
+        let m = c.overall.evidence;
+        assert_eq!((m.authoritative, m.corroborating, m.heuristic), (1, 2, 2));
+        let v = serde_json::to_value(&c).unwrap();
+        assert_eq!(v["overall"]["evidence"]["heuristic"], 2);
+        assert_eq!(v["dimensions"][3]["evidence"], "authoritative");
+        assert!(v["gates"].as_array().unwrap().is_empty());
     }
 }

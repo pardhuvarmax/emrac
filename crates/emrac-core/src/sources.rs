@@ -1327,11 +1327,11 @@ impl Sources {
             match crate::security_tracker::load(offline, t) {
                 Ok(list) => {
                     f.tracker = Some(crate::score::TrackerFact {
-                        matches: crate::security_tracker::matches(
+                        entries: crate::security_tracker::assess_now(
                             &list.groups,
                             &details.name,
                             &checked,
-                            &|a, b| alpm::vercmp(a, b),
+                            t,
                         ),
                         version: checked,
                         list_age_hours: t.saturating_sub(list.fetched_at) / 3600,
@@ -2310,7 +2310,227 @@ impl Sources {
     /// throwaway database (needs the network); without it the check reports
     /// honestly how old the package list is instead.
     pub fn doctor(&self, online: bool) -> Result<DoctorReport> {
-        Ok(doctor::evaluate(&self.doctor_inputs(online)))
+        let mut report = doctor::evaluate(&self.doctor_inputs(online));
+        report.checks.push(self.vuln_doctor_check(online));
+        // Problems first, then warnings, notes and ok; the order within a group is kept.
+        report.checks.sort_by_key(|c| std::cmp::Reverse(c.status));
+        Ok(report)
+    }
+
+    /// Installed packages against the Arch Security Tracker. `offline` uses the
+    /// saved list only.
+    pub fn vuln_report(&self, offline: bool) -> Result<crate::security_tracker::VulnReport> {
+        let t = now();
+        let list = crate::security_tracker::load(offline, t)?;
+        Ok(crate::security_tracker::report(
+            &list,
+            &self.installed_pairs(),
+            &|n| self.alpm.sync_version(n),
+            &|a, b| alpm::vercmp(a, b),
+            &crate::security_tracker::read_ignores(),
+            t,
+        ))
+    }
+
+    /// The doctor's row about known vulnerabilities. It uses the saved list and
+    /// asks the network only for `--online`.
+    fn vuln_doctor_check(&self, online: bool) -> doctor::Check {
+        use crate::security_tracker::Severity;
+        let mk =
+            |status, summary: String, detail: Vec<String>, fix: Option<String>| doctor::Check {
+                id: "vulnerabilities",
+                title: "Known vulnerabilities",
+                status,
+                summary,
+                detail,
+                fix,
+            };
+        let report = match self.vuln_report(!online) {
+            Ok(r) => r,
+            Err(e) => {
+                return mk(
+                    doctor::Status::Note,
+                    format!("not checked: {e}"),
+                    Vec::new(),
+                    Some("emrac vulns".to_string()),
+                )
+            }
+        };
+        let confirmed: Vec<&crate::security_tracker::VulnPackage> = report
+            .packages
+            .iter()
+            .filter(|p| p.worst_confirmed().is_some())
+            .collect();
+        let others = report.packages.len() - confirmed.len();
+        let age = format!("(list {} h old)", report.list_age_hours);
+        if confirmed.is_empty() {
+            let extra = if others > 0 {
+                format!("; {others} package(s) have only possibly stale or ignored entries (`emrac vulns --all`)")
+            } else {
+                String::new()
+            };
+            return mk(
+                doctor::Status::Ok,
+                format!("no confirmed open Arch Security Tracker entry for the {} installed packages {age}{extra}", report.checked),
+                Vec::new(),
+                None,
+            );
+        }
+        let hard = report.hard();
+        let fixable = confirmed
+            .iter()
+            .flat_map(|p| p.entries.iter().map(move |e| (p, e)))
+            .filter(|(p, e)| {
+                e.standing.confirmed() && p.fix_in_repos(e, &|a, b| alpm::vercmp(a, b))
+            })
+            .count();
+        let detail: Vec<String> = confirmed
+            .iter()
+            .take(5)
+            .map(|p| {
+                let worst = p.worst_confirmed().unwrap_or(Severity::Unknown);
+                format!(
+                    "{} {}: {} confirmed, worst {}",
+                    p.name,
+                    p.version,
+                    p.entries.iter().filter(|e| e.standing.confirmed()).count(),
+                    worst.word()
+                )
+            })
+            .collect();
+        let status = if hard > 0 && fixable > 0 {
+            doctor::Status::Warning
+        } else {
+            doctor::Status::Note
+        };
+        mk(
+            status,
+            format!(
+                "{} installed package(s) have a confirmed open Arch Security Tracker entry ({hard} High or Critical, {fixable} with a fix already in the repositories) {age}",
+                confirmed.len()
+            ),
+            detail,
+            Some(if fixable > 0 { "emrac vulns --fixable, then emrac upgrade".to_string() } else { "emrac vulns".to_string() }),
+        )
+    }
+
+    /// The pre-flight check about vulnerabilities for a plan: the versions the
+    /// plan would install against the tracker, and what the plan fixes. `None`
+    /// when there is nothing to say (a removal, only AUR packages, or offline
+    /// with no saved list).
+    pub fn vuln_check_plan(&self, plan: &Plan, offline: bool) -> Option<doctor::Check> {
+        if !matches!(
+            plan.action,
+            PlanAction::Install
+                | PlanAction::Upgrade
+                | PlanAction::Reinstall
+                | PlanAction::Downgrade
+        ) {
+            return None;
+        }
+        let official: Vec<&PlannedPackage> =
+            plan.packages.iter().filter(|p| p.repo != "aur").collect();
+        if official.is_empty() {
+            return None;
+        }
+        let t = now();
+        let mk =
+            |status, summary: String, detail: Vec<String>, fix: Option<String>| doctor::Check {
+                id: "vulnerabilities",
+                title: "Known vulnerabilities",
+                status,
+                summary,
+                detail,
+                fix,
+            };
+        let activity = crate::style::Activity::spinner("checking the Arch Security Tracker");
+        let list = match crate::security_tracker::load(offline, t) {
+            Ok(l) => {
+                activity.finish("checked the Arch Security Tracker");
+                l
+            }
+            Err(e) => {
+                activity.fail("could not check the Arch Security Tracker");
+                return (!offline).then(|| {
+                    mk(
+                        doctor::Status::Note,
+                        format!("not checked: {e}"),
+                        Vec::new(),
+                        None,
+                    )
+                });
+            }
+        };
+        let ignored = crate::security_tracker::read_ignores();
+        let year = crate::security_tracker::year_of(t);
+        let cmp = |a: &str, b: &str| alpm::vercmp(a, b);
+        let mut hard: Vec<String> = Vec::new();
+        let mut fixed_by_plan: Vec<String> = Vec::new();
+        for p in &official {
+            let groups: Vec<crate::security_tracker::Group> = list
+                .groups
+                .iter()
+                .filter(|g| g.status == "Vulnerable" && g.packages.contains(&p.name))
+                .cloned()
+                .collect();
+            if groups.is_empty() {
+                continue;
+            }
+            let after =
+                crate::security_tracker::assess(&groups, &p.name, &p.version, &cmp, &ignored, year);
+            for e in after.iter().filter(|e| {
+                e.standing.confirmed()
+                    && e.found.severity >= crate::security_tracker::Severity::High
+            }) {
+                hard.push(format!(
+                    "{} {}: {} {}",
+                    p.name,
+                    p.version,
+                    e.found.id,
+                    e.found.severity.word()
+                ));
+            }
+            if let Some(have) = self.alpm.installed_version(&p.name) {
+                let before =
+                    crate::security_tracker::assess(&groups, &p.name, &have, &cmp, &ignored, year);
+                for e in before.iter().filter(|e| e.standing.confirmed()) {
+                    if !after.iter().any(|a| a.found.id == e.found.id) {
+                        fixed_by_plan.push(format!("{} {}", e.found.id, p.name));
+                    }
+                }
+            }
+        }
+        let age = format!("(list {} h old)", t.saturating_sub(list.fetched_at) / 3600);
+        if !hard.is_empty() {
+            return Some(mk(
+                doctor::Status::Problem,
+                format!("{} confirmed open High or Critical Arch Security Tracker {} for what this would install {age}", hard.len(), if hard.len() == 1 { "entry" } else { "entries" }),
+                hard.into_iter().take(6).collect(),
+                Some("emrac vulns --all shows them; `emrac vulns ignore AVG-... --reason ...` sets one aside; safety.vulnerabilities sets how strict this is".to_string()),
+            ));
+        }
+        if !fixed_by_plan.is_empty() {
+            return Some(mk(
+                doctor::Status::Note,
+                format!(
+                    "this fixes {} Arch Security Tracker {} {age}",
+                    fixed_by_plan.len(),
+                    if fixed_by_plan.len() == 1 {
+                        "entry"
+                    } else {
+                        "entries"
+                    }
+                ),
+                fixed_by_plan.into_iter().take(6).collect(),
+                None,
+            ));
+        }
+        Some(mk(
+            doctor::Status::Ok,
+            format!("no confirmed open High or Critical Arch Security Tracker entry for the versions to install {age}"),
+            Vec::new(),
+            None,
+        ))
     }
 
     /// The facts for the bug-report header.
@@ -2943,7 +3163,14 @@ impl Sources {
         {
             facts.partial = Some(self.partial_upgrade_facts(plan)?);
         }
-        Ok(crate::preflight::evaluate(&facts))
+        let mut checks = crate::preflight::evaluate(&facts);
+        if Config::load().map_or(true, |c| c.safety.vulnerabilities != "off") {
+            if let Some(c) = self.vuln_check_plan(plan, offline) {
+                checks.push(c);
+                checks.sort_by_key(|c| std::cmp::Reverse(c.status));
+            }
+        }
+        Ok(checks)
     }
 
     /// Upgrades the repositories have for installed packages that this plan
