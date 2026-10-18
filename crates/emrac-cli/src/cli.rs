@@ -347,6 +347,19 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// What happened to the system, day by day: transactions, builds,
+    /// snapshots and config file actions
+    Timeline {
+        /// A period back from now (30d, 12h, 8w) or a date (YYYY-MM-DD, UTC);
+        /// default 7d
+        #[arg(long, value_name = "PERIOD|DATE")]
+        since: Option<String>,
+
+        /// Only what touched this package
+        #[arg(long, value_name = "NAME")]
+        pkg: Option<String>,
+    },
+
     /// What emrac has built and installed here, and how long builds took
     Stats {
         /// Only the last period: a number with m, h, d or w (for example 30d)

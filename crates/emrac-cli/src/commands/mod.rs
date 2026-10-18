@@ -33,5 +33,6 @@ pub mod search;
 pub mod self_cmd;
 pub mod snapshot;
 pub mod stats;
+pub mod timeline;
 pub mod upgrade;
 pub mod verify;

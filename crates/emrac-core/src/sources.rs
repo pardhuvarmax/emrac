@@ -1238,6 +1238,23 @@ impl Sources {
             .unwrap_or_default()
     }
 
+    /// The events of `emrac timeline`, newest first, from the records emrac keeps.
+    /// A record that cannot be read is skipped.
+    pub fn timeline(&self, filter: &crate::timeline::Filter) -> Vec<crate::timeline::Event> {
+        let history = History::all_with_archive().unwrap_or_default();
+        let snapshots = crate::snapshot::SnapshotStore::list().unwrap_or_default();
+        let pacnew = crate::pacnew_log::log_path()
+            .and_then(|p| crate::pacnew_log::read(&p))
+            .unwrap_or_default();
+        crate::timeline::collect(
+            &history,
+            &crate::recommend::read_builds(),
+            &snapshots,
+            &pacnew,
+            filter,
+        )
+    }
+
     /// Build and transaction statistics for `emrac stats`.
     pub fn stats(&self, since_secs: Option<u64>) -> crate::build_stats::Stats {
         let history = History::all().unwrap_or_default();

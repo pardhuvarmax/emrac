@@ -20,7 +20,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | Section | Built | Partial | Specified | Idea | Research | Not planned | Total |
 |---|---|---|---|---|---|---|---|
 | 1. Built: what works today | 56 | 0 | 0 | 0 | 0 | 0 | 56 |
-| 2. The specification (SPEC.md): catalogue and signature features | 0 | 31 | 25 | 0 | 0 | 0 | 56 |
+| 2. The specification (SPEC.md): catalogue and signature features | 0 | 32 | 24 | 0 | 0 | 0 | 56 |
 | 3. Ideas from additions.md (A, B, C) | 13 | 8 | 0 | 18 | 0 | 0 | 39 |
 | 4. Ideas from ideas.md | 10 | 7 | 1 | 38 | 0 | 0 | 56 |
 | 5. Wandrover: cross-distribution package resolution | 0 | 0 | 0 | 9 | 0 | 0 | 9 |
@@ -31,7 +31,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
 | 11. Newer ideas (not yet in the other documents) | 0 | 1 | 0 | 26 | 0 | 0 | 27 |
 | 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **86** | **54** | **27** | **139** | **9** | **3** | **318** |
+| **All** | **86** | **55** | **26** | **139** | **9** | **3** | **318** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -149,7 +149,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | IV.6 Build Diff | Partial | PKGBUILD diff on rebuild exists; `diff-build` (binary vs source runtime comparison) does not. |  |
 | IV.7 Build Benchmark | Partial | `benchmark <pkg>` (u9): first run, warm median, size and memory above the launcher floor, stored in `benchmarks.jsonl`. No CPU time, no cold-cache run, not yet read by `recommend`. | `docs/plan/r3/u9-stats-benchmark.md` |
 | IV.8 Build Cache Explorer | Partial | Per-package sizes in `cache list`; no browsing or selective deletion by name. |  |
-| IV.9 Timeline | Specified | History grouped chronologically ("Yesterday: installed ..., rollback point created"). |  |
+| IV.9 Timeline | Partial | `timeline` (u10): transactions, builds, snapshots and config file actions by UTC day, with `--since` and `--pkg`. No TUI form; `pacman.log` and file-change events belong to package forensics. | `docs/plan/r3/u10-timeline.md` |
 | IV.10 Rollback Snapshots | Partial | Package-set snapshots and per-transaction rollback; no Btrfs/ZFS filesystem snapshots. |  |
 | IV.11 Interactive Conflict Resolver | Partial | Conflicts and providers listed in plans; an AUR-build dependency conflict is explained with a swap offered. No interactive `[1] Downgrade [2] Rebuild [3] Replace` for the rest. | u24-u26 |
 | IV.12 Dependency Graph Explorer | Partial | Text/dot/JSON views; the interactive explorer needs the TUI. |  |

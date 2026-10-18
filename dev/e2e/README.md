@@ -21,6 +21,8 @@ dev/e2e/run.sh
 
 `dev/e2e/run.sh buildtools` runs [`buildtools.sh`](./buildtools.sh) as the ordinary user: a local checkout posing as an AUR package has a build-only dependency and a runtime one; after the build emrac must offer to remove exactly what the build added and nothing needs, in each of the `build.remove_make_deps` modes.
 
+`dev/e2e/run.sh timeline` runs [`timeline.sh`](./timeline.sh) as the ordinary user: real installs, a removal, an undo and a snapshot plus a build-times fixture, told by `emrac timeline` by day and newest first, with the `--pkg` and `--since` filters, the JSON form and the refusal of a bad period.
+
 `dev/e2e/run.sh stats` runs [`stats.sh`](./stats.sh) as the ordinary user: `emrac stats` over a build-times file with known builds (all time, `--since`, failed builds left out of the averages, the refusal of a bad period) and `emrac benchmark` of an installed package (nothing runs without an answer, the programs are listed first, a result is kept and shown by `--history`, packages with no programs and unknown executables are refused).
 
 `dev/e2e/run.sh policy` runs [`policy.sh`](./policy.sh) as root: a small package is upgraded, reinstalled and removed by real pacman while an override and a diversion are set; it shows what pacman does without the policy, what survives with it, the refusals, the warnings about a frozen file, the untrusted-executable refusal, and the plan preview.

@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 502
+     - 510
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 17
@@ -31,9 +31,9 @@ Totals
      - 31
    * - **Automated total**
      -
-     - **550**
+     - **558**
 
-emrac-core library (502)
+emrac-core library (510)
 ------------------------
 
 ``arch_news::tests`` (7)
@@ -716,6 +716,18 @@ emrac-core library (502)
 * ``the_elf_reader_agrees_with_readelf_on_a_real_binary_and_a_library``
 * ``transaction_starts_are_found_in_the_log``
 
+``timeline::tests`` (8)
+~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_failed_transaction_carries_the_first_line_of_the_error``
+* ``a_long_list_is_cut_with_a_count``
+* ``a_rollback_says_what_it_reversed``
+* ``builds_snapshots_and_config_actions_join_the_story``
+* ``days_are_labelled_and_split_at_midnight_utc``
+* ``since_and_package_filters_apply_to_every_source``
+* ``the_clock_is_hours_and_minutes_utc``
+* ``transactions_read_as_sentences``
+
 ``upgrade_report::tests`` (6)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1009,6 +1021,29 @@ nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 pa
 * a package that was installed before the build is not offered
 
 (9 checks.)
+
+End-to-end: the timeline (dev/e2e/timeline.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Real transactions, a snapshot and a build-times fixture, told by
+``emrac timeline``: ``dev/e2e/run.sh timeline``. Last full run: after u10, 14 of 14 passed.
+
+* an empty history says so
+* today's events are under a Today heading
+* installs and the removal are told as sentences
+* the undo shows as a rollback of the transaction
+* the snapshot is on the timeline with its package count
+* a build and a failed build are on it with their times
+* events run newest first within the day
+* --pkg keeps only what names that package
+* --pkg for a package with no events says so
+* --since 1h still shows today's events
+* a date far in the future shows nothing
+* --json is a list of events with a source
+* a bad period is refused
+* it says the times are UTC
+
+(14 checks.)
 
 End-to-end: statistics and benchmark (dev/e2e/stats.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

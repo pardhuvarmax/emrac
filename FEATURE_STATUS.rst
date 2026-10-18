@@ -397,9 +397,9 @@ Signature & Advanced Features
      - ``docs/feats/SPEC.md`` IV.8; ``docs/plan/r1/u28-cache.md``
    * - 9
      - Timeline
-     - Not started
-     - Nothing built yet.
-     - ``docs/feats/SPEC.md`` IV.9
+     - Partial
+     - ``emrac timeline [--since PERIOD|DATE] [--pkg NAME]`` tells transactions, builds, snapshots and config file actions by day, newest first. The TUI form and ``pacman.log`` / file-change events (package forensics) are not built
+     - ``docs/feats/SPEC.md`` IV.9; ``docs/plan/r3/u10-timeline.md``
    * - 10
      - Rollback Snapshots
      - Partial
@@ -537,7 +537,7 @@ Part V is the command surface of features covered above.
      - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
      - ``docs/feats/SPEC.md`` Part V
 
-Core scope: 59 tracked: 5 done, 32 partial, 22 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
+Core scope: 59 tracked: 5 done, 33 partial, 21 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
 
 Extended scope
 ----------------
@@ -1575,8 +1575,8 @@ Totals
      - Total
    * - Core
      - 5
-     - 32
-     - 22
+     - 33
+     - 21
      - 0
      - 59
    * - Extended
@@ -1593,8 +1593,8 @@ Totals
      - 77
    * - **All**
      - **35**
-     - **55**
-     - **30**
+     - **56**
+     - **29**
      - **151**
      - **271**
 

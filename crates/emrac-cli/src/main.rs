@@ -355,6 +355,9 @@ fn run(cli: &Cli) -> Result<()> {
         } => commands::deps::impact(&sources, pkg, *install, *upgrade, offline, json),
         Commands::Cycles => commands::deps::cycles(&sources, json),
         Commands::Recommend { args } => commands::recommend::run(&sources, args, offline, json),
+        Commands::Timeline { since, pkg } => {
+            commands::timeline::run(&sources, since.as_deref(), pkg.as_deref(), json)
+        }
         Commands::Stats { since } => commands::stats::run(&sources, since.as_deref(), json),
         Commands::Benchmark {
             pkg,
