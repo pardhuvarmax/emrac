@@ -70,6 +70,17 @@ pub struct Cli {
     /// Show what would happen without doing it
     #[arg(short = 'n', long, global = true)]
     pub dry_run: bool,
+
+    /// When to use colour: auto (a terminal, not NO_COLOR), always or never
+    #[arg(long, global = true, value_enum, value_name = "WHEN")]
+    pub color: Option<ColorWhen>,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+pub enum ColorWhen {
+    Auto,
+    Always,
+    Never,
 }
 
 /// Shared by `install` and `upgrade` — anything that builds an AUR package

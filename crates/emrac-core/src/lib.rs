@@ -52,6 +52,7 @@ pub mod self_upgrade;
 mod snapshot;
 mod sources;
 pub mod stale_builds;
+pub mod style;
 pub mod timeline;
 pub mod upgrade_report;
 mod verify;

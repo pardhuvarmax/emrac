@@ -27,6 +27,8 @@ fn main() {
         Cli::from_arg_matches(&cli::command().get_matches()).unwrap_or_else(|e| e.exit())
     };
 
+    init_style(&cli);
+
     if let Err(err) = run(&cli) {
         emrac_core::say_err!(err.voice(), "{err}");
         std::process::exit(1);
@@ -49,6 +51,22 @@ fn warn_if_root() {
     if !meant_for_root && emrac_core::ledger::running_as_root() {
         emrac_core::say_err!(emrac_core::Voice::Warns, "{}", cli::ROOT_WARNING);
     }
+}
+
+/// Looks, from the config, the `--color` flag, and whether output must stay plain.
+fn init_style(cli: &Cli) {
+    use emrac_core::style::{self, Mode};
+    let config = Config::load().unwrap_or_default();
+    let mut settings = config.clui.settings();
+    if let Some(when) = cli.color {
+        settings.color = match when {
+            cli::ColorWhen::Auto => Mode::Auto,
+            cli::ColorWhen::Always => Mode::Always,
+            cli::ColorWhen::Never => Mode::Never,
+        };
+    }
+    settings.plain_output = cli.json || cli.quiet || config.flags.json || config.flags.quiet;
+    style::init(settings);
 }
 
 fn run(cli: &Cli) -> Result<()> {

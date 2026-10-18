@@ -4,7 +4,7 @@
 //! `emrac <word>:` prefix by hand (a test scans the sources for that).
 
 use std::fmt;
-use std::io::{IsTerminal, Write};
+use std::io::Write;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Voice {
@@ -91,6 +91,21 @@ impl Voice {
         }
     }
 
+    /// The role of the verb in the theme.
+    pub fn role(self) -> crate::style::Role {
+        use crate::style::Role;
+        match self {
+            Voice::Says | Voice::Refuses => Role::Problem,
+            Voice::Warns => Role::Warn,
+            Voice::Suspects => Role::Accent,
+            Voice::Thinks => Role::Note,
+            Voice::Suggests | Voice::Confirms => Role::Ok,
+            Voice::Asks => Role::Question,
+            Voice::Notes | Voice::Remembers => Role::Dim,
+            Voice::Plans | Voice::Found => Role::Plain,
+        }
+    }
+
     /// `emrac thinks:`, with the verb coloured when `color` is set.
     pub fn prefix(self, color: bool) -> String {
         format!("emrac {}:", self.styled(color))
@@ -109,14 +124,17 @@ impl Voice {
         }
     }
 
-    /// `thinks:` as it should look on `stderr` or `stdout` right now.
+    /// `thinks:` as it should look on `stderr` or `stdout` right now: the
+    /// verb in the colours of the chosen theme, or plain.
     pub fn short_for(self, stderr: bool) -> String {
-        self.short(use_color(stderr))
+        let st = crate::style::Style::for_stream(stderr);
+        format!("{}:", st.paint(self.role(), self.word()))
     }
 
     /// The prefix as it should look on `stderr` or `stdout` right now.
     pub fn prefix_for(self, stderr: bool) -> String {
-        self.prefix(use_color(stderr))
+        let st = crate::style::Style::for_stream(stderr);
+        format!("emrac {}:", st.paint(self.role(), self.word()))
     }
 }
 
@@ -129,19 +147,6 @@ impl fmt::Display for Voice {
 /// Colour only on a terminal, never when `NO_COLOR` is set, never on a dumb one.
 pub fn color_allowed(is_terminal: bool, no_color: Option<&str>, term: Option<&str>) -> bool {
     is_terminal && no_color.is_none_or(str::is_empty) && term != Some("dumb")
-}
-
-fn use_color(stderr: bool) -> bool {
-    let is_terminal = if stderr {
-        std::io::stderr().is_terminal()
-    } else {
-        std::io::stdout().is_terminal()
-    };
-    color_allowed(
-        is_terminal,
-        std::env::var("NO_COLOR").ok().as_deref(),
-        std::env::var("TERM").ok().as_deref(),
-    )
 }
 
 /// Prints `emrac <verb>: <text>` on the verb's stream.

@@ -30,6 +30,62 @@ pub struct Config {
     pub safety: SafetyConfig,
     #[serde(default)]
     pub advisor: AdvisorConfig,
+    #[serde(default)]
+    pub clui: ClUiConfig,
+}
+
+/// How emrac looks and moves (u17). The words are kept as text in the file and
+/// checked when set; `settings` turns them into the type `style` uses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClUiConfig {
+    /// `regular`: nothing moves, as before. `active`: spinners and progress bars.
+    #[serde(default = "default_animations")]
+    pub animations: String,
+    /// `auto` (a terminal, not `NO_COLOR`), `always` or `never`.
+    #[serde(default = "default_auto")]
+    pub color: String,
+    /// `auto` (when the locale is UTF-8), `always` or `never` (ASCII marks and lines).
+    #[serde(default = "default_auto")]
+    pub unicode: String,
+    /// `default`, `light`, `mono` or `high-contrast`.
+    #[serde(default = "default_theme")]
+    pub theme: String,
+}
+
+fn default_animations() -> String {
+    "regular".to_string()
+}
+fn default_auto() -> String {
+    "auto".to_string()
+}
+fn default_theme() -> String {
+    "default".to_string()
+}
+
+impl Default for ClUiConfig {
+    fn default() -> Self {
+        Self {
+            animations: default_animations(),
+            color: default_auto(),
+            unicode: default_auto(),
+            theme: default_theme(),
+        }
+    }
+}
+
+impl ClUiConfig {
+    /// The settings `style` works from; a value that is not one of the words
+    /// (a hand-edited file) falls back to the default.
+    pub fn settings(&self) -> crate::style::Settings {
+        use crate::style::{Animations, Mode, Settings, Theme};
+        Settings {
+            color: Mode::parse(&self.color).unwrap_or_default(),
+            unicode: Mode::parse(&self.unicode).unwrap_or_default(),
+            animations: Animations::parse(&self.animations).unwrap_or_default(),
+            theme: Theme::parse(&self.theme).unwrap_or_default(),
+            plain_output: false,
+        }
+    }
 }
 
 /// The Package Advisor (u15): when a plan is big enough to be worth a word.
@@ -366,6 +422,10 @@ impl Config {
             "safety.partial_upgrade" => self.safety.partial_upgrade.clone(),
             "safety.arch_news" => self.safety.arch_news.clone(),
             "safety.db_backup" => self.safety.db_backup.clone(),
+            "clui.animations" => self.clui.animations.clone(),
+            "clui.color" => self.clui.color.clone(),
+            "clui.unicode" => self.clui.unicode.clone(),
+            "clui.theme" => self.clui.theme.clone(),
             "advisor.enabled" => self.advisor.enabled.to_string(),
             "advisor.large_download_mib" => self.advisor.large_download_mib.to_string(),
             "advisor.large_growth_mib" => self.advisor.large_growth_mib.to_string(),
@@ -439,6 +499,22 @@ impl Config {
             }
             "cache.keep_days" => {
                 self.cache.keep_days = value.parse().map_err(|_| invalid())?;
+            }
+            "clui.animations" => {
+                crate::style::Animations::parse(value).ok_or_else(invalid)?;
+                self.clui.animations = value.to_string();
+            }
+            "clui.color" => {
+                crate::style::Mode::parse(value).ok_or_else(invalid)?;
+                self.clui.color = value.to_string();
+            }
+            "clui.unicode" => {
+                crate::style::Mode::parse(value).ok_or_else(invalid)?;
+                self.clui.unicode = value.to_string();
+            }
+            "clui.theme" => {
+                crate::style::Theme::parse(value).ok_or_else(invalid)?;
+                self.clui.theme = value.to_string();
             }
             "advisor.enabled" => {
                 self.advisor.enabled = parse_bool(value).ok_or_else(invalid)?;
@@ -528,6 +604,10 @@ impl Config {
             "build.remove_make_deps" => self.build.remove_make_deps = default_remove_make_deps(),
             "cache.policy" => self.cache.policy = default_cache_policy(),
             "cache.keep_days" => self.cache.keep_days = default_keep_days(),
+            "clui.animations" => self.clui.animations = default_animations(),
+            "clui.color" => self.clui.color = default_auto(),
+            "clui.unicode" => self.clui.unicode = default_auto(),
+            "clui.theme" => self.clui.theme = default_theme(),
             "advisor.enabled" => self.advisor.enabled = true,
             "advisor.large_download_mib" => {
                 self.advisor.large_download_mib = default_large_download_mib()

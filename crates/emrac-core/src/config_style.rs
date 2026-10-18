@@ -129,6 +129,17 @@ const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        name: "clui",
+        icon: "✦",
+        blurb: "how emrac looks and moves",
+        keys: &[
+            key("animations", Kind::Text, "regular: nothing moves, as before; active: a spinner or a progress bar while emrac itself is waiting (never over pacman's or a build's own output, never when piped, in CI or with --json)", "\"regular\" | \"active\""),
+            key("color", Kind::Text, "auto: colours on a terminal unless NO_COLOR is set; always; never. The --color flag overrides it", "\"auto\" | \"always\" | \"never\""),
+            key("unicode", Kind::Text, "auto: Unicode marks, lines and bars when the locale is UTF-8, ASCII otherwise; always; never", "\"auto\" | \"always\" | \"never\""),
+            key("theme", Kind::Text, "the colours: default, light (for a light background), mono (bold and dim only) or high-contrast", "\"default\" | \"light\" | \"mono\" | \"high-contrast\""),
+        ],
+    },
+    Section {
         name: "advisor",
         icon: "✎",
         blurb: "advice under a big plan; it blocks nothing",
@@ -379,6 +390,10 @@ mod tests {
             ("build.remove_make_deps", "never"),
             ("cache.policy", "lean"),
             ("cache.keep_days", "3"),
+            ("clui.animations", "active"),
+            ("clui.color", "never"),
+            ("clui.unicode", "never"),
+            ("clui.theme", "mono"),
             ("advisor.enabled", "false"),
             ("advisor.large_download_mib", "5"),
             ("advisor.large_growth_mib", "6"),
@@ -396,7 +411,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 31, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 35, "{text}");
     }
 
     #[test]
@@ -453,6 +468,7 @@ mod tests {
             "[snapshot]",
             "[build]",
             "[cache]",
+            "[clui]",
             "[advisor]",
             "[safety]",
             "[self]",
