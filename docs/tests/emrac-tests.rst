@@ -25,13 +25,13 @@ Totals
      - 667
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 48
+     - 49
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 32
    * - **Automated total**
      -
-     - **747**
+     - **748**
 
 emrac-core library (667)
 ------------------------
@@ -967,7 +967,7 @@ emrac-core library (667)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (48)
+emrac command line, unit tests (49)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -1030,7 +1030,7 @@ emrac command line, unit tests (48)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-``view::tests`` (20)
+``view::tests`` (21)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_long_check_summary_wraps_under_itself_and_never_runs_past_the_width``
@@ -1051,6 +1051,7 @@ emrac command line, unit tests (48)
 * ``the_report_card_has_a_bar_and_a_number_for_what_is_known_and_a_dash_for_the_rest``
 * ``the_summary_has_the_sizes_a_bar_and_the_plan_id``
 * ``the_timeline_groups_by_day_with_a_glyph_for_each_kind``
+* ``the_version_banner_has_the_lettering_the_versions_and_the_motto``
 * ``vulns_view_fixable_keeps_only_entries_with_a_fix_in_the_repositories``
 * ``vulns_view_hides_stale_entries_unless_asked``
 
@@ -1350,7 +1351,7 @@ End-to-end: how emrac looks (dev/e2e/clui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 emrac under a real pseudo-terminal and piped: marks, boxes, colour, themes, ASCII,
-width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: after u17, 48 of 48 passed.
+width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: after the version banner, 50 of 50 passed.
 
 * the defaults: regular animations, auto colour and unicode, the default theme
 * a value that is not one of the words is refused
@@ -1400,8 +1401,10 @@ width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: a
 * emrac ui --demo runs both animations even when set to regular
 * the plan id of a plan does not depend on how it is shown
 * a real install on a terminal still works
+* --version on a terminal is the EMRAC lettering, both versions and the motto
+* --version piped is still the plain lines scripts read
 
-(48 checks.)
+(50 checks.)
 
 End-to-end: Mirror Intelligence (dev/e2e/mirrors.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

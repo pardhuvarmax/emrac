@@ -6,7 +6,7 @@
 # animations only when `clui.animations active`, never in CI or piped, and the
 # cursor always shown again, also after Ctrl-C.
 #
-# last full run: after u17, 48 of 48 passed
+# last full run: after the version banner, 50 of 50 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -94,6 +94,8 @@ $e config unset clui.animations >/dev/null
 # --- nothing else changed
 ck "the plan id of a plan does not depend on how it is shown" "A=\$($e install vim --dry-run --json | grep digest); B=\$(pty \"$T $e install vim --dry-run --json\" | grep digest); [ -n \"\$A\" ] && [ \"\$A\" = \"\$B\" ]"
 ck "a real install on a terminal still works" "pty \"$T $e install vim --yes\" > $W/inst.out; pacman -Q vim"
+ck "--version on a terminal is the EMRAC lettering, both versions and the motto" "ptyp \"$T $e --version\" | grep -q 'emrac v[0-9.]* - libalpm v[0-9.]*' && ptyp \"$T $e --version\" | grep -q '|/____/' && ptyp \"$T $e --version\" | grep -q 'Sic Mundus Creatus Est.'"
+ck "--version piped is still the plain lines scripts read" "[ \"\$($e --version | head -1)\" = \"emrac \$($e --version | head -1 | cut -d' ' -f2)\" ] && $e --version | grep -q '^built by ' && ! $e --version | grep -q '|/____/'"
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]

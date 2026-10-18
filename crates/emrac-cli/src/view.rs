@@ -1057,6 +1057,100 @@ pub fn vulns_view(
     out
 }
 
+/// The EMRAC lettering of `emrac --version`: shaded blocks with a slanted
+/// outline, five rows of ten columns for each of E, M, R, A and C.
+const LETTERS: [[&str; 5]; 5] = [
+    [
+        "  /\u{2588}\u{2588}\u{2588}\u{2588} / ",
+        " | \u{2593}\u{2593}\u{2593}    ",
+        " |_\u{2592}_ /   ",
+        " | \u{2592}\u{2592}\u{2592}\u{2592}   ",
+        " |/____/  ",
+    ],
+    [
+        "  /\u{2592}\u{2592}\u{2592}\u{2592}\u{2592}  ",
+        " | \u{2592} \u{2592} \u{2592}  ",
+        " | \u{2593} \u{2593} \u{2593}  ",
+        " | \u{2588} \u{2588} \u{2588}  ",
+        "  / / / / ",
+    ],
+    [
+        "  /\u{2592}\u{2592}\u{2592}\u{2592}   ",
+        " | \u{2592} /\u{2592}   ",
+        " |_\u{2593}\u{2593}\u{2593}/   ",
+        " | \u{2588}  \u{2588}   ",
+        "  // //   ",
+    ],
+    [
+        "  /\u{2588}\u{2588}\u{2588}\u{2588}   ",
+        " | \u{2588}  \u{2588}   ",
+        " | \u{2593}\u{2593}\u{2593}\u{2593}   ",
+        " |_\u{2592}_/\u{2592}   ",
+        "  // //   ",
+    ],
+    [
+        "  /\u{2592}\u{2592}\u{2592}\u{2592}   ",
+        " | \u{2592}      ",
+        " | \u{2593}__/   ",
+        " | \u{2588}\u{2588}\u{2588}\u{2588}   ",
+        " |/____/  ",
+    ],
+];
+
+/// `emrac --version` on a terminal: the EMRAC lettering in shaded blocks, then
+/// the version, libalpm's version, who built it and the motto. Piped, the old
+/// plain lines are printed instead (see `main`).
+pub fn version_banner(
+    st: &Style,
+    version: &str,
+    libalpm: &str,
+    author: &str,
+    homepage: &str,
+) -> String {
+    let mut out = String::from("\n");
+    for row in 0..5 {
+        let line: String = LETTERS.iter().map(|l| l[row]).collect();
+        let mut painted = String::from(" ");
+        for c in line.chars() {
+            let (text, role) = match c {
+                '\u{2588}' => (if st.unicode { "\u{2588}" } else { "#" }, Role::Brand),
+                '\u{2593}' => (if st.unicode { "\u{2593}" } else { "%" }, Role::Brand),
+                '\u{2592}' => (if st.unicode { "\u{2592}" } else { ":" }, Role::Accent),
+                '/' => ("/", Role::Dim),
+                '|' => ("|", Role::Dim),
+                '_' => ("_", Role::Dim),
+                _ => (" ", Role::Dim),
+            };
+            painted.push_str(&st.paint(role, text));
+        }
+        out.push_str(painted.trim_end());
+        out.push('\n');
+    }
+    out.push('\n');
+    let text: [Vec<Seg>; 3] = [
+        vec![
+            Seg::new("emrac", Role::Heading),
+            Seg::plain(" "),
+            Seg::new(format!("v{version}"), Role::Version),
+            Seg::new(" - libalpm ", Role::Dim),
+            Seg::new(format!("v{libalpm}"), Role::Version),
+        ],
+        vec![
+            Seg::new("Built by ", Role::Dim),
+            Seg::new(author, Role::Package),
+            Seg::new(" - ", Role::Dim),
+            Seg::new(homepage, Role::Path),
+        ],
+        vec![Seg::new("Sic Mundus Creatus Est.", Role::Accent)],
+    ];
+    for line in &text {
+        out.push_str("  ");
+        out.push_str(&render_line(st, line));
+        out.push('\n');
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2000,5 +2094,29 @@ mod tests {
         r.packages[0].repo_version = None;
         let none = vulns_view(&uncoloured(), &r, true, true);
         assert!(none.contains("No confirmed open entry"));
+    }
+
+    #[test]
+    fn the_version_banner_has_the_lettering_the_versions_and_the_motto() {
+        let b = version_banner(
+            &uncoloured(),
+            "0.3.0",
+            "16.0.1",
+            "pardhuvarmax",
+            "https://github.com/pardhuvarmax/emrac",
+        );
+        assert!(b.starts_with('\n'));
+        assert!(b.contains('\u{2588}') && b.contains("|/____/"));
+        assert!(b.contains("emrac v0.3.0 - libalpm v16.0.1"), "{b}");
+        assert!(b.contains("Built by pardhuvarmax - https://github.com/pardhuvarmax/emrac"));
+        assert!(b.contains("Sic Mundus Creatus Est."));
+        fits(&b, 80);
+        // five lettering rows, then the three text lines
+        assert_eq!(b.lines().filter(|l| !l.trim().is_empty()).count(), 8);
+        let plain = version_banner(&ascii(), "0.3.0", "16.0.1", "a", "b");
+        assert!(plain.is_ascii(), "{plain}");
+        let lit = version_banner(&colour(), "0.3.0", "16.0.1", "a", "b");
+        assert_eq!(strip_ansi(&lit).lines().count(), b.lines().count());
+        assert!(lit.contains('\u{1b}'));
     }
 }

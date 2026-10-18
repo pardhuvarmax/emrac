@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u20 addendum 2 (after r3) — 2026-10-19 — a designed `emrac --version`
+
+On a terminal, `emrac --version` (or `-V`) prints the EMRAC lettering in shaded blocks with a slanted outline (the design the author drew), then `emrac v0.3.0 - libalpm v16.0.1`, who built it with the address, and the motto, in the theme's colours; with an ASCII locale the blocks become `#`, `%` and `:`. Piped or redirected it is still the old plain lines (`emrac 0.3.0`, `built by …`), so scripts that read it are unaffected. `emrac_core::libalpm_version()`, `view::version_banner` (1 test), 2 more checks in `dev/e2e/clui.sh` (50).
+
 ## Slice u20 addendum (after r3) — 2026-10-19 — Compatibility for installed AUR packages
 
 An AUR package that is installed is now checked for Compatibility from the local database: its architecture, dependencies that nothing installed satisfies, and installed packages it conflicts with and does not replace (same points as for a repository package; no "new dependencies", since it is already installed). A package that is not installed stays unknown ("an AUR package is checked once it is installed"). `AlpmBackend::installed_compat`, one more unit test (16 in `score_more.rs`).

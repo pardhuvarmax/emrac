@@ -66,6 +66,11 @@ pub use audit::{
     audit, scriptlet_name, AuditReport, ExtraFile, Finding, Severity, Verdict, MAX_EXTRA_FILES,
 };
 pub use backend::version_is_newer;
+
+/// The version of libalpm emrac is linked with.
+pub fn libalpm_version() -> &'static str {
+    alpm::version()
+}
 pub use backend::AurSyncOutcome;
 pub use backend::BuildOptions;
 pub use cache::{

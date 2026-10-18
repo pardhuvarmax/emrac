@@ -23,6 +23,25 @@ fn main() {
 
     warn_if_root();
 
+    // `emrac --version` on a terminal shows the banner; piped it stays the plain
+    // text clap prints, which scripts may read.
+    if matches!(std::env::args().nth(1).as_deref(), Some("--version" | "-V")) {
+        let st = emrac_core::style::Style::stdout();
+        if st.fancy {
+            print!(
+                "{}",
+                view::version_banner(
+                    &st,
+                    env!("CARGO_PKG_VERSION"),
+                    emrac_core::libalpm_version(),
+                    env!("CARGO_PKG_AUTHORS"),
+                    env!("CARGO_PKG_HOMEPAGE"),
+                )
+            );
+            return;
+        }
+    }
+
     let cli = {
         use clap::FromArgMatches;
         Cli::from_arg_matches(&cli::command().get_matches()).unwrap_or_else(|e| e.exit())
