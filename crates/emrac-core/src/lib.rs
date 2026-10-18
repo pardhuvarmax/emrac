@@ -13,6 +13,7 @@ mod deps;
 mod doctor;
 mod downgrade;
 mod error;
+pub mod graph_render;
 mod history;
 mod history_log;
 pub mod hooks;

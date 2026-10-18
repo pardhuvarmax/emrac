@@ -145,6 +145,10 @@ pub enum Error {
     #[error("{0}")]
     PacmanDb(String),
 
+    /// A graph could not be drawn.
+    #[error("{0}")]
+    Graph(String),
+
     /// A benchmark could not run or be stored.
     #[error("{0}")]
     Benchmark(String),
@@ -390,6 +394,7 @@ impl Error {
             | Error::News(_)
             | Error::PacmanDb(_)
             | Error::Benchmark(_)
+            | Error::Graph(_)
             | Error::NoTransactionToRollBack
             | Error::NotInstalledForVerify(_)
             | Error::VerificationFailed { .. }

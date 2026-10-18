@@ -82,6 +82,7 @@ bt=dev/e2e/buildtools.sh
 po=dev/e2e/policy.sh
 st=dev/e2e/stats.sh
 tl=dev/e2e/timeline.sh
+gr=dev/e2e/graph.sh
 pre_run=$(sed -n 's/^# last full run: *//p' "$pre" | head -1)
 self_run=$(sed -n 's/^# last full run: *//p' "$selfup" | head -1)
 hk_run=$(sed -n 's/^# last full run: *//p' "$hk" | head -1)
@@ -90,6 +91,8 @@ bt_run=$(sed -n 's/^# last full run: *//p' "$bt" | head -1)
 po_run=$(sed -n 's/^# last full run: *//p' "$po" | head -1)
 st_run=$(sed -n 's/^# last full run: *//p' "$st" | head -1)
 tl_run=$(sed -n 's/^# last full run: *//p' "$tl" | head -1)
+gr_run=$(sed -n 's/^# last full run: *//p' "$gr" | head -1)
+sed -n 's/^ck "\([^"]*\)".*/\1/p' "$gr" >"$work/e2e_graph.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$tl" >"$work/e2e_timeline.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$st" >"$work/e2e_stats.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$po" >"$work/e2e_policy.txt"
@@ -99,7 +102,7 @@ sed -n 's/^ck "\([^"]*\)".*/\1/p' "$hk" >"$work/e2e_hooks.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$pre" >"$work/e2e_pre.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$selfup" >"$work/e2e_self.txt"
 
-awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" -v hk_file="$work/e2e_hooks.txt" -v hk_run="$hk_run" -v rc_file="$work/e2e_recovery.txt" -v rc_run="$rc_run" -v bt_file="$work/e2e_buildtools.txt" -v bt_run="$bt_run" -v po_file="$work/e2e_policy.txt" -v po_run="$po_run" -v st_file="$work/e2e_stats.txt" -v st_run="$st_run" -v tl_file="$work/e2e_timeline.txt" -v tl_run="$tl_run" '
+awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work/e2e_pre.txt" -v pre_run="$pre_run" -v self_file="$work/e2e_self.txt" -v self_run="$self_run" -v hk_file="$work/e2e_hooks.txt" -v hk_run="$hk_run" -v rc_file="$work/e2e_recovery.txt" -v rc_run="$rc_run" -v bt_file="$work/e2e_buildtools.txt" -v bt_run="$bt_run" -v po_file="$work/e2e_policy.txt" -v po_run="$po_run" -v st_file="$work/e2e_stats.txt" -v st_run="$st_run" -v tl_file="$work/e2e_timeline.txt" -v tl_run="$tl_run" -v gr_file="$work/e2e_graph.txt" -v gr_run="$gr_run" '
     function rule(text, ch,   i, line) {
         line = ""
         for (i = 0; i < length(text); i++) line = line ch
@@ -229,6 +232,16 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work
         print ""
         print "(" n " checks.)"
         print ""
+        title("End-to-end: graphs drawn in the terminal (dev/e2e/graph.sh)", "~")
+        print "``emrac graph --format boxes`` (native) and ``--format easy`` (graph-easy,"
+        print "installed from the AUR by emrac): ``dev/e2e/run.sh graph``. Last full run: " gr_run "."
+        print ""
+        n = 0
+        while ((getline t < gr_file) > 0) { n++; print "* " t }
+        close(gr_file)
+        print ""
+        print "(" n " checks.)"
+        print ""
         title("End-to-end: the timeline (dev/e2e/timeline.sh)", "~")
         print "Real transactions, a snapshot and a build-times fixture, told by"
         print "``emrac timeline``: ``dev/e2e/run.sh timeline``. Last full run: " tl_run "."
@@ -276,7 +289,7 @@ awk -F'|' -v e2e_file="$work/e2e.txt" -v last_run="$last_run" -v pre_file="$work
 case "$mode" in
 write)
     cp "$work/out.rst" "$target"
-    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") + $(wc -l <"$work/e2e_hooks.txt") + $(wc -l <"$work/e2e_recovery.txt") + $(wc -l <"$work/e2e_buildtools.txt") + $(wc -l <"$work/e2e_policy.txt") + $(wc -l <"$work/e2e_stats.txt") + $(wc -l <"$work/e2e_timeline.txt") end-to-end checks)"
+    echo "wrote $target ($(grep -c '^\* ``' "$target") tests, $(wc -l <"$work/e2e.txt") + $(wc -l <"$work/e2e_pre.txt") + $(wc -l <"$work/e2e_self.txt") + $(wc -l <"$work/e2e_hooks.txt") + $(wc -l <"$work/e2e_recovery.txt") + $(wc -l <"$work/e2e_buildtools.txt") + $(wc -l <"$work/e2e_policy.txt") + $(wc -l <"$work/e2e_stats.txt") + $(wc -l <"$work/e2e_timeline.txt") + $(wc -l <"$work/e2e_graph.txt") end-to-end checks)"
     ;;
 check)
     if ! diff -u "$target" "$work/out.rst" >"$work/diff.txt"; then

@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 510
+     - 517
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 17
@@ -31,9 +31,9 @@ Totals
      - 31
    * - **Automated total**
      -
-     - **558**
+     - **565**
 
-emrac-core library (510)
+emrac-core library (517)
 ------------------------
 
 ``arch_news::tests`` (7)
@@ -304,6 +304,17 @@ emrac-core library (510)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``only_the_no_network_failure_suggests_a_retry_with_network``
+
+``graph_render::tests`` (7)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_chain_runs_left_to_right``
+* ``a_lone_package_is_one_box``
+* ``a_root_with_two_dependencies_sorted_by_name``
+* ``a_shared_dependency_sits_once_with_the_extra_links_listed``
+* ``an_optional_link_is_dashed_and_links_back_are_listed_not_lost``
+* ``every_package_and_every_link_is_in_the_output``
+* ``too_big_a_graph_is_refused_with_advice``
 
 ``history::tests`` (28)
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -1021,6 +1032,28 @@ nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 pa
 * a package that was installed before the build is not offered
 
 (9 checks.)
+
+End-to-end: graphs drawn in the terminal (dev/e2e/graph.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``emrac graph --format boxes`` (native) and ``--format easy`` (graph-easy,
+installed from the AUR by emrac): ``dev/e2e/run.sh graph``. Last full run: after u11, 13 of 13 passed.
+
+* boxes draws the root in a double box with its first dependency
+* every direct dependency emrac lists for pacman is drawn
+* links are arrows from a trunk
+* the layout goes left to right: zlib is left of glibc
+* a shared package is drawn once, the extra links are listed
+* a graph with too many packages is refused with advice
+* an unknown package is refused
+* dot is unchanged
+* json is unchanged
+* easy without graph-easy says how to get it
+* emrac installs graph-easy from the AUR
+* easy draws with graph-easy (the root has a heavy border)
+* easy shows the dependencies
+
+(13 checks.)
 
 End-to-end: the timeline (dev/e2e/timeline.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

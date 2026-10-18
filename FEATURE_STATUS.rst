@@ -413,8 +413,8 @@ Signature & Advanced Features
    * - 12
      - Dependency Graph Explorer
      - Partial
-     - ``deps -r`` prints the transitive closure as text, ``tree`` and ``graph`` show it as a tree or Graphviz source; no interactive view (that needs the TUI)
-     - ``docs/feats/SPEC.md`` IV.12; ``docs/plan/r2/u16-dependency-views.md``
+     - ``deps -r`` prints the transitive closure as text; ``tree`` and ``graph`` show it as a tree, Graphviz source, or a drawing in the terminal (``--format boxes`` by emrac itself, ``--format easy`` through graph-easy); no interactive view (that needs the TUI)
+     - ``docs/feats/SPEC.md`` IV.12; ``docs/plan/r2/u16-dependency-views.md``; ``docs/plan/r3/u11-graph-render.md``
    * - 13
      - Package Inspector
      - Partial

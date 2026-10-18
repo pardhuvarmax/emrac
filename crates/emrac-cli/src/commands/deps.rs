@@ -1,4 +1,4 @@
-use emrac_core::{Result, Sources};
+use emrac_core::{Error, Result, Sources};
 
 use crate::cli::GraphFormat;
 
@@ -50,8 +50,62 @@ pub fn graph(
             println!("{}", serde_json::to_string_pretty(&report).unwrap())
         }
         (GraphFormat::Text, false) => output::print_graph(&report),
+        (GraphFormat::Boxes, false) => {
+            let drawing = emrac_core::graph_render::render(&report).map_err(Error::Graph)?;
+            print!("{drawing}");
+        }
+        (GraphFormat::Easy, false) => print!("{}", through_graph_easy(&report.to_dot())?),
     }
     Ok(())
+}
+
+/// The dot form drawn by `graph-easy`, which emrac does not ship.
+fn through_graph_easy(dot: &str) -> Result<String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    // The Arch package keeps it in /usr/bin/vendor_perl, which is on PATH only
+    // in a login shell.
+    let program = ["graph-easy", "/usr/bin/vendor_perl/graph-easy"]
+        .into_iter()
+        .find(|p| {
+            Command::new(p)
+                .arg("--version")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok()
+        })
+        .unwrap_or("graph-easy");
+    let mut child = Command::new(program)
+        .args(["--from=dot", "--as=boxart"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                Error::Graph(
+                    "graph-easy is not installed (the AUR package perl-graph-easy); \
+                     `--format boxes` draws the same thing without it"
+                        .into(),
+                )
+            } else {
+                Error::Graph(format!("couldn't run graph-easy: {e}"))
+            }
+        })?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(dot.as_bytes());
+    }
+    let out = child
+        .wait_with_output()
+        .map_err(|e| Error::Graph(format!("graph-easy: {e}")))?;
+    if !out.status.success() {
+        return Err(Error::Graph(format!(
+            "graph-easy failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        )));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 pub fn cycles(sources: &Sources, json: bool) -> Result<()> {

@@ -764,6 +764,10 @@ pub enum HistoryCommand {
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum GraphFormat {
     Text,
+    /// Drawn in the terminal with box-drawing characters, by emrac itself
+    Boxes,
+    /// Drawn by `graph-easy` (installed separately) from the dot form
+    Easy,
     Dot,
     Json,
 }

@@ -152,7 +152,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | IV.9 Timeline | Partial | `timeline` (u10): transactions, builds, snapshots and config file actions by UTC day, with `--since` and `--pkg`. No TUI form; `pacman.log` and file-change events belong to package forensics. | `docs/plan/r3/u10-timeline.md` |
 | IV.10 Rollback Snapshots | Partial | Package-set snapshots and per-transaction rollback; no Btrfs/ZFS filesystem snapshots. |  |
 | IV.11 Interactive Conflict Resolver | Partial | Conflicts and providers listed in plans; an AUR-build dependency conflict is explained with a swap offered. No interactive `[1] Downgrade [2] Rebuild [3] Replace` for the rest. | u24-u26 |
-| IV.12 Dependency Graph Explorer | Partial | Text/dot/JSON views; the interactive explorer needs the TUI. |  |
+| IV.12 Dependency Graph Explorer | Partial | Text, dot, JSON, and graphs drawn in the terminal: `--format boxes` (native) and `--format easy` (graph-easy). The interactive explorer needs the TUI. | `docs/plan/r3/u11-graph-render.md` |
 | IV.13 Package Inspector | Partial | The pieces exist separately; not the single aggregated view. |  |
 | IV.14 Repository Analytics | Specified | Per-repository totals, pending updates, bandwidth saved, mirror latency. |  |
 | IV.15 Build Dashboard | Specified | Live compilation view; needs the TUI. |  |
