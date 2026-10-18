@@ -1105,6 +1105,53 @@ impl AlpmBackend {
         })
     }
 
+    /// The compatibility facts of an installed package from the local
+    /// database alone (for a package that no repository carries, such as an AUR
+    /// build): its architecture, dependencies nothing installed satisfies, and
+    /// installed packages it conflicts with and does not replace.
+    pub fn installed_compat(&self, name: &str) -> Option<crate::score::CompatFact> {
+        let local = self.handle.localdb();
+        let pkg = local.pkg(name).ok()?;
+        let missing_deps: Vec<String> = pkg
+            .depends()
+            .iter()
+            .map(|d| d.to_string())
+            .filter(|d| local.pkgs().find_satisfier(d.clone()).is_none())
+            .collect();
+        let replaced: Vec<String> = pkg
+            .replaces()
+            .iter()
+            .map(|d| d.name().to_string())
+            .collect();
+        let mut conflicts: Vec<String> = pkg
+            .conflicts()
+            .iter()
+            .filter_map(|c| local.pkgs().find_satisfier(c.to_string()))
+            .map(|p| p.name().to_string())
+            .filter(|n| n != name && !replaced.contains(n))
+            .collect();
+        conflicts.sort();
+        conflicts.dedup();
+        let configured: Vec<String> = self
+            .handle
+            .architectures()
+            .iter()
+            .map(str::to_string)
+            .collect();
+        Some(crate::score::CompatFact {
+            arch: pkg.arch().unwrap_or("").to_string(),
+            system_arch: if configured.is_empty() {
+                vec![std::env::consts::ARCH.to_string()]
+            } else {
+                configured
+            },
+            missing_deps,
+            conflicts,
+            new_deps: 0,
+            installed: true,
+        })
+    }
+
     /// Names of the sync-database packages satisfying `name`'s required
     /// dependencies, installed or not.
     pub fn sync_dependency_names(&self, name: &str) -> Vec<String> {

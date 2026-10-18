@@ -1434,7 +1434,11 @@ impl Sources {
                 missing_deps: m.missing_deps.clone(),
                 conflicts: m.conflicts_installed.clone(),
                 new_deps: m.new_deps,
+                installed: false,
             });
+        } else if f.repo_kind == crate::score::RepoKind::Aur {
+            // an installed AUR build is checked from the local database
+            f.compat = self.alpm.installed_compat(name);
         }
         if f.repo_kind == crate::score::RepoKind::Arch && ss::valid_name(name) {
             let req = ss::Request {

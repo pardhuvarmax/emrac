@@ -77,6 +77,8 @@ pub struct CompatFact {
     pub conflicts: Vec<String>,
     /// Dependencies that are not installed yet.
     pub new_deps: usize,
+    /// Checked from the installed copy (a package no repository carries).
+    pub installed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -339,7 +341,7 @@ pub fn compatibility(f: &Facts) -> Dimension {
         return unknown(
             key,
             title,
-            "only a package in a configured repository is checked here; the AUR is resolved when it is built",
+            "an AUR package is checked once it is installed; before that its dependencies are resolved when it is built",
             None,
         );
     };
@@ -395,7 +397,14 @@ pub fn compatibility(f: &Facts) -> Dimension {
         parts.push(format!("conflicts with {}", c.conflicts.join(", ")));
     }
     if c.missing_deps.is_empty() && c.conflicts.is_empty() && arch_ok {
-        parts.push("dependencies can be met, no conflicts".to_string());
+        parts.push(
+            if c.installed {
+                "every dependency of the installed copy is installed, no conflicts"
+            } else {
+                "dependencies can be met, no conflicts"
+            }
+            .to_string(),
+        );
     }
     if c.new_deps > 0 {
         rules.push(rule(
@@ -744,6 +753,7 @@ mod tests {
             missing_deps: vec![],
             conflicts: vec![],
             new_deps: 0,
+            installed: false,
         }
     }
 
@@ -778,6 +788,28 @@ mod tests {
             "at most -60"
         );
         assert_eq!(with(&mut f, 0, &["a"], &["b"]), Some(30));
+    }
+
+    #[test]
+    fn an_installed_aur_build_is_checked_from_its_local_record() {
+        let mut f = Facts {
+            name: "yay".into(),
+            ..Facts::default()
+        };
+        assert!(compatibility(&f)
+            .summary
+            .contains("checked once it is installed"));
+        let mut c = compat();
+        c.installed = true;
+        f.compat = Some(c.clone());
+        let d = compatibility(&f);
+        assert_eq!(d.score, Some(100));
+        assert!(d
+            .summary
+            .contains("every dependency of the installed copy is installed"));
+        c.missing_deps = vec!["libgone".into()];
+        f.compat = Some(c);
+        assert_eq!(compatibility(&f).score, Some(60));
     }
 
     #[test]

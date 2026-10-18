@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 666
+     - 667
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 48
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **746**
+     - **747**
 
-emrac-core library (666)
+emrac-core library (667)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -720,11 +720,12 @@ emrac-core library (666)
 * ``weights_are_parsed_strictly_with_friendly_names``
 * ``what_has_no_data_is_unknown_not_a_number``
 
-``score_more::tests`` (15)
+``score_more::tests`` (16)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_failed_reproduction_lowers_the_dimension_and_opens_no_gate``
 * ``a_package_for_another_architecture_scores_zero``
+* ``an_installed_aur_build_is_checked_from_its_local_record``
 * ``an_upstream_that_is_not_on_github_says_so``
 * ``compatibility_starts_at_100_and_loses_points_for_each_problem``
 * ``packaging_bands_have_inclusive_edges_and_two_adjustments``
