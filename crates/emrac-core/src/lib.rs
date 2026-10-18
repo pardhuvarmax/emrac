@@ -46,6 +46,8 @@ pub mod repo_trust;
 mod rollback;
 mod sandbox;
 pub mod score;
+pub mod score_more;
+pub mod score_sources;
 pub mod security_tracker;
 pub mod self_check;
 pub mod self_meta;

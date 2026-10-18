@@ -1043,10 +1043,65 @@ impl AlpmBackend {
             .flat_map(|db| db.pkgs().iter())
             .filter(|p| p.name() != name && p.depends().iter().any(|d| d.name() == name))
             .count();
+        let db = pkg.db();
+        let local = self.handle.localdb();
+        let (mut missing_deps, mut new_deps) = (Vec::new(), 0);
+        for d in pkg.depends() {
+            let text = d.to_string();
+            if local.pkgs().find_satisfier(text.clone()).is_some() {
+                continue;
+            }
+            new_deps += 1;
+            if !dbs
+                .iter()
+                .any(|db| db.pkgs().find_satisfier(text.clone()).is_some())
+            {
+                missing_deps.push(text);
+            }
+        }
+        let replaced: Vec<String> = pkg
+            .replaces()
+            .iter()
+            .map(|d| d.name().to_string())
+            .collect();
+        let mut conflicts_installed: Vec<String> = pkg
+            .conflicts()
+            .iter()
+            .filter_map(|c| local.pkgs().find_satisfier(c.to_string()))
+            .map(|p| p.name().to_string())
+            .filter(|n| n != name && !replaced.contains(n))
+            .collect();
+        conflicts_installed.sort();
+        conflicts_installed.dedup();
+        let level = db.map(|d| d.siglevel());
         Some(RepoMeta {
             build_date: pkg.build_date(),
             signed: pkg.base64_sig().is_some(),
             dependents,
+            base: pkg.base().unwrap_or(name).to_string(),
+            packager: pkg.packager().map(str::to_string),
+            arch: pkg.arch().unwrap_or("").to_string(),
+            system_arch: {
+                let configured: Vec<String> = self
+                    .handle
+                    .architectures()
+                    .iter()
+                    .map(str::to_string)
+                    .collect();
+                if configured.is_empty() {
+                    vec![std::env::consts::ARCH.to_string()]
+                } else {
+                    configured
+                }
+            },
+            sig_required: level.is_some_and(|l| {
+                l.contains(alpm::SigLevel::PACKAGE) && !l.contains(alpm::SigLevel::PACKAGE_OPTIONAL)
+            }),
+            sig_never: level.is_some_and(|l| !l.contains(alpm::SigLevel::PACKAGE)),
+            repo_packages: db.map_or(0, |d| d.pkgs().len()),
+            missing_deps,
+            conflicts_installed,
+            new_deps,
         })
     }
 
@@ -1324,6 +1379,25 @@ pub struct RepoMeta {
     pub build_date: i64,
     pub signed: bool,
     pub dependents: usize,
+    /// The package base (the packaging repository is named after it).
+    pub base: String,
+    pub packager: Option<String>,
+    /// The package's `arch` field (`x86_64`, `any`).
+    pub arch: String,
+    /// This machine's architectures.
+    pub system_arch: Vec<String>,
+    /// Whether pacman.conf requires a valid package signature from this repository.
+    pub sig_required: bool,
+    /// Whether it asks for no package signature at all.
+    pub sig_never: bool,
+    /// How many packages the repository has.
+    pub repo_packages: usize,
+    /// Dependencies that nothing installed or in the databases satisfies.
+    pub missing_deps: Vec<String>,
+    /// Installed packages it conflicts with and does not replace.
+    pub conflicts_installed: Vec<String>,
+    /// Dependencies that are not installed yet.
+    pub new_deps: usize,
 }
 
 pub struct RepoShape {

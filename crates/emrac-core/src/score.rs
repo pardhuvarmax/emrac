@@ -4,6 +4,11 @@
 
 use serde::Serialize;
 
+pub use crate::score_more::{
+    CompatFact, OsvFact, PackagingFact, ProvenanceFact, RepoKind, ReproFact, ReproStatus,
+    ScorecardFact, UpstreamFact,
+};
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Bench {
     /// Median over the package's programs, microseconds.
@@ -64,6 +69,17 @@ pub struct Facts {
     pub tracker: Option<TrackerFact>,
     /// Why the tracker was not checked (offline with nothing saved, no network).
     pub tracker_note: Option<String>,
+    pub repo_kind: RepoKind,
+    /// The version the rebuilders were asked about: the installed one, else the repository's.
+    pub repro_for: String,
+    pub repro: Option<ReproFact>,
+    pub repro_note: Option<String>,
+    pub provenance: Option<ProvenanceFact>,
+    pub compat: Option<CompatFact>,
+    pub packaging: Option<PackagingFact>,
+    pub packaging_note: Option<String>,
+    pub upstream: Option<UpstreamFact>,
+    pub upstream_note: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -122,37 +138,58 @@ pub struct Dimension {
     pub hint: Option<String>,
 }
 
-/// How much each dimension counts in the overall number: 0 leaves it out, 1 is
-/// the default for every one, 10 is the most.
+/// How much each dimension counts in the overall number: 0 leaves it out, 10
+/// is the most. The default is 1 for the dimensions that rest on facts and 0 for
+/// the heuristic ones (a proxy such as age or votes), which are still shown but
+/// only count when you ask under `[score]`.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 pub struct Weights {
     pub performance: u8,
     pub build_time: u8,
     pub maintenance: u8,
     pub security: u8,
+    pub reproducibility: u8,
+    pub provenance: u8,
+    pub compatibility: u8,
+    pub packaging: u8,
+    pub upstream: u8,
     pub popularity: u8,
     pub source: u8,
 }
 
 impl Default for Weights {
     fn default() -> Self {
-        Weights {
+        let mut w = Weights {
             performance: 1,
             build_time: 1,
             maintenance: 1,
             security: 1,
+            reproducibility: 1,
+            provenance: 1,
+            compatibility: 1,
+            packaging: 1,
+            upstream: 1,
             popularity: 1,
             source: 1,
+        };
+        for k in KEYS {
+            w.set(k, Weights::default_for(k));
         }
+        w
     }
 }
 
 pub const MAX_WEIGHT: u8 = 10;
-pub const KEYS: [&str; 6] = [
+pub const KEYS: [&str; 11] = [
     "performance",
     "build_time",
     "maintenance",
     "security",
+    "reproducibility",
+    "provenance",
+    "compatibility",
+    "packaging",
+    "upstream",
     "popularity",
     "source",
 ];
@@ -162,21 +199,39 @@ pub fn normalize_key(word: &str) -> Option<&'static str> {
     match word.trim().to_ascii_lowercase().replace('-', "_").as_str() {
         "performance" | "perf" => Some("performance"),
         "build_time" | "build" | "buildtime" => Some("build_time"),
-        "maintenance" | "maintained" => Some("maintenance"),
+        "maintenance" | "maintained" | "inferred_maintenance" => Some("maintenance"),
         "security" | "secure" => Some("security"),
-        "popularity" | "popular" => Some("popularity"),
+        "reproducibility" | "reproducible" | "repro" => Some("reproducibility"),
+        "provenance" | "origin" => Some("provenance"),
+        "compatibility" | "compat" => Some("compatibility"),
+        "packaging" | "packaging_quality" | "commit_activity" => Some("packaging"),
+        "upstream" | "upstream_health" => Some("upstream"),
+        "popularity" | "popular" | "community_votes" => Some("popularity"),
         "source" | "source_worthiness" => Some("source"),
         _ => None,
     }
 }
 
 impl Weights {
+    /// What a dimension counts when nothing is configured.
+    pub fn default_for(key: &str) -> u8 {
+        match key {
+            "maintenance" | "packaging" | "upstream" | "popularity" => 0,
+            _ => 1,
+        }
+    }
+
     pub fn get(&self, key: &str) -> u8 {
         match key {
             "performance" => self.performance,
             "build_time" => self.build_time,
             "maintenance" => self.maintenance,
             "security" => self.security,
+            "reproducibility" => self.reproducibility,
+            "provenance" => self.provenance,
+            "compatibility" => self.compatibility,
+            "packaging" => self.packaging,
+            "upstream" => self.upstream,
             "popularity" => self.popularity,
             _ => self.source,
         }
@@ -188,6 +243,11 @@ impl Weights {
             "build_time" => self.build_time = value,
             "maintenance" => self.maintenance = value,
             "security" => self.security = value,
+            "reproducibility" => self.reproducibility = value,
+            "provenance" => self.provenance = value,
+            "compatibility" => self.compatibility = value,
+            "packaging" => self.packaging = value,
+            "upstream" => self.upstream = value,
             "popularity" => self.popularity = value,
             _ => self.source = value,
         }
@@ -235,7 +295,7 @@ impl Weights {
     /// `security 5, popularity 0` for what differs from the default.
     pub fn describe_changes(&self) -> String {
         KEYS.iter()
-            .filter(|k| self.get(k) != 1)
+            .filter(|k| self.get(k) != Weights::default_for(k))
             .map(|k| format!("{} {}", k.replace('_', " "), self.get(k)))
             .collect::<Vec<_>>()
             .join(", ")
@@ -343,7 +403,7 @@ impl Card {
     }
 }
 
-fn rule(text: impl Into<String>, points: Option<i32>) -> Rule {
+pub(crate) fn rule(text: impl Into<String>, points: Option<i32>) -> Rule {
     Rule {
         text: text.into(),
         points,
@@ -351,14 +411,14 @@ fn rule(text: impl Into<String>, points: Option<i32>) -> Rule {
 }
 
 /// The score of the first limit that `value` does not exceed, else `last`.
-fn band(value: f64, limits: &[(f64, u8)], last: u8) -> u8 {
+pub(crate) fn band(value: f64, limits: &[(f64, u8)], last: u8) -> u8 {
     limits
         .iter()
         .find(|(limit, _)| value <= *limit)
         .map_or(last, |(_, score)| *score)
 }
 
-fn clamp(points: i32) -> u8 {
+pub(crate) fn clamp(points: i32) -> u8 {
     points.clamp(0, 100) as u8
 }
 
@@ -382,7 +442,7 @@ fn millis(micros: u64) -> String {
     }
 }
 
-fn unknown(
+pub(crate) fn unknown(
     key: &'static str,
     title: &'static str,
     summary: impl Into<String>,
@@ -568,10 +628,18 @@ fn security(f: &Facts) -> Dimension {
             },
             None,
         )];
-        let mut summary = if signed {
-            "official package, signed by an Arch packager".to_string()
-        } else {
-            "official package with no signature in the database".to_string()
+        let third = f.repo_kind == RepoKind::ThirdParty;
+        let mut summary = match (signed, third) {
+            (true, false) => "official package, signed by an Arch packager".to_string(),
+            (false, false) => "official package with no signature in the database".to_string(),
+            (true, true) => format!(
+                "from {}, a repository Arch does not run; signed in its database",
+                f.repo
+            ),
+            (false, true) => format!(
+                "from {}, a repository Arch does not run; no signature in its database",
+                f.repo
+            ),
         };
         if f.news_mentions > 0 {
             let cut = (15 * f.news_mentions as i32).min(30);
@@ -855,11 +923,17 @@ pub fn card(f: &Facts) -> Card {
 
 /// The report card, its overall number weighted as asked.
 pub fn card_with(f: &Facts, w: &Weights) -> Card {
+    use crate::score_more as more;
     let mut dimensions = vec![
         performance(f),
         build_time(f),
         maintenance(f),
         security(f),
+        more::reproducibility(f),
+        more::provenance(f),
+        more::compatibility(f),
+        more::packaging(f),
+        more::upstream(f),
         popularity(f),
         source_worthiness(f),
     ];
@@ -869,6 +943,9 @@ pub fn card_with(f: &Facts, w: &Weights) -> Card {
             "build_time" if f.build.as_ref().is_some_and(|b| b.measured) => Evidence::Corroborating,
             "security" if f.official => Evidence::Authoritative,
             "security" => Evidence::Corroborating,
+            "reproducibility" | "provenance" | "compatibility" | "packaging" | "upstream" => {
+                d.evidence
+            }
             _ => Evidence::Heuristic,
         };
     }
@@ -877,7 +954,11 @@ pub fn card_with(f: &Facts, w: &Weights) -> Card {
         version: f.version.clone(),
         repo: f.repo.clone(),
         overall: overall(&dimensions, w),
-        gates: gates(f),
+        gates: {
+            let mut g = gates(f);
+            g.extend(more::gates(f));
+            g
+        },
         dimensions,
     }
 }
@@ -935,6 +1016,29 @@ pub fn gates(f: &Facts) -> Vec<Gate> {
 mod tests {
     use super::*;
 
+    fn card(f: &Facts) -> Card {
+        card_with(f, &six())
+    }
+
+    /// The weights the first six dimensions had before u20: all 1, the rest 0.
+    fn six() -> Weights {
+        let mut w = Weights::default();
+        for k in KEYS {
+            w.set(k, 0);
+        }
+        for k in [
+            "performance",
+            "build_time",
+            "maintenance",
+            "security",
+            "popularity",
+            "source",
+        ] {
+            w.set(k, 1);
+        }
+        w
+    }
+
     fn official() -> Facts {
         Facts {
             name: "neovim".into(),
@@ -971,7 +1075,7 @@ mod tests {
     }
 
     #[test]
-    fn there_are_six_dimensions_in_the_specs_order() {
+    fn there_are_eleven_dimensions_in_the_specs_order() {
         let c = card(&official());
         let keys: Vec<&str> = c.dimensions.iter().map(|d| d.key).collect();
         assert_eq!(
@@ -981,6 +1085,11 @@ mod tests {
                 "build_time",
                 "maintenance",
                 "security",
+                "reproducibility",
+                "provenance",
+                "compatibility",
+                "packaging",
+                "upstream",
                 "popularity",
                 "source"
             ]
@@ -1394,9 +1503,9 @@ mod tests {
             .summary
             .starts_with("starts in 4.3 ms (warm), 2 programs, benchmarked 2026-"));
         let v: serde_json::Value = serde_json::to_value(&c).unwrap();
-        assert_eq!(v["dimensions"].as_array().unwrap().len(), 6);
+        assert_eq!(v["dimensions"].as_array().unwrap().len(), 11);
         assert_eq!(v["dimensions"][0]["score"], 100);
-        assert!(v["dimensions"][4]["score"].is_null());
+        assert!(v["dimensions"][9]["score"].is_null());
         for d in &c.dimensions {
             if let Some(s) = d.score {
                 assert!(s <= 100);
@@ -1432,12 +1541,15 @@ mod tests {
         assert_eq!(o.score, Some(80), "(100 + 85 + 100 + 95 + 20) / 5 = 80");
         assert_eq!((o.used, o.of), (5, 6));
         assert_eq!(o.coverage_percent, 83, "5 of 6 equal weights");
-        assert_eq!(o.left_out.len(), 1);
+        assert_eq!(o.left_out.len(), 6, "the five new ones have weight 0 here");
         assert_eq!(
-            (o.left_out[0].key, o.left_out[0].why),
-            ("popularity", "unknown")
+            o.left_out
+                .iter()
+                .find(|l| l.key == "popularity")
+                .map(|l| l.why),
+            Some("unknown")
         );
-        assert!(o.weights.is_default());
+        assert_eq!(o.weights, six());
     }
 
     #[test]
@@ -1463,7 +1575,7 @@ mod tests {
                     evidence: Evidence::Heuristic,
                 },
             ];
-            overall(&dims, &Weights::default()).score
+            overall(&dims, &six()).score
         };
         assert_eq!(mk(50, 51), Some(51), "50.5 rounds up");
         assert_eq!(mk(50, 50), Some(50));
@@ -1483,28 +1595,24 @@ mod tests {
             .score,
             None
         );
-        let zero = Weights {
-            performance: 0,
-            build_time: 0,
-            maintenance: 0,
-            security: 0,
-            popularity: 0,
-            source: 0,
-        };
+        let mut zero = six();
+        for k in KEYS {
+            zero.set(k, 0);
+        }
         let c = card_with(&full(), &zero);
         assert_eq!(c.overall.score, None);
         assert_eq!(
             (c.overall.used, c.overall.of, c.overall.coverage_percent),
             (0, 0, 0)
         );
-        assert_eq!(c.overall.left_out.len(), 6);
+        assert_eq!(c.overall.left_out.len(), KEYS.len());
     }
 
     #[test]
     fn a_weight_changes_the_overall_in_the_stated_way() {
         let f = full();
         // security counts 5 times: (100 + 85 + 100 + 95*5 + 20) / 9
-        let w = Weights::default().with_list("security=5").unwrap();
+        let w = six().with_list("security=5").unwrap();
         let c = card_with(&f, &w);
         assert_eq!(c.overall.score, Some(87), "(100+85+100+475+20)/9 = 86.7");
         assert_eq!(
@@ -1512,7 +1620,7 @@ mod tests {
             "9 of 10 of the weight is known (popularity, weight 1, is not)"
         );
         // a weight of 0 leaves a dimension out, known or not
-        let no_source = card_with(&f, &Weights::default().with_list("source=0").unwrap());
+        let no_source = card_with(&f, &six().with_list("source=0").unwrap());
         assert_eq!(
             no_source.overall.score,
             Some(95),
@@ -1524,7 +1632,7 @@ mod tests {
             .iter()
             .any(|l| l.key == "source" && l.why == "its weight is 0"));
         // popularity is unknown, so its weight cannot move the number
-        let pop = card_with(&f, &Weights::default().with_list("popularity=10").unwrap());
+        let pop = card_with(&f, &six().with_list("popularity=10").unwrap());
         assert_eq!(pop.overall.score, Some(80));
         assert!(
             pop.overall.coverage_percent < 50,
@@ -1534,7 +1642,7 @@ mod tests {
 
     #[test]
     fn weights_are_parsed_strictly_with_friendly_names() {
-        let w = Weights::default()
+        let w = six()
             .with_list("security=5, popularity=0 ,build-time=2,perf=3")
             .unwrap();
         assert_eq!(
@@ -1551,24 +1659,33 @@ mod tests {
             "speed=3",
             "=3",
         ] {
-            assert!(Weights::default().with_list(bad).is_err(), "{bad}");
+            assert!(six().with_list(bad).is_err(), "{bad}");
         }
-        assert!(Weights::default().with_list("").unwrap().is_default());
-        let e = Weights::default().with_list("speed=3").unwrap_err();
+        assert_eq!(six().with_list("").unwrap(), six());
+        let e = six().with_list("speed=3").unwrap_err();
         assert!(
-            e.contains("performance, build_time, maintenance, security, popularity, source"),
+            e.contains("performance, build_time, maintenance, security, reproducibility, provenance, compatibility, packaging, upstream, popularity, source"),
             "{e}"
         );
-        let c = Weights::default()
-            .caring_about("security, maintenance")
-            .unwrap();
+        let c = six().caring_about("security, maintenance").unwrap();
         assert_eq!((c.security, c.maintenance, c.source), (3, 3, 1));
-        assert!(Weights::default().caring_about("looks").is_err());
+        assert!(six().caring_about("looks").is_err());
+        // popularity is 0 by default now, so only the others are changes
+        let from_default = Weights::default()
+            .with_list("performance=3,build_time=2,security=5,popularity=0")
+            .unwrap();
         assert_eq!(
-            w.describe_changes(),
-            "performance 3, build time 2, security 5, popularity 0"
+            from_default.describe_changes(),
+            "performance 3, build time 2, security 5"
         );
         assert_eq!(Weights::default().describe_changes(), "");
+        assert_eq!(
+            (
+                Weights::default().popularity,
+                Weights::default().reproducibility
+            ),
+            (0, 1)
+        );
         for k in KEYS {
             assert_eq!(normalize_key(k), Some(k));
         }
@@ -1762,7 +1879,11 @@ mod tests {
         assert_eq!(v["overall"]["score"], 80);
         assert_eq!(v["overall"]["coverage_percent"], 83);
         assert_eq!(v["overall"]["weights"]["security"], 1);
-        assert_eq!(v["overall"]["left_out"][0]["key"], "popularity");
+        assert!(v["overall"]["left_out"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|l| l["key"] == "popularity"));
     }
 
     fn stale_entry(

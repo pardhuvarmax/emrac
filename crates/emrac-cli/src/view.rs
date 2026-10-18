@@ -795,7 +795,7 @@ pub fn score_view(st: &Style, card: &emrac_core::score::Card, details: bool) -> 
 fn overall_view(st: &Style, card: &emrac_core::score::Card) -> String {
     let o = &card.overall;
     let mut out = String::from("\n");
-    let title = st.paint(Role::Heading, &pad_right("Overall", 12));
+    let title = st.paint(Role::Heading, &pad_right("Overall", 17));
     match o.score {
         Some(s) => out.push_str(&format!(
             "  {title}  {}  {}  {}\n",
@@ -826,10 +826,17 @@ fn overall_view(st: &Style, card: &emrac_core::score::Card) -> String {
             .iter()
             .map(|l| format!("{} ({})", l.title, l.why))
             .collect();
-        out.push_str(&format!(
-            "  {}\n",
-            st.paint(Role::Dim, &format!("left out: {}", names.join(", ")))
-        ));
+        let text = format!("left out: {}", names.join(", "));
+        for (i, l) in wrap(&st.text(&text), st.width.saturating_sub(4))
+            .iter()
+            .enumerate()
+        {
+            out.push_str(&format!(
+                "  {}{}\n",
+                if i == 0 { "" } else { "  " },
+                st.paint(Role::Dim, l)
+            ));
+        }
     }
     out
 }
@@ -865,7 +872,7 @@ pub fn score_plain(card: &emrac_core::score::Card, details: bool) -> String {
     }
     for d in &card.dimensions {
         let num = d.score.map_or("-".to_string(), |s| s.to_string());
-        out.push_str(&format!("  {:<12} {:>3}  {}\n", d.title, num, d.summary));
+        out.push_str(&format!("  {:<17} {:>3}  {}\n", d.title, num, d.summary));
         if details {
             for r in &d.rules {
                 let pts = r.points.map_or(String::new(), |p| format!(" ({p:+})"));
@@ -879,13 +886,13 @@ pub fn score_plain(card: &emrac_core::score::Card, details: bool) -> String {
     let o = &card.overall;
     match o.score {
         Some(sc) => out.push_str(&format!(
-            "  {:<12} {:>3}  {}\n",
+            "  {:<17} {:>3}  {}\n",
             "Overall",
             sc,
             overall_words(o)
         )),
         None => out.push_str(&format!(
-            "  {:<12} {:>3}  {}\n",
+            "  {:<17} {:>3}  {}\n",
             "Overall",
             "-",
             overall_none_words(o)
@@ -1845,7 +1852,7 @@ mod tests {
         let c = sample_card();
         let out = score_view(&uncoloured(), &c, false);
         assert!(
-            out.starts_with("neovim 0.10.2-1 (extra): a report card, 5 of 6 known"),
+            out.starts_with("neovim 0.10.2-1 (extra): a report card, 5 of 11 known"),
             "{out}"
         );
         let perf = out.lines().find(|l| l.contains("Performance")).unwrap();
@@ -1855,11 +1862,11 @@ mod tests {
         );
         let pop = out.lines().find(|l| l.contains("Popularity")).unwrap();
         assert!(
-            pop.contains("  -  ") && pop.contains("no popularity") && !pop.contains('\u{2587}'),
+            pop.contains("  -  ") && pop.contains("keep no") && !pop.contains('\u{2587}'),
             "{pop}"
         );
         assert!(
-            out.contains("(212 packages depend on it)"),
+            out.contains("popularity data (212 packages depend on"),
             "the rest of the summary wraps under it: {out}"
         );
         assert!(!out.contains("run `"), "no hint for what is known");
@@ -1906,13 +1913,13 @@ mod tests {
         let out = score_plain(&sample_card(), false);
         assert_eq!(
             out.lines().next().unwrap(),
-            "neovim 0.10.2-1 (extra): a report card, 5 of 6 known"
+            "neovim 0.10.2-1 (extra): a report card, 5 of 11 known"
         );
         assert!(
-            out.contains("  Performance  100  starts in 4.3 ms"),
+            out.contains("  Performance       100  starts in 4.3 ms"),
             "{out}"
         );
-        assert!(out.contains("  Popularity     -  the official repositories keep no popularity data (212 packages depend on it)"), "{out}");
+        assert!(out.contains("  Popularity          -  the official repositories keep no popularity data (212 packages depend on it)"), "{out}");
         assert!(!out.contains('\u{2587}'));
     }
 

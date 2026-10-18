@@ -133,11 +133,16 @@ const SECTIONS: &[Section] = &[
         icon: "✓",
         blurb: "how much each part of `emrac score` counts overall",
         keys: &[
-            key("performance", Kind::Number, "weight of Performance in the overall number: 0 leaves it out, 10 is the most, 1 is the default", "0 to 10"),
+            key("performance", Kind::Number, "weight of Performance in the overall number: 0 leaves it out, 10 is the most; the default is 1, and 0 for the proxy dimensions", "0 to 10"),
             key("build_time", Kind::Number, "weight of Build time", "0 to 10"),
             key("maintenance", Kind::Number, "weight of Maintenance", "0 to 10"),
             key("security", Kind::Number, "weight of Security", "0 to 10"),
-            key("popularity", Kind::Number, "weight of Popularity", "0 to 10"),
+            key("reproducibility", Kind::Number, "weight of Reproducibility (what the Arch rebuilders found for this version)", "0 to 10"),
+            key("provenance", Kind::Number, "weight of Provenance (where the package comes from and how it is signed)", "0 to 10"),
+            key("compatibility", Kind::Number, "weight of Compatibility (architecture, dependencies, conflicts)", "0 to 10"),
+            key("packaging", Kind::Number, "weight of Packaging quality, a proxy from the packaging history; 0 by default", "0 to 10"),
+            key("upstream", Kind::Number, "weight of Upstream health (OpenSSF Scorecard, OSV), a proxy; 0 by default", "0 to 10"),
+            key("popularity", Kind::Number, "weight of Popularity, a proxy; 0 by default", "0 to 10"),
             key("source", Kind::Number, "weight of Source worthiness", "0 to 10"),
         ],
     },
@@ -413,7 +418,12 @@ mod tests {
             ("score.build_time", "3"),
             ("score.maintenance", "4"),
             ("score.security", "5"),
-            ("score.popularity", "0"),
+            ("score.popularity", "2"),
+            ("score.reproducibility", "4"),
+            ("score.provenance", "5"),
+            ("score.compatibility", "6"),
+            ("score.packaging", "3"),
+            ("score.upstream", "2"),
             ("score.source", "6"),
             ("clui.animations", "active"),
             ("clui.color", "never"),
@@ -437,7 +447,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 42, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 47, "{text}");
     }
 
     #[test]

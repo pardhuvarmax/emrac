@@ -44,11 +44,21 @@ pub struct ScoreConfig {
     pub performance: u8,
     #[serde(default = "default_weight")]
     pub build_time: u8,
-    #[serde(default = "default_weight")]
+    #[serde(default = "weight_0")]
     pub maintenance: u8,
     #[serde(default = "default_weight")]
     pub security: u8,
     #[serde(default = "default_weight")]
+    pub reproducibility: u8,
+    #[serde(default = "default_weight")]
+    pub provenance: u8,
+    #[serde(default = "default_weight")]
+    pub compatibility: u8,
+    #[serde(default = "weight_0")]
+    pub packaging: u8,
+    #[serde(default = "weight_0")]
+    pub upstream: u8,
+    #[serde(default = "weight_0")]
     pub popularity: u8,
     #[serde(default = "default_weight")]
     pub source: u8,
@@ -58,14 +68,23 @@ fn default_weight() -> u8 {
     1
 }
 
+fn weight_0() -> u8 {
+    0
+}
+
 impl Default for ScoreConfig {
     fn default() -> Self {
         Self {
             performance: 1,
             build_time: 1,
-            maintenance: 1,
+            maintenance: 0,
             security: 1,
-            popularity: 1,
+            reproducibility: 1,
+            provenance: 1,
+            compatibility: 1,
+            packaging: 0,
+            upstream: 0,
+            popularity: 0,
             source: 1,
         }
     }
@@ -78,6 +97,11 @@ impl ScoreConfig {
             build_time: self.build_time.min(crate::score::MAX_WEIGHT),
             maintenance: self.maintenance.min(crate::score::MAX_WEIGHT),
             security: self.security.min(crate::score::MAX_WEIGHT),
+            reproducibility: self.reproducibility.min(crate::score::MAX_WEIGHT),
+            provenance: self.provenance.min(crate::score::MAX_WEIGHT),
+            compatibility: self.compatibility.min(crate::score::MAX_WEIGHT),
+            packaging: self.packaging.min(crate::score::MAX_WEIGHT),
+            upstream: self.upstream.min(crate::score::MAX_WEIGHT),
             popularity: self.popularity.min(crate::score::MAX_WEIGHT),
             source: self.source.min(crate::score::MAX_WEIGHT),
         }
@@ -90,6 +114,11 @@ impl ScoreConfig {
             "score.maintenance" => &mut self.maintenance,
             "score.security" => &mut self.security,
             "score.popularity" => &mut self.popularity,
+            "score.reproducibility" => &mut self.reproducibility,
+            "score.provenance" => &mut self.provenance,
+            "score.compatibility" => &mut self.compatibility,
+            "score.packaging" => &mut self.packaging,
+            "score.upstream" => &mut self.upstream,
             "score.source" => &mut self.source,
             _ => return None,
         })
@@ -499,6 +528,11 @@ impl Config {
             "score.maintenance" => self.score.maintenance.to_string(),
             "score.security" => self.score.security.to_string(),
             "score.popularity" => self.score.popularity.to_string(),
+            "score.reproducibility" => self.score.reproducibility.to_string(),
+            "score.provenance" => self.score.provenance.to_string(),
+            "score.compatibility" => self.score.compatibility.to_string(),
+            "score.packaging" => self.score.packaging.to_string(),
+            "score.upstream" => self.score.upstream.to_string(),
             "score.source" => self.score.source.to_string(),
             "clui.animations" => self.clui.animations.clone(),
             "clui.color" => self.clui.color.clone(),
@@ -697,7 +731,8 @@ impl Config {
             "cache.policy" => self.cache.policy = default_cache_policy(),
             "cache.keep_days" => self.cache.keep_days = default_keep_days(),
             k if k.starts_with("score.") && self.score.slot(k).is_some() => {
-                *self.score.slot(k).expect("checked above") = default_weight();
+                *self.score.slot(k).expect("checked above") =
+                    crate::score::Weights::default_for(k.trim_start_matches("score."));
             }
             "clui.animations" => self.clui.animations = default_animations(),
             "clui.color" => self.clui.color = default_auto(),

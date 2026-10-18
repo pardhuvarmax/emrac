@@ -1259,7 +1259,7 @@ impl Sources {
     /// emrac has measured here (benchmarks, builds), the audit of an AUR
     /// package's PKGBUILD (online only) and the cached Arch news.
     pub fn score_facts(&self, name: &str, offline: bool) -> Result<crate::score::Facts> {
-        use crate::score::{AuditCounts, Bench, BuildFact, Facts, SourceFact};
+        use crate::score::{AuditCounts, Bench, BuildFact, Facts, RepoKind, SourceFact};
         let details = self.info(name, offline)?;
         let official = details.repo != "aur";
         let t = now();
@@ -1313,11 +1313,24 @@ impl Sources {
             });
         }
 
+        f.repo_kind = if !official {
+            RepoKind::Aur
+        } else if crate::score_more::is_arch_repo(&details.repo) {
+            RepoKind::Arch
+        } else {
+            RepoKind::ThirdParty
+        };
+        f.repro_for = self
+            .alpm
+            .installed_version(&details.name)
+            .unwrap_or_else(|| details.version.clone());
+        let mut meta_for_outside = None;
         if official {
             if let Some(meta) = self.alpm.repo_meta(&details.name) {
                 f.age_days = Some(days_ago(meta.build_date));
                 f.signed = Some(meta.signed);
                 f.dependents = Some(meta.dependents);
+                meta_for_outside = Some(meta);
             }
             // the Arch Security Tracker, for the installed version if there is one
             let checked = self
@@ -1387,7 +1400,176 @@ impl Sources {
                 }
             }
         }
+        self.score_outside(&mut f, &details, meta_for_outside.as_ref(), offline, t);
         Ok(f)
+    }
+
+    /// The facts of `emrac score` that come from outside the package databases:
+    /// provenance and compatibility (the databases and pacman.conf), the Arch
+    /// rebuilders, the packaging history, the OpenSSF Scorecard and OSV. A source
+    /// that cannot be reached leaves its dimension unknown, with the reason.
+    fn score_outside(
+        &self,
+        f: &mut crate::score::Facts,
+        details: &PackageDetails,
+        meta: Option<&crate::backend::alpm::RepoMeta>,
+        offline: bool,
+        t: u64,
+    ) {
+        use crate::score::{CompatFact, ProvenanceFact, UpstreamFact};
+        use crate::score_sources as ss;
+        let name = details.name.as_str();
+        f.provenance = Some(ProvenanceFact {
+            kind: f.repo_kind,
+            repo: details.repo.clone(),
+            packager: meta.and_then(|m| m.packager.clone()),
+            sig_required: meta.is_some_and(|m| m.sig_required),
+            sig_never: meta.is_some_and(|m| m.sig_never),
+            repo_packages: meta.map_or(0, |m| m.repo_packages),
+        });
+        if let Some(m) = meta {
+            f.compat = Some(CompatFact {
+                arch: m.arch.clone(),
+                system_arch: m.system_arch.clone(),
+                missing_deps: m.missing_deps.clone(),
+                conflicts: m.conflicts_installed.clone(),
+                new_deps: m.new_deps,
+            });
+        }
+        if f.repo_kind == crate::score::RepoKind::Arch && ss::valid_name(name) {
+            let req = ss::Request {
+                kind: "repro",
+                key: name,
+                url: ss::address("EMRAC_REPRO_URL", ss::REPRO_URL, name),
+                post: None,
+                ttl: ss::REPRO_TTL,
+            };
+            match ss::get(&req, offline, t) {
+                Ok(got) => {
+                    if let Some(body) = got.body {
+                        match ss::parse_repro(
+                            &body,
+                            name,
+                            &f.repro_for,
+                            got.fetched_at,
+                            t,
+                            got.note,
+                        ) {
+                            Ok(Some(r)) => f.repro = Some(r),
+                            Ok(None) => {}
+                            Err(e) => f.repro_note = Some(format!("not checked: {e}")),
+                        }
+                    }
+                }
+                Err(e) => f.repro_note = Some(format!("not checked: {e}")),
+            }
+        }
+        if f.repo_kind == crate::score::RepoKind::Arch {
+            let base = meta.map_or(name, |m| m.base.as_str());
+            if !ss::valid_name(base) {
+                f.packaging_note = Some("the package base has an unexpected name".to_string());
+            } else {
+                let req = ss::Request {
+                    kind: "commits",
+                    key: base,
+                    url: ss::address("EMRAC_PACKAGING_URL", ss::COMMITS_URL, base),
+                    post: None,
+                    ttl: ss::SLOW_TTL,
+                };
+                match ss::get(&req, offline, t) {
+                    Ok(got) => match got.body {
+                        Some(body) => match ss::parse_commits(&body, base, t) {
+                            Ok(Some(p)) => f.packaging = Some(p),
+                            Ok(None) => {
+                                f.packaging_note = Some(
+                                    "the packaging repository has no PKGBUILD history".to_string(),
+                                )
+                            }
+                            Err(e) => f.packaging_note = Some(format!("not checked: {e}")),
+                        },
+                        None => {
+                            f.packaging_note = Some(format!(
+                                "no packaging repository named {base} on gitlab.archlinux.org"
+                            ))
+                        }
+                    },
+                    Err(e) => f.packaging_note = Some(format!("not checked: {e}")),
+                }
+            }
+        } else {
+            f.packaging_note = Some(
+                "the packaging history is Arch's; this package is not from an Arch repository"
+                    .to_string(),
+            );
+        }
+        // upstream: only a GitHub address can be named
+        let repo = details.url.as_deref().and_then(ss::github_repo);
+        match repo {
+            None => {
+                f.upstream_note = Some(
+                    "upstream not identified: the package's URL is not a GitHub repository"
+                        .to_string(),
+                );
+            }
+            Some(repo) => {
+                let mut up = UpstreamFact {
+                    repo: Some(repo.clone()),
+                    scorecard: None,
+                    osv: None,
+                };
+                let mut problems = Vec::new();
+                let req = ss::Request {
+                    kind: "scorecard",
+                    key: &repo.replace('/', "_"),
+                    url: ss::address("EMRAC_SCORECARD_URL", ss::SCORECARD_URL, &repo)
+                        .replace("%2F", "/"),
+                    post: None,
+                    ttl: ss::SLOW_TTL,
+                };
+                match ss::get(&req, offline, t) {
+                    Ok(got) => {
+                        if let Some(body) = got.body {
+                            match ss::parse_scorecard(&body) {
+                                Ok(s) => up.scorecard = s,
+                                Err(e) => problems.push(format!("Scorecard: {e}")),
+                            }
+                        }
+                    }
+                    Err(e) => problems.push(format!("Scorecard: {e}")),
+                }
+                let ver = ss::upstream_version(&details.version);
+                let post = serde_json::json!({
+                    "package": {"name": format!("https://github.com/{repo}"), "ecosystem": "GIT"},
+                    "version": ver,
+                })
+                .to_string();
+                let req = ss::Request {
+                    kind: "osv",
+                    key: &format!("{}_{ver}", repo.replace('/', "_")),
+                    url: std::env::var("EMRAC_OSV_URL").unwrap_or_else(|_| ss::OSV_URL.to_string()),
+                    post: Some(post),
+                    ttl: ss::SLOW_TTL,
+                };
+                match ss::get(&req, offline, t) {
+                    Ok(got) => {
+                        if let Some(body) = got.body {
+                            match ss::parse_osv(&body, &ver) {
+                                Ok(o) => up.osv = Some(o),
+                                Err(e) => problems.push(format!("OSV: {e}")),
+                            }
+                        }
+                    }
+                    Err(e) => problems.push(format!("OSV: {e}")),
+                }
+                if up.scorecard.is_some() || up.osv.is_some() {
+                    f.upstream = Some(up);
+                } else if !problems.is_empty() {
+                    f.upstream_note = Some(format!("not checked: {}", problems.join("; ")));
+                } else {
+                    f.upstream = Some(up);
+                }
+            }
+        }
     }
 
     /// Makes a bundle in `dir` (which must not exist): the repository packages

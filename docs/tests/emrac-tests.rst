@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 640
+     - 666
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 48
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **720**
+     - **746**
 
-emrac-core library (640)
+emrac-core library (666)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -716,9 +716,43 @@ emrac-core library (640)
 * ``the_tracker_cannot_take_off_more_than_60_and_says_so``
 * ``the_tracker_does_not_apply_to_the_aur``
 * ``the_tracker_takes_off_by_severity_and_says_which_entries``
-* ``there_are_six_dimensions_in_the_specs_order``
+* ``there_are_eleven_dimensions_in_the_specs_order``
 * ``weights_are_parsed_strictly_with_friendly_names``
 * ``what_has_no_data_is_unknown_not_a_number``
+
+``score_more::tests`` (15)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_failed_reproduction_lowers_the_dimension_and_opens_no_gate``
+* ``a_package_for_another_architecture_scores_zero``
+* ``an_upstream_that_is_not_on_github_says_so``
+* ``compatibility_starts_at_100_and_loses_points_for_each_problem``
+* ``packaging_bands_have_inclusive_edges_and_two_adjustments``
+* ``provenance_is_unknown_when_it_could_not_be_read``
+* ``provenance_of_a_third_party_repository_depends_on_its_signature_level``
+* ``provenance_of_an_arch_package_counts_its_signature_and_attestation``
+* ``provenance_of_an_aur_package_loses_points_for_orphans_and_trust_signals``
+* ``reproducibility_does_not_cover_the_aur_or_other_repositories``
+* ``reproducibility_is_for_the_exact_version_and_unknown_otherwise``
+* ``the_arch_repositories_are_named_exactly``
+* ``the_evidence_mix_counts_the_new_authoritative_dimensions``
+* ``the_proxy_dimensions_and_the_unreadable_ones_are_left_out_by_default``
+* ``upstream_uses_the_scorecard_and_takes_off_for_osv_entries``
+
+``score_sources::tests`` (11)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_scorecard_lists_its_weak_checks_and_refuses_nonsense``
+* ``an_undecided_or_unexpected_status_is_unknown``
+* ``answers_are_cached_refreshed_and_kept_when_the_source_fails``
+* ``commits_give_age_activity_and_authors``
+* ``dates_become_days``
+* ``github_addresses_are_recognised_and_nothing_else``
+* ``names_are_encoded_and_validated``
+* ``only_https_is_fetched``
+* ``osv_ids_are_counted_once_and_withdrawn_ones_dropped``
+* ``the_rebuilder_record_for_the_wanted_version_wins``
+* ``the_upstream_version_drops_epoch_and_release``
 
 ``security_tracker::tests`` (17)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1237,10 +1271,10 @@ End-to-end: the package report card (dev/e2e/score.sh)
 
 ``emrac score`` for an official package and an AUR package: six dimensions from stated
 rules, unknown when there is no data, no overall number: ``dev/e2e/run.sh score``.
-Last full run: after u19, 48 of 48 passed.
+Last full run: after u20, 69 of 69 passed.
 
-* the card has a header and the six dimensions in order
-* the card is six dimensions and an overall that says what it covers
+* the card has a header and the eleven dimensions in order
+* the card is eleven dimensions and an overall that says what it covers
 * an official package's maintenance is its repository build age
 * its security is the signature, with the honest note under --details
 * popularity is unknown for an official package, and says why
@@ -1287,8 +1321,29 @@ Last full run: after u19, 48 of 48 passed.
 * a plan that would install a confirmed Critical entry warns by default
 * with safety.vulnerabilities block it is a problem and the dry run says it would refuse
 * with off the check is not made
+* a good rebuild of this exact version scores 100 and names the attestation
+* provenance of an Arch package: the repository, the signature, the attestation
+* compatibility: architecture, dependencies met, no conflicts
+* reproducibility, provenance and compatibility count by default
+* the proxy dimensions are shown but left out by default
+* a failed rebuild lowers the dimension to 20 and opens no gate
+* a result for another version is unknown and says which was checked
+* and its attestation does not count for provenance
+* no record at all is unknown, not zero
+* offline with nothing saved says it was not checked
+* an answer saved earlier is used offline and says so
+* the answers are cached under the data directory
+* packaging quality reads the PKGBUILD history
+* it is left out of the overall until you give it a weight
+* the standing weight can be set in the config, and reset to its own default
+* popularity, maintenance, packaging and upstream default to 0; the rest to 1
+* a missing packaging repository is named
+* an official package with a GitHub URL gets the Scorecard and OSV
+* a URL that is not GitHub says upstream was not identified
+* the JSON carries all eleven dimensions with their evidence
+* an AUR package has provenance from the AUR and no rebuild or compatibility
 
-(48 checks.)
+(69 checks.)
 
 End-to-end: how emrac looks (dev/e2e/clui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
