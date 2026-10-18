@@ -529,15 +529,15 @@ Part V is the command surface of features covered above.
      - ``emrac export`` / ``import`` (u12): packages, a safe subset of the settings, holds and repository names in one file; import reports first, installs through the normal install path, and never applies repositories, ``self.*``, ``safety.*``, ``flags.*`` or ``review.skip_*``. ``bundle create | verify | apply`` (u14): repository packages and their signatures for a machine without network, installed with signatures required (AUR packages and sync databases are not in a bundle)
      - ``docs/feats/SPEC.md`` Part V; ``docs/plan/r3/u12-export-import.md``; ``docs/plan/r3/u14-bundle.md``
    * - Help (``help``, ``man``, ``docs``, ``license``, ``credits``, ``bug-report``)
-     - Not started
-     - Only clap's auto-generated ``--help`` exists today
+     - Done
+     - ``help`` (clap), ``man`` (a man page, or ``--roff``; ``--generate DIR`` writes a page for every command), ``docs``, ``license [--full]``, ``credits``, ``support``, ``feedback`` and ``bug-report`` (the scrubbed doctor report and the last failed transactions; printed, never sent)
      - ``docs/feats/SPEC.md`` Part V; ``docs/plan/r3/u13-help-pages.md``
    * - ``lock``/``unlock``, ``pin``/``unpin`` (under Package Management)
      - Partial
      - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
      - ``docs/feats/SPEC.md`` Part V
 
-Core scope: 59 tracked: 8 done, 33 partial, 18 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
+Core scope: 59 tracked: 9 done, 33 partial, 17 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
 
 Extended scope
 ----------------
@@ -1574,9 +1574,9 @@ Totals
      - Idea / planned / research / not planned
      - Total
    * - Core
-     - 8
+     - 9
      - 33
-     - 18
+     - 17
      - 0
      - 59
    * - Extended
@@ -1592,9 +1592,9 @@ Totals
      - 62
      - 77
    * - **All**
-     - **38**
+     - **39**
      - **57**
-     - **26**
+     - **25**
      - **150**
      - **271**
 
