@@ -25,13 +25,13 @@ Totals
      - 539
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 22
+     - 25
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 32
    * - **Automated total**
      -
-     - **593**
+     - **596**
 
 emrac-core library (539)
 ------------------------
@@ -811,7 +811,7 @@ emrac-core library (539)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (22)
+emrac command line, unit tests (25)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -827,14 +827,17 @@ emrac command line, unit tests (22)
 * ``points_say_the_cap_instead_of_zero_and_signs_otherwise``
 * ``the_thresholds_are_the_engines``
 
-``commands::helppages::tests`` (5)
+``commands::helppages::tests`` (8)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_command_and_a_subcommand_are_found``
+* ``a_command_page_points_back_to_its_parent``
+* ``a_page_is_written_for_every_command_and_subcommand``
 * ``an_unknown_command_lists_the_known_ones``
-* ``every_command_renders_as_a_man_page``
+* ``text_in_roff_is_escaped``
 * ``the_libraries_named_are_the_ones_in_cargo_toml``
 * ``the_licence_is_the_gpl_3``
+* ``the_main_page_has_the_sections_a_man_page_has``
 
 ``commands::plan_check::tests`` (2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1117,7 +1120,7 @@ End-to-end: help pages and the bug report (dev/e2e/helppages.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``man``, ``docs``, ``license``, ``credits``, ``support``, ``feedback`` and
-``bug-report``: ``dev/e2e/run.sh helppages``. Last full run: after u13, 17 of 17 passed.
+``bug-report``: ``dev/e2e/run.sh helppages``. Last full run: after u13, 22 of 22 passed.
 
 * man prints the help of a command when not on a terminal
 * man takes a subcommand
@@ -1125,6 +1128,11 @@ End-to-end: help pages and the bug report (dev/e2e/helppages.sh)
 * man of emrac itself lists the commands
 * an unknown command lists the known ones
 * every command renders as roff
+* man emrac is the main page with files, exit status and see-also
+* man --generate writes emrac.1 and a page for every command
+* every generated page has a title line and a name section
+* no page is written for the root helpers
+* --generate with a command is a usage error
 * docs gives the site and the repository
 * docs without --open opens nothing
 * license says GPL and offers the full text
@@ -1137,7 +1145,7 @@ End-to-end: help pages and the bug report (dev/e2e/helppages.sh)
 * bug-report is scrubbed: no user name, no home path
 * bug-report says it was not sent
 
-(17 checks.)
+(22 checks.)
 
 End-to-end: export and import (dev/e2e/exchange.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
