@@ -179,26 +179,26 @@ Functions (18)
 - `pub docs()` :406
 - `pub license()` :416
 - `pub credits()` :429
-- `pub support()` :444
-- `pub feedback()` :454
-- `pub bug_report()` :464
+- `pub support()` :467
+- `pub feedback()` :477
+- `pub bug_report()` :487
 
 Tests (9)
 
-- `a_command_and_a_subcommand_are_found()` :490
-- `an_unknown_command_lists_the_known_ones()` :506
-- `the_main_page_has_the_sections_a_man_page_has()` :516
-- `a_command_page_points_back_to_its_parent()` :548
-- `a_page_is_written_for_every_command_and_subcommand()` :572
-- `text_in_roff_is_escaped()` :596
-- `the_libraries_named_are_the_ones_in_cargo_toml()` :603
-- `the_licence_is_the_gpl_3()` :621
-- `the_plain_pages_get_colour_only_where_there_is_some()` :629
+- `a_command_and_a_subcommand_are_found()` :513
+- `an_unknown_command_lists_the_known_ones()` :529
+- `the_main_page_has_the_sections_a_man_page_has()` :539
+- `a_command_page_points_back_to_its_parent()` :571
+- `a_page_is_written_for_every_command_and_subcommand()` :595
+- `text_in_roff_is_escaped()` :619
+- `the_libraries_named_are_the_ones_in_cargo_toml()` :626
+- `the_licence_is_the_gpl_3()` :644
+- `the_plain_pages_get_colour_only_where_there_is_some()` :652
 
 Test helpers (2)
 
-- `built()` :479
-- `text()` :485
+- `built()` :502
+- `text()` :508
 
 ### `crates/emrac-cli/src/commands/history.rs`
 

@@ -12,6 +12,14 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u20 addendum 4b (after r3) — 2026-10-19 — the heat colours made darker
+
+The red, orange, yellow, green of the bars, sparklines and the wait animation are deeper and less bright: a muted dark red, a burnt orange, an olive yellow and a forest green (true colour and 256 colours; the 16-colour and `light` palettes are as they were). The style stays the gradient along the bar; a reference with solid single-colour bars was tried and taken back.
+
+## Slice u20 addendum 4b (after r3) — 2026-10-19 — darker heat colours, a fuller `emrac credits`
+
+The red, orange, yellow and green of the bars, sparklines and the wait animation are deeper and less bright (a muted red, a burnt orange, an olive yellow, a forest green; true and 256 colours). A reference with solid single-colour bars was tried and taken back: the gradient along the bar stays. `emrac credits` colours the name and version, who made it, the address, the licence, each program and library, with the licences dimmed.
+
 ## Slice u20 addendum 4 (after r3) — 2026-10-19 — every help page in colour
 
 `emrac`, `emrac --help`, `emrac <command> --help`, `emrac <command> <subcommand> --help`, `emrac help <command>` and `emrac man <command>` are in emrac's colours on a terminal: headings and usage in the brand colour, commands and flags green, placeholders cyan, errors red, and the credit at the foot with the address underlined and the motto in the accent colour; the colours come from the theme (`clui.theme`) and depth, so `mono` is bold only. The pages `credits`, `support`, `docs`, `license` and `feedback` colour their headings, `commands` and addresses the same way. The decision is made before the arguments are read, from the config, the environment and `--color`, `--json` and `--quiet` as typed: piped, with `NO_COLOR`, `--color never` or `TERM=dumb` the help is the plain text it always was, and `--color always` colours it even when piped. `Style::sgr`, `command_styled`, `colorize`; 1 test, 6 more checks in `dev/e2e/clui.sh` (56).

@@ -427,18 +427,41 @@ pub fn license(full: bool) {
 }
 
 pub fn credits() {
-    let mut text = format!(
-        "emrac {}\nMade by pardhuvarmax  {REPO}\nLicence: GPL-3.0-or-later\n\nMade for Arch Linux. It runs, and depends on:\n",
-        env!("CARGO_PKG_VERSION")
+    use emrac_core::style::Role::{Accent, Brand, Dim, Heading, Package, Path, Version};
+    let st = emrac_core::style::Style::stdout();
+    println!(
+        "{} {}",
+        st.paint(Brand, "emrac"),
+        st.paint(Version, env!("CARGO_PKG_VERSION"))
+    );
+    println!(
+        "{} {}  {}",
+        st.paint(Dim, "Made by"),
+        st.paint(Package, "pardhuvarmax"),
+        st.paint(Path, REPO)
+    );
+    println!(
+        "{} {}",
+        st.paint(Dim, "Licence:"),
+        st.paint(Accent, "GPL-3.0-or-later")
+    );
+    println!();
+    println!(
+        "{}",
+        st.paint(Heading, "Made for Arch Linux. It runs, and depends on:")
     );
     for p in PROGRAMS {
-        text.push_str(&format!("  {p}\n"));
+        println!("  {}", st.paint(Package, p));
     }
-    text.push_str("\nBuilt with these Rust libraries:\n");
+    println!();
+    println!("{}", st.paint(Heading, "Built with these Rust libraries:"));
     for (name, licence) in LIBRARIES {
-        text.push_str(&format!("  {name:<14} {licence}\n"));
+        println!(
+            "  {} {}",
+            st.paint(Package, &format!("{name:<14}")),
+            st.paint(Dim, licence)
+        );
     }
-    say_page(&text);
 }
 
 pub fn support(open_it: bool) -> Result<()> {
