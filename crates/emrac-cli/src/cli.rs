@@ -4,17 +4,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 pub const ROOT_WARNING: &str =
     "DON'T RUN AS ROOT UNLESS NECESSARY (emrac asks for sudo itself when a step needs it)";
 
-/// The credit every `--help` ends with.
-pub const CREDIT: &str = concat!(
-    "Built by ",
-    env!("CARGO_PKG_AUTHORS"),
-    " — ",
-    env!("CARGO_PKG_HOMEPAGE"),
-    "\nSic Mundus Creatus Est."
-);
-
-/// The command tree with the credit on every (sub)command's help, not only the top one.
-pub fn command() -> clap::Command {
+fn command_with(tail: &str) -> clap::Command {
     use clap::CommandFactory;
     fn credit(cmd: clap::Command, tail: &str) -> clap::Command {
         let names: Vec<String> = cmd
@@ -27,7 +17,88 @@ pub fn command() -> clap::Command {
         }
         cmd
     }
-    credit(Cli::command(), CREDIT)
+    credit(Cli::command(), tail)
+}
+
+/// One SGR parameter string (`1;38;2;90;210;240`) as a clap style.
+fn sgr_style(code: Option<&str>) -> clap::builder::styling::Style {
+    use clap::builder::styling::{Ansi256Color, Color, Effects, RgbColor, Style as S};
+    let mut style = S::new();
+    let Some(code) = code else {
+        return style;
+    };
+    let nums: Vec<u32> = code.split(';').filter_map(|n| n.parse().ok()).collect();
+    let mut i = 0;
+    while i < nums.len() {
+        match nums[i] {
+            1 => style = style.effects(style.get_effects() | Effects::BOLD),
+            2 => style = style.effects(style.get_effects() | Effects::DIMMED),
+            4 => style = style.effects(style.get_effects() | Effects::UNDERLINE),
+            7 => style = style.effects(style.get_effects() | Effects::INVERT),
+            n @ 30..=37 => style = style.fg_color(Some(Color::Ansi256(Ansi256Color(n as u8 - 30)))),
+            n @ 90..=97 => {
+                style = style.fg_color(Some(Color::Ansi256(Ansi256Color(n as u8 - 90 + 8))))
+            }
+            38 if nums.get(i + 1) == Some(&5) && i + 2 < nums.len() => {
+                style = style.fg_color(Some(Color::Ansi256(Ansi256Color(
+                    nums[i + 2].min(255) as u8
+                ))));
+                i += 2;
+            }
+            38 if nums.get(i + 1) == Some(&2) && i + 4 < nums.len() => {
+                style = style.fg_color(Some(Color::Rgb(RgbColor(
+                    nums[i + 2].min(255) as u8,
+                    nums[i + 3].min(255) as u8,
+                    nums[i + 4].min(255) as u8,
+                ))));
+                i += 4;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    style
+}
+
+/// The help pages in emrac's own colours: headings and usage in the brand
+/// colour, commands and flags green, placeholders cyan, errors red.
+fn help_styles(st: &emrac_core::style::Style) -> clap::builder::styling::Styles {
+    use emrac_core::style::Role;
+    clap::builder::styling::Styles::styled()
+        .header(sgr_style(st.sgr(Role::Brand)))
+        .usage(sgr_style(st.sgr(Role::Brand)))
+        .literal(sgr_style(st.sgr(Role::Command)))
+        .placeholder(sgr_style(st.sgr(Role::Note)))
+        .error(sgr_style(st.sgr(Role::Problem)))
+        .valid(sgr_style(st.sgr(Role::Ok)))
+        .invalid(sgr_style(st.sgr(Role::Warn)))
+        .context(sgr_style(st.sgr(Role::Dim)))
+        .context_value(sgr_style(st.sgr(Role::Version)))
+}
+
+/// The credit line in colour (plain when the stream has none).
+fn styled_credit(st: &emrac_core::style::Style) -> String {
+    use emrac_core::style::Role;
+    format!(
+        "{} {} {} {}\n{}",
+        st.paint(Role::Dim, "Built by"),
+        st.paint(Role::Package, env!("CARGO_PKG_AUTHORS")),
+        st.paint(Role::Dim, "\u{2014}"),
+        st.paint(Role::Path, env!("CARGO_PKG_HOMEPAGE")),
+        st.paint(Role::Accent, "Sic Mundus Creatus Est.")
+    )
+}
+
+/// The command tree for parsing: every help page, with `emrac` and
+/// `emrac --help`, in colour when the stream has it.
+pub fn command_styled(st: &emrac_core::style::Style) -> clap::Command {
+    command_with(&styled_credit(st))
+        .color(if st.color {
+            clap::ColorChoice::Always
+        } else {
+            clap::ColorChoice::Never
+        })
+        .styles(help_styles(st))
 }
 
 #[derive(Parser)]

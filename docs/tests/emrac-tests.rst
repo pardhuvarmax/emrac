@@ -25,13 +25,13 @@ Totals
      - 671
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 49
+     - 50
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 32
    * - **Automated total**
      -
-     - **752**
+     - **753**
 
 emrac-core library (671)
 ------------------------
@@ -971,7 +971,7 @@ emrac-core library (671)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (49)
+emrac command line, unit tests (50)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -987,7 +987,7 @@ emrac command line, unit tests (49)
 * ``points_say_the_cap_instead_of_zero_and_signs_otherwise``
 * ``the_thresholds_are_the_engines``
 
-``commands::helppages::tests`` (8)
+``commands::helppages::tests`` (9)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_command_and_a_subcommand_are_found``
@@ -998,6 +998,7 @@ emrac command line, unit tests (49)
 * ``the_libraries_named_are_the_ones_in_cargo_toml``
 * ``the_licence_is_the_gpl_3``
 * ``the_main_page_has_the_sections_a_man_page_has``
+* ``the_plain_pages_get_colour_only_where_there_is_some``
 
 ``commands::plan_check::tests`` (2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1355,7 +1356,7 @@ End-to-end: how emrac looks (dev/e2e/clui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 emrac under a real pseudo-terminal and piped: marks, boxes, colour, themes, ASCII,
-width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: after the version banner, 50 of 50 passed.
+width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: after the coloured help pages, 56 of 56 passed.
 
 * the defaults: regular animations, auto colour and unicode, the default theme
 * a value that is not one of the words is refused
@@ -1407,8 +1408,14 @@ width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: a
 * a real install on a terminal still works
 * --version on a terminal is the EMRAC lettering, both versions and the motto
 * --version piped is still the plain lines scripts read
+* emrac with no arguments and emrac --help are in colour on a terminal
+* a command's and a subcommand's --help, and emrac help <cmd>, are in colour
+* the help text is the same with the colour taken out
+* piped, --color never and NO_COLOR give plain help
+* --color always colours piped help
+* the other pages (credits, support, docs, license) are in colour too
 
-(50 checks.)
+(56 checks.)
 
 End-to-end: Mirror Intelligence (dev/e2e/mirrors.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

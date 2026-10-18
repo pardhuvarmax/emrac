@@ -292,6 +292,17 @@ impl Style {
         }
     }
 
+    /// The SGR parameters (`1;38;2;90;210;240`) of a role on this stream, or
+    /// `None` when there is no colour or the role has none: for code that hands
+    /// the look to another library, such as the help pages.
+    pub fn sgr(&self, role: Role) -> Option<&'static str> {
+        if self.color {
+            self.code(role)
+        } else {
+            None
+        }
+    }
+
     fn code(&self, role: Role) -> Option<&'static str> {
         use Role::*;
         if let Heat(step) = role {

@@ -44,7 +44,8 @@ fn main() {
 
     let cli = {
         use clap::FromArgMatches;
-        Cli::from_arg_matches(&cli::command().get_matches()).unwrap_or_else(|e| e.exit())
+        Cli::from_arg_matches(&cli::command_styled(&early_style()).get_matches())
+            .unwrap_or_else(|e| e.exit())
     };
 
     init_style(&cli);
@@ -74,6 +75,38 @@ fn warn_if_root() {
 }
 
 /// Looks, from the config, the `--color` flag, and whether output must stay plain.
+/// How the help pages look, decided before the arguments are parsed: from the
+/// config, the environment and `--color`, `--json` and `--quiet` as they are
+/// typed.
+fn early_style() -> emrac_core::style::Style {
+    use emrac_core::style::{Env, Mode, Style};
+    let config = Config::load().unwrap_or_default();
+    let mut settings = config.clui.settings();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut i = 0;
+    while i < args.len() {
+        let value = if args[i] == "--color" {
+            i += 1;
+            args.get(i).map(String::as_str)
+        } else {
+            args[i].strip_prefix("--color=")
+        };
+        match value {
+            Some("always") => settings.color = Mode::Always,
+            Some("never") => settings.color = Mode::Never,
+            Some("auto") => settings.color = Mode::Auto,
+            _ => {}
+        }
+        i += 1;
+    }
+    settings.plain_output = args
+        .iter()
+        .any(|a| matches!(a.as_str(), "--json" | "--quiet" | "-q"))
+        || config.flags.json
+        || config.flags.quiet;
+    Style::resolve(&settings, &Env::current(false))
+}
+
 fn init_style(cli: &Cli) {
     use emrac_core::style::{self, Mode};
     let config = Config::load().unwrap_or_default();

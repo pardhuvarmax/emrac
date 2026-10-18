@@ -312,7 +312,8 @@ pub fn man(path: &[String], roff: bool, generate_to: Option<&str>) -> Result<()>
         eprintln!("wrote {} manual pages to {dir}", written.len());
         return Ok(());
     }
-    let mut root = Cli::command();
+    let st = emrac_core::style::Style::stdout();
+    let mut root = crate::cli::command_styled(&st);
     root.build();
     let top = top_level_names(&root);
     let words: Vec<String> = if path.first().is_some_and(|w| w == "emrac") {
@@ -342,18 +343,70 @@ pub fn man(path: &[String], roff: bool, generate_to: Option<&str>) -> Result<()>
         }
     }
     let mut cmd = cmd;
-    println!("{}", cmd.render_long_help());
+    println!("{}", cmd.render_long_help().ansi());
     Ok(())
 }
 
+/// A line of one of the plain pages in colour: addresses underlined, `commands`
+/// in backticks green, a line that introduces a list (it ends with `:` or `?`
+/// and is not indented) as a heading. With no colour it is the line itself.
+pub fn colorize(st: &emrac_core::style::Style, line: &str) -> String {
+    use emrac_core::style::Role;
+    if line.is_empty() {
+        return String::new();
+    }
+    if !line.starts_with(' ') && (line.ends_with(':') || line.ends_with('?')) {
+        return st.paint(Role::Heading, line);
+    }
+    let mut out = String::new();
+    let mut rest = line;
+    while !rest.is_empty() {
+        if let Some(inner) = rest.strip_prefix('`') {
+            if let Some(end) = inner.find('`') {
+                out.push('`');
+                out.push_str(&st.paint(Role::Command, &inner[..end]));
+                out.push('`');
+                rest = &inner[end + 1..];
+                continue;
+            }
+        }
+        if rest.starts_with("http://") || rest.starts_with("https://") {
+            let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+            let (url, tail) = rest.split_at(end);
+            out.push_str(&st.paint(Role::Path, url));
+            rest = tail;
+            continue;
+        }
+        if let Some(cmd) = rest.strip_prefix("emrac ") {
+            let word_end = cmd.find(char::is_whitespace).unwrap_or(cmd.len());
+            if word_end > 0
+                && cmd[..word_end]
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '-')
+            {
+                out.push_str(&st.paint(Role::Command, &rest[..6 + word_end]));
+                rest = &rest[6 + word_end..];
+                continue;
+            }
+        }
+        let c = rest.chars().next().unwrap_or(' ');
+        out.push(c);
+        rest = &rest[c.len_utf8()..];
+    }
+    out
+}
+
+fn say_page(text: &str) {
+    let st = emrac_core::style::Style::stdout();
+    for line in text.lines() {
+        println!("{}", colorize(&st, line));
+    }
+}
+
 pub fn docs(open_it: bool) -> Result<()> {
-    println!("Documentation   {SITE}");
-    println!("Source          {REPO}");
-    println!("Changelog       {REPO}/blob/main/CHANGELOG.md");
-    println!("What is built   {REPO}/blob/main/FEATURE_STATUS.rst");
-    println!("Specification   {REPO}/blob/main/docs/feats/SPEC.md");
-    println!();
-    println!("In the terminal: `emrac help <command>`, `emrac man <command>`.");
+    say_page(&format!(
+        "Documentation   {SITE}\nSource          {REPO}\nChangelog       {REPO}/blob/main/CHANGELOG.md\nWhat is built   {REPO}/blob/main/FEATURE_STATUS.rst\nSpecification   {REPO}/blob/main/docs/feats/SPEC.md\n\nIn the terminal: `emrac help <command>`, `emrac man <command>`."
+    ));
     if open_it {
         open(SITE)?;
     }
@@ -361,46 +414,37 @@ pub fn docs(open_it: bool) -> Result<()> {
 }
 
 pub fn license(full: bool) {
-    println!(
-        "emrac is free software: you can redistribute it and/or modify it under the terms of the"
+    say_page(
+        "emrac is free software: you can redistribute it and/or modify it under the terms of the\nGNU General Public License as published by the Free Software Foundation, either version 3\nof the License, or (at your option) any later version. It comes with NO WARRANTY.\n",
     );
-    println!(
-        "GNU General Public License as published by the Free Software Foundation, either version 3"
-    );
-    println!("of the License, or (at your option) any later version. It comes with NO WARRANTY.");
-    println!();
     if full {
         println!("{LICENSE_TEXT}");
     } else {
-        println!(
-            "The whole text: `emrac license --full`, or https://www.gnu.org/licenses/gpl-3.0.html"
+        say_page(
+            "The whole text: `emrac license --full`, or https://www.gnu.org/licenses/gpl-3.0.html",
         );
     }
 }
 
 pub fn credits() {
-    println!("emrac {}", env!("CARGO_PKG_VERSION"));
-    println!("Made by pardhuvarmax  {REPO}");
-    println!("Licence: GPL-3.0-or-later");
-    println!();
-    println!("Made for Arch Linux. It runs, and depends on:");
+    let mut text = format!(
+        "emrac {}\nMade by pardhuvarmax  {REPO}\nLicence: GPL-3.0-or-later\n\nMade for Arch Linux. It runs, and depends on:\n",
+        env!("CARGO_PKG_VERSION")
+    );
     for p in PROGRAMS {
-        println!("  {p}");
+        text.push_str(&format!("  {p}\n"));
     }
-    println!();
-    println!("Built with these Rust libraries:");
+    text.push_str("\nBuilt with these Rust libraries:\n");
     for (name, licence) in LIBRARIES {
-        println!("  {name:<14} {licence}");
+        text.push_str(&format!("  {name:<14} {licence}\n"));
     }
+    say_page(&text);
 }
 
 pub fn support(open_it: bool) -> Result<()> {
-    println!("Something not right?");
-    println!("  1. emrac doctor         checks this system for common problems");
-    println!("  2. emrac help <cmd>     what a command does");
-    println!("  3. {SITE}   the documentation");
-    println!("  4. emrac bug-report     a report you can read, then paste into an issue");
-    println!("  5. {REPO}/issues   ask, or report");
+    say_page(&format!(
+        "Something not right?\n  1. emrac doctor         checks this system for common problems\n  2. emrac help <cmd>     what a command does\n  3. {SITE}   the documentation\n  4. emrac bug-report     a report you can read, then paste into an issue\n  5. {REPO}/issues   ask, or report"
+    ));
     if open_it {
         open(&format!("{REPO}/issues"))?;
     }
@@ -408,11 +452,9 @@ pub fn support(open_it: bool) -> Result<()> {
 }
 
 pub fn feedback(open_it: bool) -> Result<()> {
-    println!("An idea, or something that annoys you? Say so:");
-    println!("  {REPO}/issues/new");
-    println!(
-        "Say what you were doing, what you expected, and what happened. Nothing is sent from here."
-    );
+    say_page(&format!(
+        "An idea, or something that annoys you? Say so:\n  {REPO}/issues/new\nSay what you were doing, what you expected, and what happened. Nothing is sent from here."
+    ));
     if open_it {
         open(&format!("{REPO}/issues/new"))?;
     }
@@ -581,5 +623,34 @@ mod tests {
             LICENSE_TEXT.contains("GNU GENERAL PUBLIC LICENSE")
                 && LICENSE_TEXT.contains("Version 3")
         );
+    }
+
+    #[test]
+    fn the_plain_pages_get_colour_only_where_there_is_some() {
+        use emrac_core::style::{strip_ansi, Depth, Style, Theme};
+        let on = Style {
+            color: true,
+            unicode: true,
+            fancy: true,
+            width: 80,
+            theme: Theme::Default,
+            depth: Depth::TrueColor,
+        };
+        let off = Style { color: false, ..on };
+        for line in [
+            "Something not right?",
+            "  1. emrac doctor         checks this system",
+            "  3. https://example.org/x   the documentation",
+            "In the terminal: `emrac help <command>`, `emrac man <command>`.",
+            "Licence: GPL-3.0-or-later",
+            "",
+        ] {
+            assert_eq!(colorize(&off, line), line, "{line:?}");
+            assert_eq!(strip_ansi(&colorize(&on, line)), line, "{line:?}");
+        }
+        assert!(colorize(&on, "Something not right?").contains('\u{1b}'));
+        assert!(colorize(&on, "  1. emrac doctor  x").contains('\u{1b}'));
+        assert!(colorize(&on, "see https://a.b/c now").contains('\u{1b}'));
+        assert!(!colorize(&on, "plain words only").contains('\u{1b}'));
     }
 }

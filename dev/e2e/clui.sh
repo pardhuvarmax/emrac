@@ -6,7 +6,7 @@
 # animations only when `clui.animations active`, never in CI or piped, and the
 # cursor always shown again, also after Ctrl-C.
 #
-# last full run: after the version banner, 50 of 50 passed
+# last full run: after the coloured help pages, 56 of 56 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -96,6 +96,15 @@ ck "the plan id of a plan does not depend on how it is shown" "A=\$($e install v
 ck "a real install on a terminal still works" "pty \"$T $e install vim --yes\" > $W/inst.out; pacman -Q vim"
 ck "--version on a terminal is the EMRAC lettering, both versions and the motto" "ptyp \"$T $e --version\" | grep -q 'emrac v[0-9.]* - libalpm v[0-9.]*' && ptyp \"$T $e --version\" | grep -q '|/____/' && ptyp \"$T $e --version\" | grep -q 'Sic Mundus Creatus Est.'"
 ck "--version piped is still the plain lines scripts read" "[ \"\$($e --version | head -1)\" = \"emrac \$($e --version | head -1 | cut -d' ' -f2)\" ] && $e --version | grep -q '^built by ' && ! $e --version | grep -q '|/____/'"
+
+# --- every help page is in colour on a terminal
+esc=$(printf '\033')
+ck "emrac with no arguments and emrac --help are in colour on a terminal" "pty \"$T $e\" | grep -q \"$esc\\[\" && pty \"$T $e --help\" | grep -q \"$esc\\[\""
+ck "a command's and a subcommand's --help, and emrac help <cmd>, are in colour" "pty \"$T $e install --help\" | grep -q \"$esc\\[\" && pty \"$T $e snapshot create --help\" | grep -q \"$esc\\[\" && pty \"$T $e help doctor\" | grep -q \"$esc\\[\""
+ck "the help text is the same with the colour taken out" "[ \"\$(ptyp \"$T $e install --help\")\" = \"\$(pty \"env TERM=xterm LANG=C.UTF-8 NO_COLOR=1 $e install --help\")\" ]"
+ck "piped, --color never and NO_COLOR give plain help" "! $e --help | grep -q \"$esc\" && ! pty \"$T $e --color never --help\" | grep -q \"$esc\" && ! pty \"env TERM=xterm LANG=C.UTF-8 NO_COLOR=1 $e --help\" | grep -q \"$esc\""
+ck "--color always colours piped help" "$e --color always snapshot --help | grep -q \"$esc\\[\""
+ck "the other pages (credits, support, docs, license) are in colour too" "for c in credits support docs license feedback; do pty \"$T $e \$c\" | grep -q \"$esc\\[\" || exit 1; done"
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]
