@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 539
+     - 548
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 25
@@ -31,10 +31,23 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **596**
+     - **605**
 
-emrac-core library (539)
+emrac-core library (548)
 ------------------------
+
+``advisor::tests`` (9)
+~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_quarter_of_the_free_space_is_said_even_below_the_growth_limit``
+* ``a_small_plan_gets_no_advice``
+* ``a_zero_threshold_turns_that_rule_off_and_enabled_false_turns_all_off``
+* ``aur_packages_are_said_to_be_uncounted_only_when_there_is_other_advice``
+* ``growth_in_gib_is_large_growth``
+* ``many_dependencies_counts_only_those_not_asked_for_and_gives_a_command``
+* ``one_package_that_is_most_of_a_plan_is_named``
+* ``removals_and_downgrades_get_no_advice``
+* ``the_download_threshold_is_inclusive_and_names_the_biggest``
 
 ``arch_news::tests`` (7)
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1079,6 +1092,30 @@ nothing needs: ``dev/e2e/run.sh buildtools``. Last full run: after u7, 9 of 9 pa
 * a package that was installed before the build is not offered
 
 (9 checks.)
+
+End-to-end: the Package Advisor (dev/e2e/advisor.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Advice under a big plan, shown by lowering the limits on a small package:
+``dev/e2e/run.sh advisor``. Last full run: after u15, 15 of 15 passed.
+
+* a small plan has no advice with the default limits
+* the advisor settings are in the config
+* a low download limit gives the large-download advice
+* the advice names the biggest package
+* the advice says it blocks nothing
+* a low growth limit gives the disk-growth advice
+* a low dependency limit gives the many-packages advice with a command
+* the advice is in the JSON plan
+* the plan id does not change with the advice
+* advisor.enabled false gives no advice at all
+* a limit of 0 turns that one rule off
+* a bad value is refused
+* advice never stops an install
+* a removal gets no advice
+* the config file has an advisor section
+
+(15 checks.)
 
 End-to-end: offline bundles (dev/e2e/bundle.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

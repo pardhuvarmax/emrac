@@ -166,6 +166,7 @@ pub fn print_plan_with_preview(plan: &Plan, preview: &PlanPreview, json: bool) {
     print_config_effects(&preview.config);
     print_policy(&preview.policy);
     print_hooks(&preview.hooks);
+    print_advice(&preview.advice);
 
     if plan.total_download_size > 0 {
         println!(
@@ -188,6 +189,21 @@ pub fn print_plan_with_preview(plan: &Plan, preview: &PlanPreview, json: bool) {
         plan.short_digest(),
         plan.short_digest()
     );
+}
+
+/// The Package Advisor's words under a big plan. Advice only.
+fn print_advice(advice: &[emrac_core::advisor::Advice]) {
+    if advice.is_empty() {
+        return;
+    }
+    println!("Advice (it blocks nothing; `emrac config` has an [advisor] section):");
+    for a in advice {
+        println!("  {}", a.text);
+        if let Some(hint) = &a.hint {
+            println!("    {hint}");
+        }
+    }
+    println!();
 }
 
 /// The config files you changed that this plan will leave beside your edits.

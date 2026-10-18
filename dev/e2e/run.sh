@@ -20,6 +20,7 @@ podman build -t emrac-test -f dev/container/Containerfile dev/container
 # dev/e2e/run.sh recovery pacman fails mid-install (injected): what emrac finds and how it mends it
 # dev/e2e/run.sh buildtools an AUR build with a build-only dependency: what emrac offers to remove
 # dev/e2e/run.sh stats    emrac stats from a build-times file, emrac benchmark of an installed package
+# dev/e2e/run.sh advisor  the Package Advisor: advice under a big plan
 # dev/e2e/run.sh bundle   offline bundles: create, verify, damage, apply, a bad signature
 # dev/e2e/run.sh helppages man, docs, license, credits, support, feedback, bug-report
 # dev/e2e/run.sh exchange emrac export / import: a file of the machine, a report, only what is safe applied
@@ -83,6 +84,13 @@ buildtools)
     podman run --rm --security-opt 'unmask=/proc/*' \
         -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
         -v "$repo_root/dev/e2e/buildtools.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+advisor)
+    echo "==> Running the Package Advisor checks"
+    podman run --rm \
+        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/advisor.sh:/t.sh:ro" \
         emrac-test bash /t.sh
     ;;
 bundle)

@@ -574,6 +574,11 @@ fn df(path: &str) -> Option<Fs> {
     Some(Fs { avail, total })
 }
 
+/// Free bytes on `/`, when `df` can say.
+pub fn free_on_root() -> Option<u64> {
+    df("/").map(|f| f.avail)
+}
+
 /// `(mount point, file system type)` pairs of `/proc/mounts`.
 pub fn parse_mounts(text: &str) -> Vec<(String, String)> {
     text.lines()

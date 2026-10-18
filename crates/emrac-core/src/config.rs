@@ -28,6 +28,49 @@ pub struct Config {
     pub self_service: SelfConfig,
     #[serde(default)]
     pub safety: SafetyConfig,
+    #[serde(default)]
+    pub advisor: AdvisorConfig,
+}
+
+/// The Package Advisor (u15): when a plan is big enough to be worth a word.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdvisorConfig {
+    /// `false` turns the advice off.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Advise when a plan downloads at least this much (MiB); 0 turns this off.
+    #[serde(default = "default_large_download_mib")]
+    pub large_download_mib: u32,
+    /// Advise when a plan grows the installed size by at least this much (MiB); 0 turns this off.
+    #[serde(default = "default_large_growth_mib")]
+    pub large_growth_mib: u32,
+    /// Advise when this many dependencies come along; 0 turns this off.
+    #[serde(default = "default_many_dependencies")]
+    pub many_dependencies: u32,
+}
+
+fn default_true() -> bool {
+    true
+}
+fn default_large_download_mib() -> u32 {
+    1024
+}
+fn default_large_growth_mib() -> u32 {
+    2048
+}
+fn default_many_dependencies() -> u32 {
+    40
+}
+
+impl Default for AdvisorConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            large_download_mib: default_large_download_mib(),
+            large_growth_mib: default_large_growth_mib(),
+            many_dependencies: default_many_dependencies(),
+        }
+    }
 }
 
 /// How strict the checks before a transaction are (u17).
@@ -323,6 +366,10 @@ impl Config {
             "safety.partial_upgrade" => self.safety.partial_upgrade.clone(),
             "safety.arch_news" => self.safety.arch_news.clone(),
             "safety.db_backup" => self.safety.db_backup.clone(),
+            "advisor.enabled" => self.advisor.enabled.to_string(),
+            "advisor.large_download_mib" => self.advisor.large_download_mib.to_string(),
+            "advisor.large_growth_mib" => self.advisor.large_growth_mib.to_string(),
+            "advisor.many_dependencies" => self.advisor.many_dependencies.to_string(),
             "self.source" => self.self_service.source.clone(),
             "self.channel" => self.self_service.channel.clone(),
             "self.require_signature" => self.self_service.require_signature.to_string(),
@@ -392,6 +439,18 @@ impl Config {
             }
             "cache.keep_days" => {
                 self.cache.keep_days = value.parse().map_err(|_| invalid())?;
+            }
+            "advisor.enabled" => {
+                self.advisor.enabled = parse_bool(value).ok_or_else(invalid)?;
+            }
+            "advisor.large_download_mib" => {
+                self.advisor.large_download_mib = value.parse().map_err(|_| invalid())?;
+            }
+            "advisor.large_growth_mib" => {
+                self.advisor.large_growth_mib = value.parse().map_err(|_| invalid())?;
+            }
+            "advisor.many_dependencies" => {
+                self.advisor.many_dependencies = value.parse().map_err(|_| invalid())?;
             }
             "safety.preflight" => {
                 if !matches!(value, "block" | "warn" | "off") {
@@ -469,6 +528,16 @@ impl Config {
             "build.remove_make_deps" => self.build.remove_make_deps = default_remove_make_deps(),
             "cache.policy" => self.cache.policy = default_cache_policy(),
             "cache.keep_days" => self.cache.keep_days = default_keep_days(),
+            "advisor.enabled" => self.advisor.enabled = true,
+            "advisor.large_download_mib" => {
+                self.advisor.large_download_mib = default_large_download_mib()
+            }
+            "advisor.large_growth_mib" => {
+                self.advisor.large_growth_mib = default_large_growth_mib()
+            }
+            "advisor.many_dependencies" => {
+                self.advisor.many_dependencies = default_many_dependencies()
+            }
             "safety.preflight" => self.safety.preflight = default_preflight(),
             "safety.partial_upgrade" => self.safety.partial_upgrade = default_partial(),
             "safety.arch_news" => self.safety.arch_news = default_news(),

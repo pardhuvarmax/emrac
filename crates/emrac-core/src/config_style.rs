@@ -129,6 +129,17 @@ const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        name: "advisor",
+        icon: "✎",
+        blurb: "advice under a big plan; it blocks nothing",
+        keys: &[
+            key("enabled", Kind::Bool, "say something under a plan whose download, disk growth or number of new packages is large", BOOL),
+            key("large_download_mib", Kind::Number, "advise when a plan downloads at least this many MiB; 0 turns this one off", NUM),
+            key("large_growth_mib", Kind::Number, "advise when a plan needs at least this many MiB more disk; 0 turns this one off", NUM),
+            key("many_dependencies", Kind::Number, "advise when at least this many packages come along that you did not ask for; 0 turns this one off", NUM),
+        ],
+    },
+    Section {
         name: "safety",
         icon: "⛨",
         blurb: "the checks made before a transaction changes anything",
@@ -368,6 +379,10 @@ mod tests {
             ("build.remove_make_deps", "never"),
             ("cache.policy", "lean"),
             ("cache.keep_days", "3"),
+            ("advisor.enabled", "false"),
+            ("advisor.large_download_mib", "5"),
+            ("advisor.large_growth_mib", "6"),
+            ("advisor.many_dependencies", "7"),
             ("safety.preflight", "warn"),
             ("safety.partial_upgrade", "off"),
             ("safety.arch_news", "warn"),
@@ -381,7 +396,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 27, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 31, "{text}");
     }
 
     #[test]
@@ -438,6 +453,7 @@ mod tests {
             "[snapshot]",
             "[build]",
             "[cache]",
+            "[advisor]",
             "[safety]",
             "[self]",
         ] {

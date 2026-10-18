@@ -5,6 +5,7 @@
 
 use serde::Serialize;
 
+use crate::advisor::Advice;
 use crate::config_preview::ConfigPreview;
 use crate::hooks::HookPreview;
 use crate::policy_preview::PolicyPreview;
@@ -17,10 +18,16 @@ pub struct PlanPreview {
     pub config: ConfigPreview,
     #[serde(skip_serializing_if = "PolicyPreview::is_empty")]
     pub policy: PolicyPreview,
+    /// Advice for a plan that is unusually big (`advisor.rs`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub advice: Vec<Advice>,
 }
 
 impl PlanPreview {
     pub fn is_empty(&self) -> bool {
-        self.hooks.is_empty() && self.config.is_empty() && self.policy.is_empty()
+        self.hooks.is_empty()
+            && self.config.is_empty()
+            && self.policy.is_empty()
+            && self.advice.is_empty()
     }
 }

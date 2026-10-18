@@ -1488,7 +1488,52 @@ impl Sources {
             hooks: self.hook_preview(plan),
             config: self.config_preview(plan),
             policy: self.policy_preview(plan),
+            advice: self.advice(plan),
         }
+    }
+
+    /// Advice for a plan that is unusually big: the Package Advisor
+    /// (`docs/plan/r3/u15-package-advisor.md`). Sizes come from the sync
+    /// databases; an AUR package has none until it is built.
+    pub fn advice(&self, plan: &Plan) -> Vec<crate::advisor::Advice> {
+        use crate::advisor::{advise, Input, Sized, Thresholds};
+        let thresholds =
+            Thresholds::from_config(&crate::config::Config::load().unwrap_or_default().advisor);
+        if !thresholds.enabled || plan.is_empty() {
+            return Vec::new();
+        }
+        let names: Vec<String> = plan.packages.iter().map(|p| p.name.clone()).collect();
+        let resolved = self.alpm.sync_resolved(&names);
+        let packages: Vec<Sized> = plan
+            .packages
+            .iter()
+            .map(|p| match resolved.iter().find(|r| r.name == p.name) {
+                Some(r) => Sized {
+                    name: p.name.clone(),
+                    explicit: p.explicit,
+                    download: r.download_size,
+                    installed: r.installed_size,
+                    unknown: false,
+                },
+                None => Sized {
+                    name: p.name.clone(),
+                    explicit: p.explicit,
+                    download: 0,
+                    installed: 0,
+                    unknown: true,
+                },
+            })
+            .collect();
+        advise(
+            &Input {
+                action: plan.action,
+                packages,
+                download_total: plan.total_download_size,
+                growth: plan.total_installed_size_delta.max(0) as u64,
+                free: crate::preflight::free_on_root(),
+            },
+            &thresholds,
+        )
     }
 
     /// The files under your local file policy (`override`, `divert`) that the

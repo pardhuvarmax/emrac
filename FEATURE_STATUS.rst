@@ -470,9 +470,9 @@ Listed in ``SPEC.md`` Part IV but left unnumbered in the spec.
      - Notes
      - Tracked in
    * - Package Advisor
-     - Not started
-     - Warns on unusually large dependency trees or disk impact before install
-     - ``docs/feats/SPEC.md`` IV+
+     - Done
+     - Under an ``install`` or ``upgrade`` plan: advice when the download, the disk growth, the share of free space or the number of new packages is large, or one package is most of it. Limits in ``[advisor]`` of the config; it never blocks (u15)
+     - ``docs/feats/SPEC.md`` IV+; ``docs/plan/r3/u15-package-advisor.md``
    * - Mirror Intelligence
      - Not started
      - Nothing built yet.
@@ -537,7 +537,7 @@ Part V is the command surface of features covered above.
      - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
      - ``docs/feats/SPEC.md`` Part V
 
-Core scope: 59 tracked: 6 done, 33 partial, 20 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
+Core scope: 59 tracked: 7 done, 33 partial, 19 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
 
 Extended scope
 ----------------
@@ -1574,9 +1574,9 @@ Totals
      - Idea / planned / research / not planned
      - Total
    * - Core
-     - 6
+     - 7
      - 33
-     - 20
+     - 19
      - 0
      - 59
    * - Extended
@@ -1592,9 +1592,9 @@ Totals
      - 62
      - 77
    * - **All**
-     - **36**
+     - **37**
      - **57**
-     - **28**
+     - **27**
      - **150**
      - **271**
 
