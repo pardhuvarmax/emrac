@@ -361,6 +361,20 @@ pub enum Commands {
     },
 
     /// Packages on a drive for a machine without network: create, verify, apply
+    ///
+    /// A bundle is a folder of the repositories' own package files and their
+    /// signatures, with a manifest of checksums. Make it where the network is;
+    /// install it on the machine that has none. AUR packages are not bundled.
+    ///
+    /// Two kinds of check: the manifest's checksums catch a damaged copy; the
+    /// signatures are what make a package trustworthy, and `apply` makes pacman
+    /// require a valid one for every package.
+    ///
+    /// NOTE ON OLD KEYRINGS: a machine that has been offline for months may not
+    /// know the keys new packages are signed with and will refuse them. Bring
+    /// `archlinux-keyring` over in a bundle of its own first. See
+    /// `emrac bundle apply --help` for the details.
+    #[command(verbatim_doc_comment)]
     Bundle {
         #[command(subcommand)]
         command: BundleCommand,
@@ -880,6 +894,18 @@ pub enum GraphFormat {
 pub enum BundleCommand {
     /// Make a bundle in a new folder: repository packages with their
     /// signatures and a manifest of checksums (no AUR packages)
+    ///
+    /// Without --for the bundle holds the named packages and their whole
+    /// dependency closure. With --for (the target's `emrac export --packages`
+    /// file) only what the target lacks or has older goes in; with --for and no
+    /// names, every upgrade the target is waiting for.
+    ///
+    /// If the target has been offline for months, make a bundle of
+    /// `archlinux-keyring` alone first and have it applied before the real one:
+    /// pacman checks every signature before it installs anything, so a newer
+    /// keyring in the same bundle cannot help the other packages. The details
+    /// are in `emrac bundle apply --help`.
+    #[command(verbatim_doc_comment)]
     Create {
         /// The new folder
         dir: String,
@@ -902,6 +928,45 @@ pub enum BundleCommand {
 
     /// Install a bundle: verify, show what changes, ask, then `pacman -U`
     /// with signatures required (never a downgrade)
+    ///
+    /// Order of work: the files are checked against the manifest; each package is
+    /// compared with what is installed (install, upgrade, already there and
+    /// skipped, or older than installed and refused: a bundle never downgrades);
+    /// the pre-flight runs with its network checks left out; the plan is shown and
+    /// you are asked (--yes answers); then it is journaled, installed with
+    /// `pacman -U` under a copy of pacman.conf that sets LocalFileSigLevel to
+    /// Required, and recorded in the history. The sync databases are not in a
+    /// bundle, so the machine's own are not refreshed.
+    ///
+    /// The keyring, and why a bundle can be refused although it is genuine
+    ///
+    ///   `apply` has pacman check every package's signature against the keyring of the
+    ///   machine it runs on: the list of Arch packagers' keys that machine trusts. Arch
+    ///   rotates those keys over time. A machine that has been offline for months may
+    ///   not know the key a new package was signed with, and pacman then stops with
+    ///   "invalid or corrupted package (PGP signature)" even though the bundle is fine.
+    ///
+    ///   The keyring is itself a package, `archlinux-keyring`, but pacman checks ALL the
+    ///   signatures before it installs ANYTHING. So putting a newer keyring into the same
+    ///   bundle as the other packages does not help: the other packages are checked
+    ///   against the old keyring first, and fail.
+    ///
+    ///   What to do, for a machine that has been offline for a while:
+    ///     1. on the machine with the network, make a small bundle of the keyring alone:
+    ///          emrac bundle create /mnt/usb/keyring archlinux-keyring
+    ///     2. on the offline machine, apply that one first (the package refreshes the
+    ///        keys itself when it is installed):
+    ///          emrac bundle apply /mnt/usb/keyring
+    ///     3. then make and apply the real bundle.
+    ///
+    ///   If you see "invalid or corrupted package (PGP signature)", suspect the keyring
+    ///   before you suspect the bundle: `emrac bundle verify` passing only means the
+    ///   files are the ones that were put in, not that this machine trusts who signed
+    ///   them. If even the keyring bundle is refused, the machine is too far behind to
+    ///   trust it; emrac does not turn the signature check off. Bring the keyring in
+    ///   by another route you trust (newer install media, or check the key fingerprints
+    ///   yourself against archlinux.org and run `pacman-key --populate archlinux`).
+    #[command(verbatim_doc_comment)]
     Apply {
         /// The bundle folder
         dir: String,

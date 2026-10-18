@@ -61,6 +61,18 @@ refused.
 - The architecture must match (`apply` refuses a bundle for another one).
 - A dependency cycle or a name no repository carries is reported at `create` and the bundle is not made.
 
+## A machine that has been offline for months: the keyring
+
+`apply` makes pacman check every signature against the target's own keyring. Arch rotates its packagers' keys, so a machine that
+has been offline for a long time may not know the key a new package was signed with, and pacman stops with "invalid or corrupted
+package (PGP signature)" although the bundle is genuine. The keyring is itself a package (`archlinux-keyring`), but pacman checks
+**all** signatures **before** it installs anything, so a newer keyring in the same bundle cannot help the other packages. The way
+through is two bundles: `emrac bundle create DIR archlinux-keyring`, applied first (its install script loads the new keys), then the real
+one. If even the keyring bundle is refused the machine is too far behind to trust it, and emrac does not turn the check off:
+bring the keyring in another way you trust. This is written in the long help of `bundle`, `bundle create` and `bundle apply`, and
+`apply` repeats the hint when pacman fails. It was not tested against a really old keyring (that needs an old image); the
+container suite checks that the help says it and that a keyring-only bundle can be made.
+
 ## Design
 
 `emrac-core/src/bundle.rs`: `Manifest`, `BundlePackage`, `render` / `parse` (every name and file name validated; no path

@@ -4,7 +4,7 @@
 # case a hash cannot catch: a bundle whose manifest was changed to match a bad
 # signature, which pacman itself must refuse.
 #
-# last full run: after u14, 24 of 24 passed
+# last full run: after u14, 26 of 26 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -12,6 +12,8 @@ sudo pacman -Syu --noconfirm >/dev/null 2>&1
 sudo pacman -R --noconfirm sl cowsay >/dev/null 2>&1
 W=/tmp/bw; rm -rf $W; mkdir -p $W; cd $W
 
+ck "the help explains the old-keyring problem" "$e bundle apply --help | grep -q 'archlinux-keyring' && $e bundle apply --help | grep -q 'invalid or corrupted package' && $e bundle --help | grep -q 'OLD KEYRINGS'"
+ck "a bundle of the keyring alone can be made" "$e bundle create $W/bk archlinux-keyring >$W/ck.out 2>&1; ls $W/bk/pkg | grep -q '^archlinux-keyring-' && ls $W/bk/pkg | grep -q 'archlinux-keyring-.*\\.sig\$'"
 ck "create makes a bundle of a package and its dependencies" "$e bundle create $W/b1 sl >$W/c1.out 2>&1; grep -q 'packages' $W/c1.out && ls $W/b1/pkg | grep -q '^sl-.*pkg.tar'"
 ck "every package has a signature file" "for f in \$(ls $W/b1/pkg | grep -v '\\.sig\$'); do [ -f $W/b1/pkg/\$f.sig ] || { echo no sig \$f; exit 1; }; done"
 ck "the user can copy and delete the bundle" "cp -r $W/b1 $W/b1copy && rm -rf $W/b1copy"

@@ -470,6 +470,37 @@ fn every_help_screen_carries_the_credit() {
     }
 }
 
+#[test]
+fn the_bundle_help_explains_the_keyring_problem() {
+    let home = Home::new("bundle-keyring");
+    for (args, must) in [
+        (
+            &["bundle", "apply", "--help"][..],
+            &[
+                "archlinux-keyring",
+                "invalid or corrupted package (PGP signature)",
+                "ALL the",
+                "emrac bundle create /mnt/usb/keyring archlinux-keyring",
+                "suspect the keyring",
+                "does not turn the signature check off",
+            ][..],
+        ),
+        (
+            &["bundle", "create", "--help"],
+            &["archlinux-keyring", "offline for months"],
+        ),
+        (
+            &["bundle", "--help"],
+            &["OLD KEYRINGS", "archlinux-keyring"],
+        ),
+    ] {
+        let text = stdout(&home.run(args));
+        for needle in must {
+            assert!(text.contains(needle), "{args:?} lacks {needle:?}:\n{text}");
+        }
+    }
+}
+
 fn snapshot_json(name: &str, count: usize) -> String {
     let packages: Vec<String> = (0..count)
         .map(|i| {

@@ -227,5 +227,11 @@ pub fn apply(sources: &Sources, dir: &str, dry_run: bool, yes: bool, json: bool)
         }
     }
     emrac_core::journal::finish();
+    if result.is_err() {
+        say!(
+            Voice::Notes,
+            "if pacman said \"invalid or corrupted package (PGP signature)\", suspect this machine's keyring before the bundle: a machine that has been offline for months may not know the keys new packages are signed with. Apply a bundle of just `archlinux-keyring` first (`emrac bundle apply --help` has the steps)."
+        );
+    }
     result
 }

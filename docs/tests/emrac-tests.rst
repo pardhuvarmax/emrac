@@ -28,10 +28,10 @@ Totals
      - 22
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
-     - 31
+     - 32
    * - **Automated total**
      -
-     - **592**
+     - **593**
 
 emrac-core library (539)
 ------------------------
@@ -864,10 +864,10 @@ emrac command line, unit tests (22)
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
 
-emrac command line, integration tests (31)
+emrac command line, integration tests (32)
 ------------------------------------------
 
-``(top level)`` (31)
+``(top level)`` (32)
 ~~~~~~~~~~~~~~~~~~~~
 
 * ``a_runaway_build_is_stopped_by_its_limits_and_the_reason_is_named``
@@ -894,6 +894,7 @@ emrac command line, integration tests (31)
 * ``self_sync_and_news_use_the_configured_source_and_keep_the_last_good_index``
 * ``self_upgrade_plans_from_the_synced_index_and_refuses_a_copy_no_package_owns``
 * ``snapshots_list_show_delete``
+* ``the_bundle_help_explains_the_keyring_problem``
 * ``the_ledger_holds_a_second_copy_and_repairs_the_history``
 * ``the_sandbox_hides_the_network_secrets_and_home_from_a_build``
 * ``the_test_helper_does_not_pass_makepkgs_folders_on_to_emrac``
@@ -1081,8 +1082,10 @@ End-to-end: offline bundles (dev/e2e/bundle.sh)
 
 ``emrac bundle create | verify | apply`` with real packages, including a bundle
 whose signature is bad and whose manifest was edited to match: ``dev/e2e/run.sh bundle``.
-Last full run: after u14, 24 of 24 passed.
+Last full run: after u14, 26 of 26 passed.
 
+* the help explains the old-keyring problem
+* a bundle of the keyring alone can be made
 * create makes a bundle of a package and its dependencies
 * every package has a signature file
 * the user can copy and delete the bundle
@@ -1108,7 +1111,7 @@ Last full run: after u14, 24 of 24 passed.
 * --json gives the changes
 * a folder with no manifest is refused
 
-(24 checks.)
+(26 checks.)
 
 End-to-end: help pages and the bug report (dev/e2e/helppages.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
