@@ -427,15 +427,27 @@ pub enum Commands {
         pins: bool,
     },
 
-    /// The manual page of a command (a subcommand as a second word)
+    /// The manual page of a command (a subcommand as a second word), or all of them
     Man {
-        /// The command, for example `install` or `snapshot create`
-        #[arg(required = true, num_args = 1..=2, value_name = "COMMAND")]
+        /// The command, for example `install` or `snapshot create`; `emrac`
+        /// for the main page
+        #[arg(
+            required_unless_present = "generate",
+            num_args = 1..=2,
+            value_name = "COMMAND",
+            conflicts_with = "generate"
+        )]
         command: Vec<String>,
 
         /// Print the roff source instead of showing the page
-        #[arg(long)]
+        #[arg(long, conflicts_with = "generate")]
         roff: bool,
+
+        /// Write emrac.1 and a page for every command (emrac-install.1,
+        /// emrac-snapshot-create.1 ...) into this folder, for a package to
+        /// install under /usr/share/man/man1
+        #[arg(long, value_name = "DIR")]
+        generate: Option<String>,
     },
 
     /// Where the documentation is

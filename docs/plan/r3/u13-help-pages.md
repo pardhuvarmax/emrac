@@ -31,10 +31,18 @@ emrac bug-report [--open]      # a scrubbed report to paste into an issue
   is printed, **never sent**: you read it, then paste it into an issue. `--open` opens the new-issue page with only a
   title filled in (a body in a web address would be long and would leave the machine before you saw it).
 
+## `man emrac` for real: `emrac man --generate DIR`
+
+`emrac man --generate DIR` writes `emrac.1` and one page per command and subcommand (`emrac-install.1`, `emrac-snapshot-create.1`,
+and so on; about 100 files) into `DIR`, with `clap_mangen`. The main page also has DESCRIPTION, FILES, EXIT STATUS, ENVIRONMENT, SEE ALSO
+(every command page, pacman(8), makepkg(8), pacman.conf(5), PKGBUILD(5), bwrap(1)), BUGS, VERSION, AUTHOR and COPYRIGHT; a command page
+points back to its parent. Hidden helpers get no page. The packaging calls it: `install.sh` and the AUR `PKGBUILD` run
+`emrac man --generate man-pages` and install the files to `/usr/share/man/man1` (guarded, so a tag from before this existed builds as before),
+which is what makes `man emrac` and `man emrac-install` work after `pacman -S emrac`. All pages pass `groff -man -ww` without a warning.
+
 ## Not covered
 
-Sending reports from emrac, a pager of our own, translations, and man pages installed by the package (the packager can use
-`emrac man emrac --roff`, and each subcommand likewise).
+Sending reports from emrac, a pager of our own, translations, and a page for the hidden root helpers.
 
 ## Verification
 

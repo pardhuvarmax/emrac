@@ -160,6 +160,10 @@ package() {
   target/release/emrac completion bash | install -Dm644 /dev/stdin "$pkgdir/usr/share/bash-completion/completions/emrac"
   target/release/emrac completion zsh  | install -Dm644 /dev/stdin "$pkgdir/usr/share/zsh/site-functions/_emrac"
   target/release/emrac completion fish | install -Dm644 /dev/stdin "$pkgdir/usr/share/fish/vendor_completions.d/emrac.fish"
+  # Manual pages (emrac man --generate): a tag from before they existed has none.
+  if target/release/emrac man --generate man-pages 2>/dev/null; then
+    install -Dm644 -t "$pkgdir/usr/share/man/man1" man-pages/*.1
+  fi
 }
 EOF
     sed -i -e "s|@VERSION@|$VERSION|" -e "s|@TAG@|$TAG|" -e "s|@SHA256@|$SHA256|" PKGBUILD

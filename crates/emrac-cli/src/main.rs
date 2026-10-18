@@ -66,7 +66,11 @@ fn run(cli: &Cli) -> Result<()> {
 
     // These print fixed text or the command definitions: no libalpm handle.
     match &cli.command {
-        Commands::Man { command, roff } => return commands::helppages::man(command, *roff),
+        Commands::Man {
+            command,
+            roff,
+            generate,
+        } => return commands::helppages::man(command, *roff, generate.as_deref()),
         Commands::Docs { open } => return commands::helppages::docs(*open),
         Commands::License { full } => {
             commands::helppages::license(*full);
