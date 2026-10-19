@@ -45,7 +45,7 @@ pub fn run(
         FromSourceCommand::Rebuild { pkgs, accept_risks } => {
             let mut choice = choice;
             choice.accept_risks |= accept_risks;
-            let policy = sources.source_policy();
+            let policy = sources.source_policy()?;
             let targets: Vec<String> = if pkgs.is_empty() {
                 policy
                     .iter()
@@ -76,7 +76,7 @@ pub fn run(
 }
 
 fn list(sources: &Sources, json: bool) -> Result<()> {
-    let policy = sources.source_policy();
+    let policy = sources.source_policy()?;
     let rows: Vec<(String, String, String)> =
         policy
             .iter()

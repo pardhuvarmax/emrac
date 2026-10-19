@@ -125,6 +125,14 @@ pub enum Error {
     #[error("{0}")]
     PlanChanged(String),
 
+    /// The record of source-build policies cannot be trusted; the text says why.
+    #[error("{0}")]
+    SourcePolicy(String),
+
+    /// The upgrade is done, but source rebuilds it was to carry out are not.
+    #[error("{0}")]
+    SourceRebuildPending(String),
+
     /// `emrac rebuild` cannot rebuild what was named; the text says why.
     #[error("{0}")]
     Rebuild(String),
@@ -414,6 +422,8 @@ impl Error {
             | Error::Preflight(_)
             | Error::PlanChanged(_)
             | Error::Rebuild(_)
+            | Error::SourcePolicy(_)
+            | Error::SourceRebuildPending(_)
             | Error::Recommend(_)
             | Error::Policy(_)
             | Error::News(_)

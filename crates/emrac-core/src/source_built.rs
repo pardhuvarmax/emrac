@@ -37,15 +37,28 @@ pub fn path() -> Result<PathBuf> {
     Ok(PathBuf::from(home).join(".local/share/emrac/source-built.json"))
 }
 
-pub fn read_from(path: &Path) -> Vec<Entry> {
-    fs::read(path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+/// The policies recorded. No file is no policy; a file that cannot be read or
+/// parsed is an error, never an empty list: an upgrade must not install binaries
+/// over source builds, nor a write replace the other entries, because the record
+/// is damaged. The damaged file is left as it is.
+pub fn read_from(path: &Path) -> Result<Vec<Entry>> {
+    let bytes = match fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(damaged(path, &e.to_string())),
+    };
+    serde_json::from_slice(&bytes).map_err(|e| damaged(path, &e.to_string()))
 }
 
-pub fn read() -> Vec<Entry> {
-    path().map(|p| read_from(&p)).unwrap_or_default()
+fn damaged(path: &Path, why: &str) -> Error {
+    Error::SourcePolicy(format!(
+        "the record of what you build from source ({}) can't be read: {why}. Intent is unknown, so emrac will not upgrade or write over it. Look at the file, and fix it or move it aside (the policies are lost then: `emrac from-source add <pkg>` declares them again)",
+        path.display()
+    ))
+}
+
+pub fn read() -> Result<Vec<Entry>> {
+    read_from(&path()?)
 }
 
 fn write(path: &Path, list: &[Entry]) -> Result<()> {
@@ -70,7 +83,7 @@ pub fn record_to(
     recipe: Option<&str>,
     now: u64,
 ) -> Result<()> {
-    let mut list = read_from(path);
+    let mut list = read_from(path)?;
     list.retain(|e| e.name != name);
     list.push(Entry {
         name: name.to_string(),
@@ -85,7 +98,7 @@ pub fn record_to(
 
 /// A rebuild is waiting for these packages (the policy stays).
 pub fn mark_pending(path: &Path, names: &[String]) -> Result<()> {
-    let mut list = read_from(path);
+    let mut list = read_from(path)?;
     let mut changed = false;
     for e in list
         .iter_mut()
@@ -102,7 +115,7 @@ pub fn mark_pending(path: &Path, names: &[String]) -> Result<()> {
 
 /// Ends the policy for these packages: they follow the repository's binary.
 pub fn forget_from(path: &Path, names: &[String]) -> Result<bool> {
-    let mut list = read_from(path);
+    let mut list = read_from(path)?;
     let before = list.len();
     list.retain(|e| !names.contains(&e.name));
     let changed = list.len() != before;
@@ -165,10 +178,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("emrac-sb-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("sb.json");
-        assert!(read_from(&file).is_empty());
+        assert!(read_from(&file).unwrap().is_empty());
         record_to(&file, "sl", "5.05-6", Some("abc123"), 100).unwrap();
         record_to(&file, "figlet", "2.2.5-6", None, 101).unwrap();
-        let list = read_from(&file);
+        let list = read_from(&file).unwrap();
         assert_eq!(
             list.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(),
             ["figlet", "sl"]
@@ -177,6 +190,7 @@ mod tests {
         mark_pending(&file, &["sl".to_string(), "absent".to_string()]).unwrap();
         assert!(
             read_from(&file)
+                .unwrap()
                 .iter()
                 .find(|e| e.name == "sl")
                 .unwrap()
@@ -185,13 +199,28 @@ mod tests {
         // a rebuild clears it
         record_to(&file, "sl", "5.05-7", Some("def456"), 200).unwrap();
         let sl = read_from(&file)
+            .unwrap()
             .into_iter()
             .find(|e| e.name == "sl")
             .unwrap();
         assert!(!sl.pending && sl.version == "5.05-7");
         assert!(forget_from(&file, &["sl".to_string()]).unwrap());
         assert!(!forget_from(&file, &["sl".to_string()]).unwrap());
-        assert_eq!(read_from(&file).len(), 1);
+        assert_eq!(read_from(&file).unwrap().len(), 1);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_damaged_record_is_an_error_and_is_never_written_over() {
+        let dir = std::env::temp_dir().join(format!("emrac-sbd-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("sb.json");
+        fs::write(&file, b"[{\"name\": \"sl\", ").unwrap();
+        assert!(matches!(read_from(&file), Err(Error::SourcePolicy(_))));
+        assert!(record_to(&file, "figlet", "1-1", None, 1).is_err());
+        assert!(mark_pending(&file, &["sl".to_string()]).is_err());
+        assert!(forget_from(&file, &["sl".to_string()]).is_err());
+        assert_eq!(fs::read(&file).unwrap(), b"[{\"name\": \"sl\", ");
         fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -81,3 +81,11 @@ Read from the code, not assumed. Invariants 1, 2, 4, 8 and 9 hold; the others ha
 - **A-6 (rule 11).** The plan is checked again before commit only if more than 30 s passed since it was shown (`RECHECK_AFTER`). That is a deliberate cost trade-off; the strict reading is "always, immediately before".
 
 Everything else in the sections above stands as written. Fix order: A-1, A-2, A-3, A-4, A-5, then the P0 list.
+
+### Fixed after the audit
+
+- **A-1 fixed.** `source_built::read_from` returns an error for a file it cannot read or parse; upgrade, `from-source` and every write refuse and leave the file untouched; `doctor` calls it a PROBLEM. Tests: `a_damaged_record_is_an_error_and_is_never_written_over`, three container checks.
+- **A-2 fixed in code**: `rebuild_policy` builds nothing when `history::begin` fails; the package is marked pending. No automated test yet (needs an injected lock; add with the S-2 fault-injection set).
+- **A-3 fixed.** `emrac upgrade` exits non-zero (`SourceRebuildPending`) after reporting the upgrade, when a rebuild failed. `--skip-source-builds` is a request and exits 0. Container check.
+- **A-5 fixed.** Every upgrade plan (also an empty one) and `doctor` list pending rebuilds. Container checks.
+- **A-4 open:** `--yes` and PGP key import needs a decision (see the conversation); **A-6** stays a deliberate trade-off.

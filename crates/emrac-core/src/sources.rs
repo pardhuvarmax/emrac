@@ -388,7 +388,7 @@ impl Sources {
     }
 
     /// The packages with a source-build policy.
-    pub fn source_policy(&self) -> Vec<crate::source_built::Entry> {
+    pub fn source_policy(&self) -> Result<Vec<crate::source_built::Entry>> {
         crate::source_built::read()
     }
 
@@ -402,7 +402,7 @@ impl Sources {
     pub fn declare_source_policy(&self, names: &[String]) -> Result<()> {
         let path = crate::source_built::path()?;
         for name in names {
-            if crate::source_built::read_from(&path)
+            if crate::source_built::read_from(&path)?
                 .iter()
                 .any(|e| &e.name == name)
             {
@@ -424,10 +424,10 @@ impl Sources {
     /// from source: their entries get `+source` and the plan says what will happen.
     /// The upgrade itself installs the repository's binaries first, so that the
     /// system is never partly upgraded; the rebuild follows it.
-    fn apply_source_policy(&self, plan: &mut Plan) {
-        let policy = crate::source_built::read();
+    fn apply_source_policy(&self, plan: &mut Plan) -> Result<()> {
+        let policy = crate::source_built::read()?;
         if policy.is_empty() {
-            return;
+            return Ok(());
         }
         let mut followed = Vec::new();
         for p in plan
@@ -446,6 +446,33 @@ impl Sources {
                 followed.join(", ")
             ));
         }
+        // A rebuild still waiting from an earlier upgrade is said in every plan
+        // until it is done or dropped.
+        let waiting: Vec<&str> = policy
+            .iter()
+            .filter(|e| e.pending && !followed.contains(&e.name))
+            .map(|e| e.name.as_str())
+            .collect();
+        if !waiting.is_empty() {
+            plan.warnings.push(format!(
+                "a source rebuild is still pending for {}: the repository's binary is installed. Build it with `emrac from-source rebuild`, or end the policy with `emrac from-source drop`",
+                waiting.join(", ")
+            ));
+        }
+        Ok(())
+    }
+
+    /// Source-build policies whose rebuild is pending (for `doctor`), or why the
+    /// record cannot be read.
+    pub fn source_policy_waiting(&self) -> std::result::Result<Vec<String>, String> {
+        crate::source_built::read()
+            .map(|l| {
+                l.into_iter()
+                    .filter(|e| e.pending)
+                    .map(|e| e.name)
+                    .collect()
+            })
+            .map_err(|e| e.to_string())
     }
 
     /// The plan recorded for rebuilding a package under the policy: `repo` is
@@ -1293,7 +1320,7 @@ impl Sources {
         } else {
             self.plan_targeted_upgrade(pkgs)?
         };
-        self.apply_source_policy(&mut up.plan);
+        self.apply_source_policy(&mut up.plan)?;
         Ok(up)
     }
 
@@ -3401,6 +3428,7 @@ impl Sources {
             stale_broken,
             stale_binary,
             stale_maybe,
+            source_policy: Some(self.source_policy_waiting()),
             db_backups,
             repo_rollbacks,
             history,

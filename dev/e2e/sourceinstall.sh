@@ -8,7 +8,7 @@
 # The source-build policy: what was asked to be built from source stays so; an
 # upgrade rebuilds it from the new packaging source instead of installing the binary.
 #
-# last full run: after the source-build policy, 23 of 23 passed
+# last full run: after the safety audit, 28 of 28 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -52,8 +52,17 @@ if [ -n "$old" ]; then
   sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
   ck "the upgrade rebuilds the package from source and clears the pending state" "$e upgrade sl --yes --skip-pkgbuild --accept-risks >/tmp/s7.out 2>&1; pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'built here'"
   sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
-  ck "a rebuild that fails leaves the binary, keeps the policy and says so" "EMRAC_ARCH_PACKAGING_URL=file:///nonexistent/{base}.git $e upgrade sl --yes >/tmp/s8.out 2>&1; grep -q 'binary of sl stays installed' /tmp/s8.out && $e from-source 2>&1 | grep -q 'rebuild pending'"
+  ck "a rebuild that fails leaves the binary, keeps the policy, says so and exits non-zero" "EMRAC_ARCH_PACKAGING_URL=file:///nonexistent/{base}.git $e upgrade sl --yes >/tmp/s8.out 2>&1; rc=\$?; [ \$rc -ne 0 ] && grep -q 'binary of sl stays installed' /tmp/s8.out && grep -q 'upgrade is done, but sl could not be rebuilt' /tmp/s8.out && pacman -Q sl && $e from-source 2>&1 | grep -q 'rebuild pending'"
+  ck "a pending rebuild is in the doctor" "$e doctor 2>&1 | grep -q 'waiting to be built from source'"
+  ck "a pending rebuild is in the plan of the next upgrade" "$e upgrade --dry-run 2>&1 | grep -q 'source rebuild is still pending for sl'"
 fi
+# a record that cannot be read is unknown intent, never "no policy"
+cp ~/.local/share/emrac/source-built.json /tmp/sb.good
+printf '[{"name": "sl", ' > ~/.local/share/emrac/source-built.json
+ck "a damaged record stops an upgrade and says why" "! $e upgrade --dry-run >/tmp/s9.out 2>&1 && grep -q \"can't be read\" /tmp/s9.out"
+ck "a damaged record is never written over" "! $e from-source add figlet >/dev/null 2>&1; [ \"\$(cat ~/.local/share/emrac/source-built.json)\" = '[{\"name\": \"sl\", ' ]"
+ck "the doctor calls a damaged record a problem" "$e doctor 2>&1 | grep -q 'record of your source-build policies'"
+cp /tmp/sb.good ~/.local/share/emrac/source-built.json
 ck "install --binary of a policy package ends the policy" "$e install --binary sl --yes >/dev/null 2>&1; $e from-source 2>&1 | grep -q 'no package is set'"
 sudo pacman -R --noconfirm sl >/dev/null 2>&1
 

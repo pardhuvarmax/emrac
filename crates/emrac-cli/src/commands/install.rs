@@ -130,7 +130,11 @@ pub fn run(
     if result.is_ok() && mode == emrac_core::SourceMode::Binary {
         // the binary was asked for explicitly: the source policy ends
         let names: Vec<String> = plan.packages.iter().map(|p| p.name.clone()).collect();
-        if sources.end_source_policy(&names).unwrap_or(false) {
+        let ended = sources.end_source_policy(&names).unwrap_or_else(|err| {
+            say!(Voice::Warns, "{err}");
+            false
+        });
+        if ended {
             say!(
                 Voice::Notes,
                 "the source-build policy of those packages ended: they follow the repository's binary."

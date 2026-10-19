@@ -51,6 +51,12 @@ pub fn run(
         }
     }
     output::print_plan_with_preview(&upgrade.plan, &sources.preview(&upgrade.plan), json);
+    if upgrade.plan.is_empty() && !json {
+        // an empty plan prints no warnings; a pending rebuild is still said
+        for w in &upgrade.plan.warnings {
+            say!(Voice::Warns, "{w}");
+        }
+    }
     crate::commands::plan_check::expect(&upgrade.plan, expect_plan)?;
     let shown = crate::commands::plan_check::Shown::new(&upgrade.plan);
     output::print_pin_notes(&upgrade.held, &upgrade.expired_pins, quiet);
@@ -184,9 +190,13 @@ pub fn run(
         Ok(())
     })();
     history::record(&upgrade.plan, &result);
-    if result.is_ok() && !source_names.is_empty() {
-        rebuild_policy(sources, &source_names, skip_source_builds, choice)?;
-    }
+    // The upgrade is one step, the source rebuilds another: what the rebuilds
+    // come to is reported after the upgrade has been, but still decides the exit.
+    let rebuilt = if result.is_ok() && !source_names.is_empty() {
+        rebuild_policy(sources, &source_names, skip_source_builds, choice)
+    } else {
+        Ok(())
+    };
     if let (Ok(()), Some(gate)) = (&result, &news_gate) {
         gate.done();
     }
@@ -197,7 +207,8 @@ pub fn run(
             failed_before,
         );
     }
-    result
+    result?;
+    rebuilt
 }
 
 /// Carries out the source-build policy after the repository's binaries are in:
@@ -227,16 +238,18 @@ fn rebuild_policy(
             "source-build policy: rebuilding '{name}' {version} from Arch's packaging source."
         );
         let plan = sources.source_rebuild_plan(name, version, repo);
-        let started = history::begin(&plan);
-        let result = crate::commands::source_install::build_and_install_at(
-            sources,
-            name,
-            Some(version),
-            choice,
-        );
-        if started.is_ok() {
-            history::record(&plan, &result);
-        }
+        // Without the transaction lock nothing is built or installed: another
+        // emrac may be changing packages, or an interrupted run is unresolved.
+        let result = history::begin(&plan).and_then(|()| {
+            let built = crate::commands::source_install::build_and_install_at(
+                sources,
+                name,
+                Some(version),
+                choice,
+            );
+            history::record(&plan, &built);
+            built
+        });
         if let Err(err) = result {
             say!(
                 Voice::Warns,
@@ -259,5 +272,8 @@ fn rebuild_policy(
         "retry: emrac from-source rebuild  ·  switch to the binary for good: emrac from-source drop {}",
         failed.join(" ")
     );
-    Ok(())
+    Err(emrac_core::Error::SourceRebuildPending(format!(
+        "the upgrade is done, but {} could not be rebuilt from source and is pending",
+        failed.join(", ")
+    )))
 }

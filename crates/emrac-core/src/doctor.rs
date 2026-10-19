@@ -154,6 +154,8 @@ pub struct DoctorInputs {
     /// Binary (`-bin`) packages with a missing library: a rebuild won't help.
     pub stale_binary: Vec<String>,
     pub stale_maybe: Vec<String>,
+    /// Source-build policies with a rebuild pending, or why the record can't be read.
+    pub source_policy: Option<std::result::Result<Vec<String>, String>>,
     /// `None`: backups are off. Otherwise how many, and the newest.
     pub db_backups: Option<(usize, Option<(u64, u64)>)>,
     /// Repositories whose database is older than one seen before.
@@ -688,6 +690,33 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             .detail(listed(&i.stale_maybe))
             .fix("emrac rebuild --check"),
         );
+    }
+
+    match &i.source_policy {
+        Some(Err(why)) => checks.push(
+            check(
+                "source-policy",
+                "Packages you build from source",
+                Status::Problem,
+                "the record of your source-build policies can't be read; an upgrade is refused until it is".to_string(),
+            )
+            .detail(vec![why.clone()])
+            .fix("emrac from-source   (shows the same message)"),
+        ),
+        Some(Ok(waiting)) if !waiting.is_empty() => checks.push(
+            check(
+                "source-policy",
+                "Packages you build from source",
+                Status::Warning,
+                format!(
+                    "{} waiting to be built from source (the repository's binary is installed)",
+                    plural(waiting.len(), "package is", "packages are")
+                ),
+            )
+            .detail(listed(waiting))
+            .fix("emrac from-source rebuild   (or emrac from-source drop <package>)"),
+        ),
+        _ => {}
     }
 
     if !i.stale_binary.is_empty() {
