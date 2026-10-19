@@ -749,6 +749,25 @@ pub enum Commands {
         command: Option<SnapshotCommand>,
     },
 
+    /// Find the transaction that broke something: put the system back into states
+    /// it really had, halve the range each time, and ask (or run your test) in
+    /// each. Whatever happens, it ends by putting the system back as it was
+    Bisect {
+        /// A state that worked: a transaction id (tx-12, the system was fine
+        /// after it), a date (2026-10-10, the end of that day) or a time back (7d)
+        #[arg(long, value_name = "WHEN")]
+        good: String,
+
+        /// A state that is broken (default: now)
+        #[arg(long, value_name = "WHEN")]
+        bad: Option<String>,
+
+        /// A command that decides: exit 0 works, 125 cannot tell, anything else
+        /// is broken. Without it you are asked in each state
+        #[arg(long, value_name = "COMMAND")]
+        test: Option<String>,
+    },
+
     /// Make the installed packages match a snapshot
     Restore {
         name: String,

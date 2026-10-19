@@ -21,25 +21,7 @@ pub fn run(
         return Ok(());
     }
 
-    // One journal for the whole restore; each step is recorded as it ends.
-    let mut all = emrac_core::Plan {
-        action: emrac_core::PlanAction::Upgrade,
-        packages: Vec::new(),
-        total_download_size: 0,
-        total_installed_size_delta: 0,
-        removals: Vec::new(),
-        provider_choices: Vec::new(),
-        warnings: Vec::new(),
-    };
-    for e in &restore.entries {
-        all.packages.push(emrac_core::PlannedPackage {
-            name: e.item.name.clone(),
-            version: e.item.to.clone(),
-            repo: if e.item.foreign { "aur" } else { "restore" }.to_string(),
-            explicit: true,
-            previous_version: e.item.from.clone(),
-        });
-    }
+    let all = merged_plan(&restore);
     crate::commands::preflight::run(
         sources,
         &all,
@@ -62,8 +44,39 @@ pub fn run(
         return Ok(());
     }
 
+    apply(sources, &restore)
+}
+
+/// One plan that names everything a restore changes (for the journal and the
+/// pre-flight checks).
+fn merged_plan(restore: &emrac_core::RestorePlan) -> emrac_core::Plan {
+    let mut all = emrac_core::Plan {
+        action: emrac_core::PlanAction::Upgrade,
+        packages: Vec::new(),
+        total_download_size: 0,
+        total_installed_size_delta: 0,
+        removals: Vec::new(),
+        provider_choices: Vec::new(),
+        warnings: Vec::new(),
+    };
+    for e in &restore.entries {
+        all.packages.push(emrac_core::PlannedPackage {
+            name: e.item.name.clone(),
+            version: e.item.to.clone(),
+            repo: if e.item.foreign { "aur" } else { "restore" }.to_string(),
+            explicit: true,
+            previous_version: e.item.from.clone(),
+        });
+    }
+    all
+}
+
+/// Carries a restore out: one journal for the whole restore, each step recorded
+/// as it ends. No question is asked here.
+pub fn apply(sources: &Sources, restore: &emrac_core::RestorePlan) -> Result<()> {
+    let all = merged_plan(restore);
     history::begin(&all)?;
-    let result = sources.execute_restore(&restore, &mut |plan, result| {
+    let result = sources.execute_restore(restore, &mut |plan, result| {
         history::record_step(plan, result)
     });
     emrac_core::journal::finish();

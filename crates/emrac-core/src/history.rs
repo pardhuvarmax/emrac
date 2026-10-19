@@ -338,7 +338,7 @@ pub fn format_utc_date(timestamp: u64) -> String {
     format_utc(timestamp)[..10].to_string()
 }
 
-pub(crate) fn format_utc(timestamp: u64) -> String {
+pub fn format_utc(timestamp: u64) -> String {
     let days = (timestamp / 86_400) as i64;
     let secs = timestamp % 86_400;
     let (y, m, d) = civil_from_days(days);

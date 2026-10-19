@@ -19,7 +19,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u22` after it (c
 
 | Section | Built | Partial | Specified | Idea | Research | Not planned | Total |
 |---|---|---|---|---|---|---|---|
-| 1. Built: what works today | 73 | 0 | 0 | 0 | 0 | 0 | 73 |
+| 1. Built: what works today | 74 | 0 | 0 | 0 | 0 | 0 | 74 |
 | 2. The specification (SPEC.md): catalogue and signature features | 5 | 33 | 18 | 0 | 0 | 0 | 56 |
 | 3. Ideas from additions.md (A, B, C) | 13 | 8 | 0 | 18 | 0 | 0 | 39 |
 | 4. Ideas from ideas.md | 11 | 11 | 1 | 33 | 0 | 0 | 56 |
@@ -31,7 +31,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u22` after it (c
 | 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
 | 11. Newer ideas (not yet in the other documents) | 4 | 2 | 0 | 25 | 0 | 0 | 31 |
 | 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **113** | **61** | **20** | **133** | **9** | **3** | **339** |
+| **All** | **114** | **61** | **20** | **133** | **9** | **3** | **340** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -128,6 +128,7 @@ Everything below runs in the current tree (r3 plus the updates after it). Slice 
 | AUR builds and reviews in emrac's style | Built | Build phases with a clock, a live compiler line, errors at once, a log (`clui.builds`); the PKGBUILD, its diff, the audit and the trust signals laid out to be read. | r3 u22; `docs/plan/r3/u22-builds-and-reviews.md` |
 | install a package file | Built | `emrac install ./x.pkg.tar.zst`: what `pacman -U` does, through the plan, the audit of what is inside, pre-flight, confirmation, journal and history. | r3 u22 |
 | Source-build policy (`from-source`) | Built | What you asked to be built from source is a recorded policy, apart from pins: the upgrade plan marks it, `pacman -Syu` installs the binaries first, then each package is rebuilt from the new packaging source; a failed or skipped rebuild keeps the binary, keeps the policy and says so; `install --binary` ends it; `emrac from-source list \| add \| drop \| rebuild`. | r3 u23b; `docs/plan/r3/u23-source-or-binary.md` |
+| bisect | Built | `emrac bisect --good <tx\|date\|7d> [--bad ...] [--test <cmd>] [--dry-run]`: the first transaction after which something is broken, found by restoring real states (the machinery of `restore --prune`), with a snapshot first, every package file checked to exist before anything changes, and the system put back at the end. | r3 u24; `docs/plan/r3/u24-bisect.md` |
 | install --source / --binary | Built | `emrac install --source <pkg>` builds an official package from Arch's packaging source (audited, sandboxed, inspected, installed with `pacman -U`); `--binary` compiles nothing and refuses a package that exists only as source, naming its `-bin` one; `install.prefer = recommend` lets the verdict of `recommend` choose. | r3 u23; `docs/plan/r3/u23-source-or-binary.md` |
 | rebuild --ack | Built | Acknowledge a "may need building again" note (or a broken binary package); it lapses when the package is built again or the note says something new. | r3 u22 |
 

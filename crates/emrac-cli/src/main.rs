@@ -595,6 +595,17 @@ fn run(cli: &Cli) -> Result<()> {
         Commands::Snapshot { command } => {
             commands::snapshot::create(&sources, command.as_ref(), json)
         }
+        Commands::Bisect { good, bad, test } => commands::bisect::run(
+            &sources,
+            &commands::bisect::Args {
+                good,
+                bad: bad.as_deref(),
+                test: test.as_deref(),
+                dry_run,
+                yes,
+                offline,
+            },
+        ),
         Commands::Restore { name, prune } => {
             commands::restore::run(&sources, name, *prune, dry_run, yes, offline, json)
         }

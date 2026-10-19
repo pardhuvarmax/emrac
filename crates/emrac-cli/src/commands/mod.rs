@@ -2,6 +2,7 @@ pub mod audit;
 pub mod aur_install;
 pub mod aur_review;
 pub mod benchmark;
+pub mod bisect;
 pub mod build;
 pub mod bundle;
 pub mod cache;

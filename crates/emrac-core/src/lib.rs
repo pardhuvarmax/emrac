@@ -4,6 +4,7 @@ mod audit;
 pub mod aur_trust;
 mod backend;
 pub mod benchmark;
+pub mod bisect;
 mod bug_report;
 pub mod build_stats;
 pub mod build_tools;
@@ -18,7 +19,6 @@ mod doctor;
 mod downgrade;
 mod error;
 pub mod exchange;
-pub mod bisect;
 pub mod fault;
 pub mod graph_render;
 mod history;
@@ -95,8 +95,8 @@ pub use doctor::{Check as DoctorCheck, DoctorReport, Status as DoctorStatus};
 pub use downgrade::{DowngradePlan, ListedVersion, VersionList};
 pub use error::{Error, Result};
 pub use history::{
-    format_utc_date, parse_date, ArchiveInfo, Break as HistoryBreak, History, TransactionRecord,
-    TxStatus, VerifyReport as HistoryVerify, RECENT_KEPT,
+    format_utc, format_utc_date, parse_date, ArchiveInfo, Break as HistoryBreak, History,
+    TransactionRecord, TxStatus, VerifyReport as HistoryVerify, RECENT_KEPT,
 };
 pub use history_log::{AnchorCheck, ArchivePlan};
 pub use install_mode::SourceMode;

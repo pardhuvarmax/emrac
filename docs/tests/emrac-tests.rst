@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 727
+     - 735
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **820**
+     - **828**
 
-emrac-core library (727)
+emrac-core library (735)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -174,6 +174,18 @@ emrac-core library (727)
 * ``only_executables_directly_in_the_bin_directories_are_runnable``
 * ``the_median_of_odd_even_and_no_values``
 * ``the_store_appends_caps_and_reads_back_by_package``
+
+``bisect::tests`` (8)
+~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_change_the_history_does_not_explain_is_named_and_held_still``
+* ``a_reference_is_a_transaction_or_a_moment``
+* ``a_removal_comes_back_and_a_conflict_removal_too``
+* ``failed_transactions_are_not_states``
+* ``references_are_read_as_a_transaction_a_date_or_a_time_back``
+* ``skipped_states_are_stepped_around_and_a_fully_skipped_window_is_said``
+* ``the_search_finds_every_culprit_in_every_window_within_the_step_bound``
+* ``the_states_are_rebuilt_by_undoing_the_history_from_the_newest``
 
 ``bug_report::tests`` (3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1531,6 +1543,26 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * a package with no packaging repository is said so, and --binary is named
 
 (56 checks.)
+
+End-to-end: bisect (dev/e2e/bisect.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+emrac bisect over real transactions with fixture packages: the culprit found, the system put back:
+``dev/e2e/run.sh bisect``. Last full run: after u24, 11 of 11 passed.
+
+* the fixtures are in place: fixb 3.0 installed and broken
+* --dry-run lists the window, says every version can be found, and changes nothing
+* a state the history does not know is refused with what was asked
+* good must come before bad
+* the search names the transaction that brought fixb 3.0
+* it did not blame the transactions around it
+* the system is back exactly as it was
+* a safety snapshot was saved and named
+* the steps are in the history, none of them failed
+* a test that cannot tell (125) in every state ends with the range, not a guess
+* a missing package file is refused up front, before the system is touched
+
+(11 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

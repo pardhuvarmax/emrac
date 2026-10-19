@@ -4031,13 +4031,78 @@ impl Sources {
     /// unless `offline`). Every file that can't be found is reported at once.
     pub fn plan_restore(&self, name: &str, prune: bool, offline: bool) -> Result<RestorePlan> {
         let snapshot = SnapshotStore::load(name)?;
+        self.plan_restore_snapshot(&snapshot, prune, offline)
+    }
+
+    /// The states the system was in, rebuilt from the history (`bisect`).
+    pub fn bisect_timeline(&self) -> Result<crate::bisect::Timeline> {
+        let records = History::all_with_archive()?;
+        Ok(crate::bisect::reconstruct(
+            &self.alpm.installed_snapshot(),
+            &records,
+        ))
+    }
+
+    /// Every package version any state in `timeline` needs that is not installed
+    /// now and that cannot be found (the cache, the repositories, the Arch
+    /// Linux Archive), as `name version`. Nothing is changed or downloaded.
+    pub fn bisect_missing(
+        &self,
+        timeline: &crate::bisect::Timeline,
+        from: usize,
+        offline: bool,
+    ) -> Result<Vec<String>> {
         let installed: Vec<(String, String)> = self
             .alpm
             .installed_snapshot()
             .into_iter()
             .map(|p: SnapshotPackage| (p.name, p.version))
             .collect();
-        let diff = snapshot::diff(&snapshot, &installed, &version_is_newer);
+        let cache_dirs = self.pacman.cache_dirs()?;
+        let mut seen: Vec<(String, String)> = Vec::new();
+        let mut missing = Vec::new();
+        for point in &timeline.points[from..] {
+            for p in &point.packages {
+                let key = (p.name.clone(), p.version.clone());
+                if installed.contains(&key) || seen.contains(&key) {
+                    continue;
+                }
+                seen.push(key);
+                if self.locate_file(&cache_dirs, &p.name, &p.version).is_some() {
+                    continue;
+                }
+                if p.foreign {
+                    missing.push(format!("{} {}", p.name, p.version));
+                    continue;
+                }
+                let in_repo = self
+                    .alpm
+                    .sync_resolved(std::slice::from_ref(&p.name))
+                    .into_iter()
+                    .next()
+                    .is_some_and(|s| s.version == p.version);
+                if !in_repo && self.locate_remote(offline, &p.name, &p.version)?.is_none() {
+                    missing.push(format!("{} {}", p.name, p.version));
+                }
+            }
+        }
+        Ok(missing)
+    }
+
+    /// As `plan_restore`, for a snapshot that is not in the store.
+    pub fn plan_restore_snapshot(
+        &self,
+        snapshot: &Snapshot,
+        prune: bool,
+        offline: bool,
+    ) -> Result<RestorePlan> {
+        let installed: Vec<(String, String)> = self
+            .alpm
+            .installed_snapshot()
+            .into_iter()
+            .map(|p: SnapshotPackage| (p.name, p.version))
+            .collect();
+        let diff = snapshot::diff(snapshot, &installed, &version_is_newer);
         let cache_dirs = self.pacman.cache_dirs()?;
 
         let mut entries = Vec::new();
@@ -4099,7 +4164,7 @@ impl Sources {
         }
 
         Ok(RestorePlan {
-            snapshot: snapshot.name,
+            snapshot: snapshot.name.clone(),
             entries,
             extras: diff.extras,
             prune,

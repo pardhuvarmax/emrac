@@ -50,12 +50,14 @@ pub fn reconstruct(installed: &[SnapshotPackage], records: &[TransactionRecord])
         match r.action {
             PlanAction::Remove => {
                 for p in &r.packages {
-                    state.entry(p.name.clone()).or_insert_with(|| SnapshotPackage {
-                        name: p.name.clone(),
-                        version: p.version.clone(),
-                        explicit: p.explicit,
-                        foreign: p.repo == "aur",
-                    });
+                    state
+                        .entry(p.name.clone())
+                        .or_insert_with(|| SnapshotPackage {
+                            name: p.name.clone(),
+                            version: p.version.clone(),
+                            explicit: p.explicit,
+                            foreign: p.repo == "aur",
+                        });
                 }
             }
             _ => {
@@ -104,7 +106,10 @@ pub fn reconstruct(installed: &[SnapshotPackage], records: &[TransactionRecord])
     points.reverse();
     // the oldest point is the state before the oldest record we know of
     if let Some(first) = points.first_mut() {
-        first.timestamp = records.first().map(|r| r.timestamp.saturating_sub(1)).unwrap_or(0);
+        first.timestamp = records
+            .first()
+            .map(|r| r.timestamp.saturating_sub(1))
+            .unwrap_or(0);
     }
     // the newest point is what is installed now
     if let Some(last) = points.last_mut() {
@@ -155,6 +160,42 @@ pub enum Reference {
     Tx(String),
     /// The state at this moment (Unix seconds, UTC).
     At(u64),
+}
+
+impl Reference {
+    /// `tx-12`, a date (`2026-10-10`, the end of that UTC day) or a time back
+    /// from now (`7d`, `12h`).
+    pub fn parse(text: &str, now: u64) -> Option<Reference> {
+        let text = text.trim();
+        if text.starts_with("tx-") {
+            return Some(Reference::Tx(text.to_string()));
+        }
+        if let Some(day) = days_since_epoch(text) {
+            return Some(Reference::At(day * 86_400 + 86_399));
+        }
+        let back = crate::build_stats::parse_since(text)?;
+        Some(Reference::At(now.saturating_sub(back)))
+    }
+}
+
+/// `YYYY-MM-DD` as days since 1970-01-01.
+fn days_since_epoch(text: &str) -> Option<u64> {
+    let mut it = text.split('-');
+    let (y, m, d) = (it.next()?, it.next()?, it.next()?);
+    if it.next().is_some() || y.len() != 4 || m.len() != 2 || d.len() != 2 {
+        return None;
+    }
+    let (y, m, d): (i64, i64, i64) = (y.parse().ok()?, m.parse().ok()?, d.parse().ok()?);
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    // days from civil (Howard Hinnant)
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    u64::try_from(era * 146_097 + doe - 719_468).ok()
 }
 
 /// The index of the state a reference means: after the transaction, or after the
@@ -294,7 +335,12 @@ mod tests {
         }
     }
 
-    fn rec(id: &str, ts: u64, action: PlanAction, list: &[(&str, &str, Option<&str>)]) -> TransactionRecord {
+    fn rec(
+        id: &str,
+        ts: u64,
+        action: PlanAction,
+        list: &[(&str, &str, Option<&str>)],
+    ) -> TransactionRecord {
         TransactionRecord {
             id: id.into(),
             timestamp: ts,
@@ -318,7 +364,10 @@ mod tests {
     }
 
     fn version_in(p: &Point, name: &str) -> Option<String> {
-        p.packages.iter().find(|x| x.name == name).map(|x| x.version.clone())
+        p.packages
+            .iter()
+            .find(|x| x.name == name)
+            .map(|x| x.version.clone())
     }
 
     #[test]
@@ -327,7 +376,12 @@ mod tests {
         let records = [
             rec("tx-1", 10, PlanAction::Install, &[("b", "1", None)]),
             rec("tx-2", 20, PlanAction::Upgrade, &[("a", "2", Some("1"))]),
-            rec("tx-3", 30, PlanAction::Upgrade, &[("a", "3", Some("2")), ("c", "2", Some("1"))]),
+            rec(
+                "tx-3",
+                30,
+                PlanAction::Upgrade,
+                &[("a", "3", Some("2")), ("c", "2", Some("1"))],
+            ),
         ];
         let t = reconstruct(&installed, &records);
         assert!(t.unexplained.is_empty());
@@ -362,14 +416,22 @@ mod tests {
         assert_eq!(version_in(&t.points[last], "old"), None, "removed in tx-2");
         assert_eq!(version_in(&t.points[last - 1], "old").as_deref(), Some("9"));
         assert_eq!(version_in(&t.points[last - 1], "gone"), None);
-        assert_eq!(version_in(&t.points[last - 2], "gone").as_deref(), Some("5"));
+        assert_eq!(
+            version_in(&t.points[last - 2], "gone").as_deref(),
+            Some("5")
+        );
     }
 
     #[test]
     fn a_change_the_history_does_not_explain_is_named_and_held_still() {
         // pacman was run by hand: `a` is 4, but the history ends at 3
         let installed = [pkg("a", "4")];
-        let records = [rec("tx-1", 10, PlanAction::Upgrade, &[("a", "3", Some("2"))])];
+        let records = [rec(
+            "tx-1",
+            10,
+            PlanAction::Upgrade,
+            &[("a", "3", Some("2"))],
+        )];
         let t = reconstruct(&installed, &records);
         assert_eq!(t.unexplained, ["a"]);
         for p in &t.points {
@@ -382,7 +444,10 @@ mod tests {
         let installed = [pkg("a", "2")];
         let mut failed = rec("tx-2", 20, PlanAction::Upgrade, &[("a", "9", Some("2"))]);
         failed.status = TxStatus::Failed;
-        let records = [rec("tx-1", 10, PlanAction::Upgrade, &[("a", "2", Some("1"))]), failed];
+        let records = [
+            rec("tx-1", 10, PlanAction::Upgrade, &[("a", "2", Some("1"))]),
+            failed,
+        ];
         let t = reconstruct(&installed, &records);
         assert_eq!(t.points.len(), 2);
         assert!(t.unexplained.is_empty());
@@ -401,7 +466,10 @@ mod tests {
         assert_eq!(locate(&t.points, &Reference::At(25)), Some(2));
         assert_eq!(locate(&t.points, &Reference::At(15)), Some(1));
         let diff = changed(&t.points[1], &t.points[2]);
-        assert_eq!(diff, [("a".to_string(), Some("2".into()), Some("3".into()))]);
+        assert_eq!(
+            diff,
+            [("a".to_string(), Some("2".into()), Some("3".into()))]
+        );
     }
 
     /// Runs the search against a hidden first-bad state.
@@ -433,8 +501,15 @@ mod tests {
         for width in 1..=40usize {
             for culprit in 1..=width {
                 let (out, looked) = find(0, width, culprit, &[]);
-                assert_eq!(out, Outcome::Found(culprit), "width {width} culprit {culprit}");
-                assert!(looked <= Search::steps(0, width), "width {width}: {looked} looks");
+                assert_eq!(
+                    out,
+                    Outcome::Found(culprit),
+                    "width {width} culprit {culprit}"
+                );
+                assert!(
+                    looked <= Search::steps(0, width),
+                    "width {width}: {looked} looks"
+                );
             }
         }
         assert_eq!(Search::steps(0, 1), 0);
@@ -449,5 +524,28 @@ mod tests {
         // the culprit hides among skipped states: the range is what is known
         let (out, _) = find(0, 4, 3, &[1, 2, 3]);
         assert_eq!(out, Outcome::Inconclusive { after: 0, up_to: 4 });
+    }
+
+    #[test]
+    fn references_are_read_as_a_transaction_a_date_or_a_time_back() {
+        assert_eq!(
+            Reference::parse("tx-12", 0),
+            Some(Reference::Tx("tx-12".into()))
+        );
+        // 2026-10-10 ends at 2026-10-10 23:59:59 UTC
+        assert_eq!(
+            Reference::parse("2026-10-10", 0),
+            Some(Reference::At(1_791_676_799))
+        );
+        assert_eq!(
+            Reference::parse("1970-01-02", 0),
+            Some(Reference::At(2 * 86_400 - 1))
+        );
+        assert_eq!(
+            Reference::parse("7d", 1_000_000),
+            Some(Reference::At(1_000_000 - 7 * 86_400))
+        );
+        assert_eq!(Reference::parse("soon", 0), None);
+        assert_eq!(Reference::parse("2026-13-01", 0), None);
     }
 }
