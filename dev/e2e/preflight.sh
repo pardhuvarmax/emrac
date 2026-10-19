@@ -52,6 +52,22 @@ cd /srv/fixrepo && rm -f fixa-1.0-1-any.pkg.tar.zst && repo-add fixrepo.db.tar.g
 pacman -Sy --noconfirm >/dev/null 2>&1
 ck "the fixtures are in place: fixa 1.0 installed, 2.0 waiting" "pacman -Q fixa | grep -q '1.0-1' && pacman -Qu | grep -q fixa"
 
+# a build whose dependency needs an installed package upgraded is a partial upgrade
+mkdir -p /tmp/bd && cat > /tmp/bd/PKGBUILD <<'PB'
+pkgname=needsnew
+pkgver=1
+pkgrel=1
+pkgdesc=x
+arch=(any)
+license=(GPL)
+makedepends=('fixa>=2.0')
+package() { :; }
+PB
+printf 'pkgbase = needsnew\n\tpkgver = 1\n\tpkgrel = 1\n\tmakedepends = fixa>=2.0\n\npkgname = needsnew\n' > /tmp/bd/.SRCINFO
+chown -R tester /tmp/bd
+ck "a build that would upgrade an installed package is refused as a partial upgrade" "! as_tester $e build /tmp/bd --skip-pkgbuild >/tmp/bd.out 2>&1; grep -q 'needs these installed packages upgraded first: fixa' /tmp/bd.out && pacman -Q fixa | grep -q '1.0-1'"
+ck "--allow-partial is not a flag of build, but safety.partial_upgrade = warn lets it say so and go on" "as_tester $e config set safety.partial_upgrade warn >/dev/null; as_tester $e build /tmp/bd --skip-pkgbuild >/tmp/bd2.out 2>&1; as_tester $e config set safety.partial_upgrade refuse >/dev/null; grep -q 'needs these installed packages upgraded first: fixa' /tmp/bd2.out && ! grep -q 'Run .emrac upgrade. first' /tmp/bd2.out"
+
 ck "installing a new package while an upgrade waits is refused and names it" "! as_tester $e install fixnew --yes 2>&1 | tee /tmp/o; grep -q 'partial' /tmp/o && grep -q 'fixa' /tmp/o && ! pacman -Q fixnew"
 ck "--dry-run says the same and changes nothing" "as_tester $e install fixnew --dry-run 2>&1 | grep -q PROBLEM; ! pacman -Q fixnew"
 ck "--allow-partial lets one run through" "as_tester $e install fixnew --yes --allow-partial && pacman -Q fixnew"

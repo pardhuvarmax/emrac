@@ -104,6 +104,35 @@ pub fn valid_base(base: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '@' | '.' | '_' | '+' | '-'))
 }
 
+/// What a failed fetch of the packaging source means, from what git said.
+pub fn explain_fetch_failure(stderr: &str, base: &str, version: &str, url: &str) -> String {
+    let git = stderr.lines().last().unwrap_or("").trim();
+    let lower = stderr.to_lowercase();
+    let why = if lower.contains("remote branch") && lower.contains("not found") {
+        format!(
+            "Arch's packaging repository for '{base}' has no tag for {version}. The binary may have been built from a revision that was not tagged; `--source` cannot build exactly it"
+        )
+    } else if lower.contains("could not read username")
+        || lower.contains("repository not found")
+        || lower.contains("does not appear to be a git repository")
+        || lower.contains("not found")
+    {
+        format!(
+            "there is no public packaging repository for '{base}' at {url} (some packages are not published there). `--source` cannot build it; `--binary` installs the repository's"
+        )
+    } else if lower.contains("could not resolve host")
+        || lower.contains("unable to access")
+        || lower.contains("timed out")
+    {
+        format!(
+            "the packaging source at {url} could not be reached; check the network and try again"
+        )
+    } else {
+        format!("the packaging source for '{base}' could not be fetched from {url}")
+    };
+    format!("{why} (git clone said: {git})")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,5 +238,35 @@ mod tests {
         for bad in ["", "-x", ".hidden", "../x", "a/b", "a b", "a?b#c"] {
             assert!(!valid_base(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn a_failed_fetch_says_what_it_means() {
+        let url = "https://gitlab.archlinux.org/archlinux/packaging/packages/tree.git";
+        let missing = explain_fetch_failure(
+            "fatal: could not read Username for 'https://gitlab.archlinux.org': terminal prompts disabled",
+            "tree",
+            "2.3.2-1",
+            url,
+        );
+        assert!(
+            missing.contains("no public packaging repository for 'tree'"),
+            "{missing}"
+        );
+        assert!(missing.contains("git clone said"));
+        let tag = explain_fetch_failure(
+            "warning: Could not find remote branch 2.3.2-1 to clone.\nfatal: Remote branch 2.3.2-1 not found in upstream origin",
+            "tree",
+            "2.3.2-1",
+            url,
+        );
+        assert!(tag.contains("has no tag for 2.3.2-1"), "{tag}");
+        let net = explain_fetch_failure(
+            "fatal: unable to access 'x': Could not resolve host: gitlab",
+            "tree",
+            "1-1",
+            url,
+        );
+        assert!(net.contains("could not be reached"), "{net}");
     }
 }

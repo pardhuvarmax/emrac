@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 725
+     - 726
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **818**
+     - **819**
 
-emrac-core library (725)
+emrac-core library (726)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -435,10 +435,11 @@ emrac-core library (725)
 * ``pre_hooks_come_first_and_each_pass_keeps_its_order``
 * ``the_last_matching_target_decides``
 
-``install_mode::tests`` (5)
+``install_mode::tests`` (6)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_built_file_names_its_package``
+* ``a_failed_fetch_says_what_it_means``
 * ``a_plan_entry_says_whether_it_is_built_here``
 * ``only_a_package_base_name_goes_into_an_address``
 * ``tags_in_arch_packaging_have_a_dash_for_the_epoch``
@@ -1287,6 +1288,8 @@ preflight``. Last full run: after u20, 24 of 24 passed.
 * an unattended run is stopped while a repository's SigLevel is weakened
 * safety.signatures = warn only says so
 * the fixtures are in place: fixa 1.0 installed, 2.0 waiting
+* a build that would upgrade an installed package is refused as a partial upgrade
+* --allow-partial is not a flag of build, but safety.partial_upgrade = warn lets it say so and go on
 * installing a new package while an upgrade waits is refused and names it
 * --dry-run says the same and changes nothing
 * --allow-partial lets one run through
@@ -1311,7 +1314,7 @@ preflight``. Last full run: after u20, 24 of 24 passed.
 * installing an older version than the installed one is a pre-flight problem naming it
 * a repository database older than one seen is a warning
 
-(26 checks.)
+(28 checks.)
 
 End-to-end: the plan preview against pacman (dev/e2e/preview.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1467,7 +1470,7 @@ End-to-end: source or binary on install (dev/e2e/sourceinstall.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 An official package built from Arch packaging source here, --binary refusing to compile,
-the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the hook and multi-package checks, 53 of 53 passed.
+the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the hook and multi-package checks, 55 of 55 passed.
 
 * the plan says an official package is built here and what that means
 * --binary on an AUR package refuses and names the prebuilt one
@@ -1522,8 +1525,10 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * TX-05 the history records the transaction as committed
 * PL-05 an unknown name in the list stops the plan: nothing is built or installed
 * PL-05 two packages built from source are both installed, verified and listed
+* PL-05 the second of two failing after the first landed: both outcomes are said
+* a package with no packaging repository is said so, and --binary is named
 
-(53 checks.)
+(55 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

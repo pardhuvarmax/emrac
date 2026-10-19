@@ -626,6 +626,7 @@ fn run(cli: &Cli) -> Result<()> {
                 limits: Limits::from_config(&config.build),
                 force: true,
                 remove_tools: commands::aur_install::RemoveTools::from_config(&config.build),
+                allow_partial: false,
             };
             if *ack || *unack {
                 return commands::rebuild::acknowledge(
@@ -664,6 +665,7 @@ fn run(cli: &Cli) -> Result<()> {
                 limits: Limits::from_config(&config.build),
                 force: false,
                 remove_tools: commands::aur_install::RemoveTools::from_config(&config.build),
+                allow_partial: false,
             };
             commands::reinstall::run(&sources, pkgs, dry_run, yes, offline, choice, json)
         }

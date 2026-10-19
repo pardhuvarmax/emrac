@@ -559,7 +559,7 @@ use_agent = true</pre>
   <p>Backgrounds are separate from themes: <code>peaks</code>, <code>grid</code>, <code>schematic</code>, <code>scan</code>, or <code>none</code>. Choose one from the Theme menu. There are a few more that are not listed.</p>
 
   <h2 id="changes">Changes</h2>
-  <p>Emrac numbers its work in slices, not semver: <b>i</b> for incubation before a release, <b>r</b> for releases, <b>u</b> for updates within one. This is the short list, newest first. 812 tests run on every change, and each command that changes the system was also run against a real pacman in a container.</p>
+  <p>Emrac numbers its work in slices, not semver: <b>i</b> for incubation before a release, <b>r</b> for releases, <b>u</b> for updates within one. This is the short list, newest first. 818 tests run on every change, and each command that changes the system was also run against a real pacman in a container.</p>
   <table class="box resp">
     <thead><tr><th>Slice</th><th>Date</th><th>Change</th></tr></thead>
     <tbody>
@@ -706,7 +706,7 @@ use_agent = true</pre>
 
   <div class="devzone" id="planned" role="group" aria-label="Under development">
     <div class="tape" aria-hidden="true"></div>
-    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 60 items, in the order they are planned. Decided against: AI features, telemetry, scripting, committing through libalpm instead of pacman.</span></div>
+    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 59 items, in the order they are planned. Decided against: AI features, telemetry, scripting, committing through libalpm instead of pacman.</span></div>
     <details open><summary>Next: finishing r3 (u24&ndash;u30) <em>7</em></summary>
       <ul>
         <li><b>u24</b> <code>emrac bisect</code>: find which package update broke something</li>
@@ -718,10 +718,9 @@ use_agent = true</pre>
         <li><b>u30</b> r3 closeout: docs, the full container suite, the release</li>
       </ul>
     </details>
-    <details open><summary>Source builds: safety fixes first <em>5</em></summary>
+    <details open><summary>Source builds: safety fixes first <em>4</em></summary>
       <ul>
         <li>PGP keys under <code>--yes</code>: an unknown key is never trusted silently</li>
-        <li>Audit of the build dependencies <code>makepkg -s</code> pulls in at build time</li>
         <li>Pending rebuilds classed as harmless, compatibility risk or unknown</li>
         <li>Detect changes made by <code>pacman</code> directly <small>(post-transaction hook and reconcile)</small></li>
         <li>Policy record: schema version, a lock against two emrac processes, a <code>failed</code> state with the reason</li>

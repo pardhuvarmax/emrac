@@ -220,7 +220,13 @@ impl AurBuildBackend {
             }
         }
         let _ = fs::remove_dir_all(&dir);
-        Err(last.unwrap_or_else(|| Error::Help("no tag to fetch".into())))
+        Err(match last {
+            Some(Error::CommandFailed { stderr, .. }) => Error::Help(
+                crate::install_mode::explain_fetch_failure(&stderr, base, version, &url),
+            ),
+            Some(other) => other,
+            None => Error::Help("no tag to fetch".into()),
+        })
     }
 
     /// The revision a checkout is at (the packaging source a build came from).

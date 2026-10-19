@@ -770,6 +770,42 @@ impl Sources {
         self.aur_build.built_files(name)
     }
 
+    /// What building `name` will make `makepkg -s` install on the host first, from
+    /// its `.SRCINFO` (read, never run): new packages, and installed packages that
+    /// must be upgraded to take them (a partial upgrade). `None` when there is no
+    /// `.SRCINFO` to read.
+    pub fn build_dependencies(&self, name: &str) -> Result<Option<BuildDeps>> {
+        let Some(text) = self.aur_build.read_file(name, None, ".SRCINFO") else {
+            return Ok(None);
+        };
+        let missing = self
+            .alpm
+            .uninstalled_repo_dependencies(&srcinfo_dependencies(&text));
+        if missing.is_empty() {
+            return Ok(Some(BuildDeps::default()));
+        }
+        let mut deps = BuildDeps::default();
+        // pacman takes names, not `name>=1.0`; it picks the version that satisfies
+        let names: Vec<String> = missing
+            .iter()
+            .map(|d| {
+                d.split(['<', '>', '='])
+                    .next()
+                    .unwrap_or(d)
+                    .trim()
+                    .to_string()
+            })
+            .collect();
+        for n in self.pacman.resolve_install(&names)? {
+            if self.alpm.installed_version(&n).is_some() {
+                deps.upgrade.push(n);
+            } else {
+                deps.install.push(n);
+            }
+        }
+        Ok(Some(deps))
+    }
+
     /// Swaps the conflicting packages named by `conflict` (see
     /// `DependencyConflict::command`). The caller has asked the user first.
     pub fn apply_dependency_swap(
@@ -4207,6 +4243,16 @@ fn undo_needs(
         }
     }
     out
+}
+
+/// The packages `makepkg -s` installs before a build.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BuildDeps {
+    /// Not installed yet.
+    pub install: Vec<String>,
+    /// Installed, and upgraded to satisfy the build dependencies: part of an
+    /// upgrade that nothing else asked for.
+    pub upgrade: Vec<String>,
 }
 
 /// The dependency lines of a `.SRCINFO` (`depends`, `makedepends`,

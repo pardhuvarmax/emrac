@@ -11,7 +11,7 @@
 # The binary here is the test build (--cfg emrac_fault): EMRAC_FAULT=<point> cuts emrac
 # off at that point, as a kill or a power cut would. A normal build has no such code.
 #
-# last full run: after the hook and multi-package checks, 53 of 53 passed
+# last full run: after the hook and multi-package checks, 55 of 55 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -158,6 +158,10 @@ sudo pacman -R --noconfirm failhook sl >/dev/null 2>&1
 ck "PL-05 an unknown name in the list stops the plan: nothing is built or installed" "! $e install --source sl no-such-package-xyz --yes >/tmp/m1.out 2>&1; ! pacman -Q sl >/dev/null 2>&1 && grep -q 'no-such-package-xyz' /tmp/m1.out"
 ck "PL-05 two packages built from source are both installed, verified and listed" "$e install --source sl cowsay --yes --skip-pkgbuild --accept-risks >/tmp/m2.out 2>&1; pacman -Q sl cowsay >/dev/null && $e from-source 2>&1 | grep -c 'source verified' | grep -q '^2$'"
 sudo pacman -R --noconfirm sl cowsay >/dev/null 2>&1
+ck "PL-05 the second of two failing after the first landed: both outcomes are said" "$e install --source sl tree --yes --skip-pkgbuild --accept-risks >/tmp/m3.out 2>&1; rc=\$?; [ \$rc -ne 0 ] && pacman -Q sl >/dev/null && ! pacman -Q tree >/dev/null 2>&1 && grep -q 'installed sl; not installed tree' /tmp/m3.out && grep -q \"no public packaging repository for 'tree'\" /tmp/m3.out"
+sudo pacman -R --noconfirm sl >/dev/null 2>&1; $e from-source drop sl >/dev/null 2>&1
+ck "a package with no packaging repository is said so, and --binary is named" "! $e install --source tree --yes >/tmp/m4.out 2>&1; grep -q 'no public packaging repository' /tmp/m4.out && grep -q -- '--binary' /tmp/m4.out"
+
 $e from-source drop sl cowsay >/dev/null 2>&1
 
 echo; echo "$((n-bad)) of $n passed"

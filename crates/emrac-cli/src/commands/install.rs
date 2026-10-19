@@ -46,6 +46,10 @@ pub fn run(
             expect_plan,
         );
     }
+    let choice = crate::commands::aur_install::BuildChoice {
+        allow_partial,
+        ..choice
+    };
     let activity = Activity::spinner("working out the plan");
     let planned = sources.plan_install_with(pkgs, offline, mode);
     let by_source = planned.as_ref().map(|(_, s)| s.clone()).unwrap_or_default();
@@ -110,6 +114,8 @@ pub fn run(
             .map(|(plan, _)| plan)
     })?;
     history::begin(&plan)?;
+    // what has landed, so that a failure part-way says so
+    let mut done: Vec<String> = Vec::new();
     let result = (|| {
         if !official.is_empty() {
             if inspect {
@@ -117,16 +123,35 @@ pub fn run(
                 crate::commands::official_inspect::show(sources, &plan)?;
             }
             sources.install_official(&official)?;
+            done.extend(official.iter().cloned());
         }
         for name in &source_built {
             crate::commands::source_install::build_and_install(sources, name, choice)?;
+            done.push(name.clone());
         }
         for details in &aur {
             crate::commands::aur_install::build_and_install(sources, &details.name, choice)?;
+            done.push(details.name.clone());
         }
         Ok(())
     })();
     history::record(&plan, &result);
+    if result.is_err() && !done.is_empty() {
+        let left: Vec<&str> = plan
+            .packages
+            .iter()
+            .filter(|p| p.explicit && !done.contains(&p.name))
+            .map(|p| p.name.as_str())
+            .collect();
+        if !left.is_empty() {
+            say!(
+                Voice::Warns,
+                "this was done in steps, and the later one failed: installed {}; not installed {}. Nothing that landed was undone (`emrac undo` reverses it).",
+                done.join(", "),
+                left.join(", ")
+            );
+        }
+    }
     if result.is_ok() && mode == emrac_core::SourceMode::Binary {
         // the binary was asked for explicitly: the source policy ends
         let names: Vec<String> = plan.packages.iter().map(|p| p.name.clone()).collect();

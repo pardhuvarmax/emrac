@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Build dependencies, partial results, a missing packaging source (after u23b) — 2026-10-20
+
+Audit result: `makepkg -s` installs missing build dependencies on the host at the version of the synced databases, so with upgrades waiting a build could upgrade installed libraries alone. Before a build emrac now reads the `.SRCINFO`, says what will be installed first, and refuses when it would upgrade an installed package (a partial upgrade), unless `safety.partial_upgrade` is `warn` or `off` or `install --allow-partial` is given. Also: a request for several packages that fails part-way says which landed and which did not (`installed sl; not installed tree`); and `--source` for a package with no packaging repository on Arch&rsquo;s GitLab says so and names `--binary` instead of showing git&rsquo;s prompt message. `sourceinstall.sh` 55 checks, `preflight.sh` 28.
+
 ## A hook that fails after the commit (after u23b) — 2026-10-20
 
 pacman exits 0 when a post-transaction hook fails and prints only `error: command failed to execute correctly`, so emrac used to record the transaction and say nothing. It now listens to what pacman prints, still records the transaction as committed, and then says which hook failed, that the packages are installed and the hook's work was not done, and exits non-zero. On a terminal the hook is named; when output is piped it is "a hook" (pacman's error stream is all that is watched there). Container checks (53 in `sourceinstall.sh`) also cover an unknown name in a list of packages and two packages built from source in one request. `hook_watch.rs` has 3 tests.

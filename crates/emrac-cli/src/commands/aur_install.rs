@@ -44,6 +44,9 @@ pub struct BuildChoice {
     pub force: bool,
     /// The build tools it leaves behind: ask, remove, or leave.
     pub remove_tools: RemoveTools,
+    /// `--allow-partial`: the build may upgrade installed packages that its
+    /// dependencies need (a partial upgrade) for this one run.
+    pub allow_partial: bool,
 }
 
 impl BuildChoice {
@@ -56,7 +59,58 @@ impl BuildChoice {
             allow_network: flags.allow_network,
             force: false,
             remove_tools: RemoveTools::from_config(build),
+            allow_partial: false,
         }
+    }
+}
+
+/// Before the build: what `makepkg -s` will install on the host, said; and if
+/// that would upgrade installed packages (a partial upgrade nobody asked for),
+/// the build stops unless `safety.partial_upgrade` or `--allow-partial` says
+/// otherwise. A build dependency is installed at the version of the synced
+/// databases, so with upgrades waiting it can drag libraries forward alone.
+pub fn check_build_dependencies(sources: &Sources, name: &str, choice: BuildChoice) -> Result<()> {
+    let deps = match sources.build_dependencies(name) {
+        Ok(Some(d)) => d,
+        Ok(None) => return Ok(()),
+        Err(err) => {
+            say!(
+                Voice::Warns,
+                "couldn't work out what building '{name}' installs first — {err}"
+            );
+            return Ok(());
+        }
+    };
+    if !deps.install.is_empty() {
+        say!(
+            Voice::Notes,
+            "building '{name}' installs these first (build and runtime dependencies): {}.",
+            deps.install.join(", ")
+        );
+    }
+    if deps.upgrade.is_empty() {
+        return Ok(());
+    }
+    let mode = emrac_core::Config::load()
+        .map(|c| c.safety.partial_upgrade)
+        .unwrap_or_else(|_| "refuse".to_string());
+    let text = format!(
+        "building '{name}' needs these installed packages upgraded first: {}. That is a partial upgrade: the rest of the system stays behind.",
+        deps.upgrade.join(", ")
+    );
+    match mode.as_str() {
+        "off" => Ok(()),
+        "warn" => {
+            say!(Voice::Warns, "{text}");
+            Ok(())
+        }
+        _ if choice.allow_partial => {
+            say!(Voice::Warns, "{text} (--allow-partial)");
+            Ok(())
+        }
+        _ => Err(emrac_core::Error::Preflight(format!(
+            "{text} Run `emrac upgrade` first, or pass --allow-partial for this one run."
+        ))),
     }
 }
 
@@ -69,6 +123,7 @@ pub fn build_options(
     predicts_network: bool,
     choice: BuildChoice,
 ) -> Result<BuildOptions> {
+    check_build_dependencies(sources, name, choice)?;
     if choice.no_sandbox {
         say!(
             Voice::Warns,
