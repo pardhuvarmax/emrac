@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 726
+     - 727
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **819**
+     - **820**
 
-emrac-core library (726)
+emrac-core library (727)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -915,11 +915,12 @@ emrac-core library (726)
 * ``names_are_validated``
 * ``prune_keeps_the_newest_with_the_prefix_and_spares_the_rest``
 
-``source_built::tests`` (7)
+``source_built::tests`` (8)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_damaged_record_is_an_error_and_is_never_written_over``
 * ``a_deleted_record_is_unknown_intent_not_no_policy``
+* ``a_policy_package_is_judged_broken_at_risk_unknown_or_low``
 * ``an_old_record_without_the_new_fields_still_reads``
 * ``an_upgrade_follows_the_policy_of_the_packages_it_contains``
 * ``it_says_what_is_known_about_the_installed_package``
@@ -1470,7 +1471,7 @@ End-to-end: source or binary on install (dev/e2e/sourceinstall.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 An official package built from Arch packaging source here, --binary refusing to compile,
-the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the hook and multi-package checks, 55 of 55 passed.
+the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the hook and multi-package checks, 56 of 56 passed.
 
 * the plan says an official package is built here and what that means
 * --binary on an AUR package refuses and names the prebuilt one
@@ -1490,6 +1491,7 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * from-source drop ends it and leaves the package
 * from-source rebuild builds the declared package here, then it is built here
 * the build is verified against the package database
+* a verified build with nothing changed under it is low risk: no risk is shown, the doctor has no source-risk line
 * the same version put back from the repository is detected, not claimed as built here
 * doctor says the policy is not honoured
 * from-source rebuild builds it again and it is verified
@@ -1528,7 +1530,7 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * PL-05 the second of two failing after the first landed: both outcomes are said
 * a package with no packaging repository is said so, and --binary is named
 
-(55 checks.)
+(56 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

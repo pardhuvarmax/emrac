@@ -90,6 +90,7 @@ pub fn run(
 
 fn list(sources: &Sources, json: bool) -> Result<()> {
     let policy = sources.source_policy()?;
+    let risks = sources.source_policy_risks();
     let rows: Vec<(String, String, &'static str, String)> = policy
         .iter()
         .map(|e| {
@@ -123,6 +124,16 @@ fn list(sources: &Sources, json: bool) -> Result<()> {
                     ),
                 ),
                 BuiltState::NotInstalled => ("not-installed", "not installed".to_string()),
+            };
+            let risk = risks
+                .iter()
+                .find(|(n, _)| n == &e.name)
+                .map(|(_, r)| r.clone());
+            let text = match risk {
+                Some(r) if r != emrac_core::source_built::Risk::Low => {
+                    format!("{text}; {}: {}", r.word(), r.why())
+                }
+                _ => text,
             };
             (
                 e.name.clone(),

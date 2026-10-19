@@ -156,6 +156,9 @@ pub struct DoctorInputs {
     pub stale_maybe: Vec<String>,
     /// Source-build policies with a rebuild pending, or why the record can't be read.
     pub source_policy: Option<std::result::Result<Vec<String>, String>>,
+    /// Installed policy packages that may not work with the system around them:
+    /// `(package, risk word, why)`, most serious first. Low risk is left out.
+    pub source_risks: Vec<(String, &'static str, String, u8)>,
     /// `None`: backups are off. Otherwise how many, and the newest.
     pub db_backups: Option<(usize, Option<(u64, u64)>)>,
     /// Repositories whose database is older than one seen before.
@@ -717,6 +720,41 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
             .fix("emrac from-source rebuild   (or emrac from-source drop <package>)"),
         ),
         _ => {}
+    }
+
+    if !i.source_risks.is_empty() {
+        let worst = i.source_risks.iter().map(|r| r.3).max().unwrap_or(0);
+        let lines: Vec<String> = i
+            .source_risks
+            .iter()
+            .map(|(n, word, why, _)| format!("{n}: {word} \u{2014} {why}"))
+            .collect();
+        checks.push(
+            check(
+                "source-risk",
+                "Source builds against the system",
+                match worst {
+                    2 => Status::Problem,
+                    1 => Status::Warning,
+                    _ => Status::Note,
+                },
+                format!(
+                    "{} may not work with the system around {}",
+                    plural(
+                        i.source_risks.len(),
+                        "package you build from source",
+                        "packages you build from source"
+                    ),
+                    if i.source_risks.len() == 1 {
+                        "it"
+                    } else {
+                        "them"
+                    }
+                ),
+            )
+            .detail(listed(&lines))
+            .fix("emrac from-source rebuild   (it estimates; an unknown risk is not a clean bill)"),
+        );
     }
 
     if !i.stale_binary.is_empty() {

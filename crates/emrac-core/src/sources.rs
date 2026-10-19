@@ -472,6 +472,43 @@ impl Sources {
         Ok(())
     }
 
+    /// How likely each installed policy package is to no longer work with the
+    /// system around it (a library it needs gone, something it was built against
+    /// changed since). Read from the files and pacman's log; an estimate.
+    pub fn source_policy_risks(&self) -> Vec<(String, crate::source_built::Risk)> {
+        let Ok(policy) = crate::source_built::read() else {
+            return Vec::new();
+        };
+        let system = crate::stale_builds::system_libs();
+        let interpreters: Vec<(&str, String)> = ["python", "perl"]
+            .into_iter()
+            .filter_map(|n| {
+                let (version, _, _) = self.alpm.package_info(n)?;
+                Some((n, crate::stale_builds::minor_of(&version)?))
+            })
+            .collect();
+        let log = std::fs::read_to_string("/var/log/pacman.log");
+        let upgrades = log
+            .as_ref()
+            .map(|t| crate::stale_builds::parse_upgrades(t))
+            .unwrap_or_default();
+        policy
+            .into_iter()
+            .filter_map(|e| {
+                let detail = self.alpm.installed_detail(&e.name)?;
+                let evidence = log.is_ok() && !detail.files.is_empty();
+                let stale = crate::stale_builds::judge(
+                    &detail,
+                    &system,
+                    &interpreters,
+                    &upgrades,
+                    Path::new("/"),
+                );
+                Some((e.name, crate::source_built::classify(&stale, evidence)))
+            })
+            .collect()
+    }
+
     /// Source-build policies whose rebuild is pending (for `doctor`), or why the
     /// record cannot be read.
     pub fn source_policy_waiting(&self) -> std::result::Result<Vec<String>, String> {
@@ -3481,6 +3518,23 @@ impl Sources {
             stale_binary,
             stale_maybe,
             source_policy: Some(self.source_policy_waiting()),
+            source_risks: {
+                let mut r: Vec<(String, &'static str, String, u8)> = self
+                    .source_policy_risks()
+                    .into_iter()
+                    .filter_map(|(n, risk)| {
+                        let level = match risk {
+                            crate::source_built::Risk::Low => return None,
+                            crate::source_built::Risk::Unknown(_) => 0,
+                            crate::source_built::Risk::CompatibilityRisk(_) => 1,
+                            crate::source_built::Risk::Broken(_) => 2,
+                        };
+                        Some((n, risk.word(), risk.why().to_string(), level))
+                    })
+                    .collect();
+                r.sort_by(|a, b| b.3.cmp(&a.3).then(a.0.cmp(&b.0)));
+                r
+            },
             db_backups,
             repo_rollbacks,
             history,

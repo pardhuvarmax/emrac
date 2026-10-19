@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Pending rebuilds are told apart (after u23b) — 2026-10-20
+
+A source rebuild that is waiting can be harmless or can leave a package that no longer works with the libraries around it. Each installed policy package is now judged with the scan that finds stale AUR builds: *broken now* (a needed library is gone), *compatibility risk* (something it was built against changed after), *risk unknown* (not enough evidence, which is never reported as low), or *low risk*. `emrac from-source` shows it, `doctor` gains a "Source builds against the system" check, and a rebuild that failed after an upgrade says which kind of pending it is. It is an estimate and never blocks an unrelated upgrade. 1 unit test; `sourceinstall.sh` 56 checks.
+
 ## Build dependencies, partial results, a missing packaging source (after u23b) — 2026-10-20
 
 Audit result: `makepkg -s` installs missing build dependencies on the host at the version of the synced databases, so with upgrades waiting a build could upgrade installed libraries alone. Before a build emrac now reads the `.SRCINFO`, says what will be installed first, and refuses when it would upgrade an installed package (a partial upgrade), unless `safety.partial_upgrade` is `warn` or `off` or `install --allow-partial` is given. Also: a request for several packages that fails part-way says which landed and which did not (`installed sl; not installed tree`); and `--source` for a package with no packaging repository on Arch&rsquo;s GitLab says so and names `--binary` instead of showing git&rsquo;s prompt message. `sourceinstall.sh` 55 checks, `preflight.sh` 28.

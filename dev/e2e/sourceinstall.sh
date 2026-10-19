@@ -11,7 +11,7 @@
 # The binary here is the test build (--cfg emrac_fault): EMRAC_FAULT=<point> cuts emrac
 # off at that point, as a kill or a power cut would. A normal build has no such code.
 #
-# last full run: after the hook and multi-package checks, 55 of 55 passed
+# last full run: after the hook and multi-package checks, 56 of 56 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -45,6 +45,7 @@ ck "from-source drop ends it and leaves the package" "$e from-source drop sl >/d
 ck "from-source rebuild builds the declared package here, then it is built here" "$e from-source rebuild sl --accept-risks --yes >/tmp/s4.out 2>&1; tail -6 /tmp/s4.out; pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'built here'"
 
 ck "the build is verified against the package database" "$e from-source 2>&1 | grep -q 'source verified'"
+ck "a verified build with nothing changed under it is low risk: no risk is shown, the doctor has no source-risk line" "! $e from-source 2>&1 | grep -qE 'compatibility risk|broken now|risk unknown' && ! $e doctor 2>&1 | grep -q 'Source builds against the system'"
 sudo pacman -S --noconfirm sl >/dev/null 2>&1
 ck "the same version put back from the repository is detected, not claimed as built here" "pacman -Qi sl | grep -q 'Packager' && ! pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'repository file detected' && ! $e from-source 2>&1 | grep -q 'source verified'"
 ck "doctor says the policy is not honoured" "$e doctor >/tmp/d.out 2>&1; grep -q 'not built from source as you asked' /tmp/d.out || { head -15 /tmp/d.out; false; }"

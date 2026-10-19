@@ -271,6 +271,55 @@ pub fn state_of(entry: &Entry, installed: Option<&Installed>) -> BuiltState {
     }
 }
 
+/// How likely it is that an installed policy package no longer works with the
+/// system around it. An estimate from what is installed and logged, not a proof
+/// that it works: ABI information is often incomplete, so *unknown* is an answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Risk {
+    /// Nothing known has changed under it.
+    Low,
+    /// Something it was built against changed after it was built.
+    CompatibilityRisk(String),
+    /// A library it needs is missing now, or it sits in an old interpreter's folder.
+    Broken(String),
+    /// Not enough evidence to say.
+    Unknown(String),
+}
+
+impl Risk {
+    pub fn word(&self) -> &'static str {
+        match self {
+            Risk::Low => "low risk",
+            Risk::CompatibilityRisk(_) => "compatibility risk",
+            Risk::Broken(_) => "broken now",
+            Risk::Unknown(_) => "risk unknown",
+        }
+    }
+
+    pub fn why(&self) -> &str {
+        match self {
+            Risk::Low => "nothing it uses has changed since it was built",
+            Risk::CompatibilityRisk(w) | Risk::Broken(w) | Risk::Unknown(w) => w,
+        }
+    }
+}
+
+/// Judges one package from what `stale_builds::judge` found. `evidence` is false
+/// when the files or the pacman log could not be read: then a clean result
+/// proves nothing.
+pub fn classify(stale: &crate::stale_builds::StaleBuild, evidence: bool) -> Risk {
+    if !stale.broken.is_empty() {
+        return Risk::Broken(stale.broken.join("; "));
+    }
+    if !stale.maybe.is_empty() {
+        return Risk::CompatibilityRisk(stale.maybe.join("; "));
+    }
+    if !evidence {
+        return Risk::Unknown("its files or pacman's log could not be read".to_string());
+    }
+    Risk::Low
+}
+
 /// The packages of an upgrade that have a source-build policy.
 pub fn followed(entries: &[Entry], names: &[&str]) -> Vec<Entry> {
     entries
@@ -439,5 +488,38 @@ mod tests {
             ["sl"]
         );
         assert!(followed(&[], &["sl"]).is_empty());
+    }
+
+    #[test]
+    fn a_policy_package_is_judged_broken_at_risk_unknown_or_low() {
+        use crate::stale_builds::StaleBuild;
+        let stale = |broken: &[&str], maybe: &[&str]| StaleBuild {
+            name: "sl".into(),
+            binary: false,
+            version: "1-1".into(),
+            built: 1,
+            broken: broken.iter().map(|s| s.to_string()).collect(),
+            maybe: maybe.iter().map(|s| s.to_string()).collect(),
+        };
+        assert!(matches!(
+            classify(&stale(&["needs libx.so.2"], &[]), true),
+            Risk::Broken(_)
+        ));
+        let may = classify(
+            &stale(&[], &["openssl moved from 3.2 to 3.3 after it was built"]),
+            true,
+        );
+        assert!(matches!(may, Risk::CompatibilityRisk(_)) && may.word() == "compatibility risk");
+        assert_eq!(classify(&stale(&[], &[]), true), Risk::Low);
+        // a clean result without the evidence to back it is unknown, not low
+        assert!(matches!(
+            classify(&stale(&[], &[]), false),
+            Risk::Unknown(_)
+        ));
+        // broken wins over unknown evidence
+        assert!(matches!(
+            classify(&stale(&["x"], &[]), false),
+            Risk::Broken(_)
+        ));
     }
 }

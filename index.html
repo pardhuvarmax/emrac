@@ -706,7 +706,7 @@ use_agent = true</pre>
 
   <div class="devzone" id="planned" role="group" aria-label="Under development">
     <div class="tape" aria-hidden="true"></div>
-    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 59 items, in the order they are planned. Decided against: AI features, telemetry, scripting, committing through libalpm instead of pacman.</span></div>
+    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 58 items, in the order they are planned. Decided against: AI features, telemetry, scripting, committing through libalpm instead of pacman.</span></div>
     <details open><summary>Next: finishing r3 (u24&ndash;u30) <em>7</em></summary>
       <ul>
         <li><b>u24</b> <code>emrac bisect</code>: find which package update broke something</li>
@@ -718,10 +718,9 @@ use_agent = true</pre>
         <li><b>u30</b> r3 closeout: docs, the full container suite, the release</li>
       </ul>
     </details>
-    <details open><summary>Source builds: safety fixes first <em>4</em></summary>
+    <details open><summary>Source builds: safety fixes first <em>3</em></summary>
       <ul>
         <li>PGP keys under <code>--yes</code>: an unknown key is never trusted silently</li>
-        <li>Pending rebuilds classed as harmless, compatibility risk or unknown</li>
         <li>Detect changes made by <code>pacman</code> directly <small>(post-transaction hook and reconcile)</small></li>
         <li>Policy record: schema version, a lock against two emrac processes, a <code>failed</code> state with the reason</li>
       </ul>

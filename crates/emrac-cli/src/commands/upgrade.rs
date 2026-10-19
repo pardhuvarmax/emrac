@@ -265,6 +265,23 @@ fn rebuild_policy(
         return Ok(());
     }
     sources.mark_source_pending(&failed);
+    // pending is not one thing: say whether what is installed can still work
+    let risks = sources.source_policy_risks();
+    for name in &failed {
+        match risks.iter().find(|(n, _)| n == name).map(|(_, r)| r) {
+            Some(emrac_core::source_built::Risk::Low) => say!(
+                Voice::Notes,
+                "'{name}': the rebuild is pending, low risk — nothing it uses has changed since the installed package was built."
+            ),
+            Some(r) => say!(
+                Voice::Warns,
+                "'{name}': the rebuild is pending, and {} — {}. Rebuild it soon.",
+                r.word(),
+                r.why()
+            ),
+            None => {}
+        }
+    }
     say!(
         Voice::Warns,
         "the repository's binary of {} stays installed (the system is consistent), your source-build policy is kept and the rebuild is pending.",

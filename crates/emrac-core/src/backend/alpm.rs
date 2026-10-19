@@ -1314,6 +1314,23 @@ impl AlpmBackend {
             .collect()
     }
 
+    /// What `stale_builds` needs about one installed package.
+    pub fn installed_detail(&self, name: &str) -> Option<crate::stale_builds::Foreign> {
+        let pkg = self.handle.localdb().pkg(name).ok()?;
+        Some(crate::stale_builds::Foreign {
+            name: pkg.name().to_string(),
+            version: pkg.version().to_string(),
+            built: pkg.build_date().max(0) as u64,
+            depends: pkg.depends().iter().map(|d| d.name().to_string()).collect(),
+            files: pkg
+                .files()
+                .files()
+                .iter()
+                .map(|f| String::from_utf8_lossy(f.name()).into_owned())
+                .collect(),
+        })
+    }
+
     /// What `stale_builds` needs about each foreign package.
     pub fn foreign_details(&self) -> Vec<crate::stale_builds::Foreign> {
         let local = self.handle.localdb();
