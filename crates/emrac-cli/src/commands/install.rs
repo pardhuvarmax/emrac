@@ -22,6 +22,7 @@ pub fn run(
     json: bool,
     allow_partial: bool,
     expect_plan: Option<&str>,
+    mode: emrac_core::SourceMode,
 ) -> Result<()> {
     // package files on this machine: installed the way `pacman -U` does
     let files = pkgs
@@ -46,7 +47,9 @@ pub fn run(
         );
     }
     let activity = Activity::spinner("working out the plan");
-    let planned = sources.plan_install(pkgs, offline);
+    let planned = sources.plan_install_with(pkgs, offline, mode);
+    let by_source = planned.as_ref().map(|(_, s)| s.clone()).unwrap_or_default();
+    let planned = planned.map(|(plan, _)| plan);
     let preview = planned.as_ref().ok().map(|p| sources.preview(p));
     match &planned {
         Ok(_) => activity.finish("worked out the plan"),
@@ -67,7 +70,10 @@ pub fn run(
                 json,
                 allow_partial,
                 check_partial: true,
-                aur_builds: plan.packages.iter().any(|p| p.repo == "aur"),
+                aur_builds: plan
+                    .packages
+                    .iter()
+                    .any(|p| p.repo == "aur" || emrac_core::install_mode::is_source_repo(&p.repo)),
             },
         )?;
     }
@@ -77,6 +83,8 @@ pub fn run(
     }
 
     let (official, aur) = sources.classify_install(pkgs, offline)?;
+    let (source_built, official): (Vec<String>, Vec<String>) =
+        official.into_iter().partition(|n| by_source.contains(n));
 
     for details in &aur {
         if !review_aur_package(
@@ -98,7 +106,8 @@ pub fn run(
     }
 
     crate::commands::plan_check::verify_before_commit(&shown, &plan, &|s| {
-        s.plan_install(pkgs, offline)
+        s.plan_install_with(pkgs, offline, mode)
+            .map(|(plan, _)| plan)
     })?;
     history::begin(&plan)?;
     let result = (|| {
@@ -108,6 +117,9 @@ pub fn run(
                 crate::commands::official_inspect::show(sources, &plan)?;
             }
             sources.install_official(&official)?;
+        }
+        for name in &source_built {
+            crate::commands::source_install::build_and_install(sources, name, choice)?;
         }
         for details in &aur {
             crate::commands::aur_install::build_and_install(sources, &details.name, choice)?;

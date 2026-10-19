@@ -227,7 +227,11 @@ struct PendingTools {
 static PENDING_TOOLS: std::sync::Mutex<Option<PendingTools>> = std::sync::Mutex::new(None);
 
 /// Remembers that `name` was just built and installed.
-fn note_build(name: &str, before: std::collections::HashSet<String>, choice: BuildChoice) {
+pub(crate) fn note_build(
+    name: &str,
+    before: std::collections::HashSet<String>,
+    choice: BuildChoice,
+) {
     if choice.remove_tools == RemoveTools::Never {
         return;
     }

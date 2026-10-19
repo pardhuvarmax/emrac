@@ -21,6 +21,7 @@ use crate::downgrade::{self, DowngradePlan, VersionList};
 use crate::error::{Error, Result};
 use crate::history::{now, History, TxStatus};
 use crate::hooks::{self, HookPreview};
+use crate::install_mode::SourceMode;
 use crate::manifest::{self, Manifest};
 use crate::package::{PackageDetails, PackageSummary};
 use crate::pacnew::{self, Class, Merge, Pending, Texts};
@@ -231,19 +232,118 @@ impl Sources {
     /// No root, and no filesystem/build side effects — AUR entries are
     /// previewed from AUR metadata alone, not by cloning yet.
     pub fn plan_install(&self, pkgs: &[String], offline: bool) -> Result<Plan> {
+        self.plan_install_with(pkgs, offline, SourceMode::Auto)
+            .map(|(plan, _)| plan)
+    }
+
+    /// Which of the official packages named are built from source: by the
+    /// choice made (`--source`, `--binary`), else by `install.prefer`.
+    fn official_by_source(
+        &self,
+        official: &[String],
+        mode: SourceMode,
+        offline: bool,
+    ) -> Vec<String> {
+        use crate::install_mode::{build_from_source, Prefer};
+        let prefer = Config::load()
+            .ok()
+            .and_then(|c| Prefer::parse(&c.install.prefer))
+            .unwrap_or_default();
+        official
+            .iter()
+            .filter(|name| {
+                let verdict = (mode == SourceMode::Auto && prefer == Prefer::Recommend)
+                    .then(|| {
+                        let facts = self.recommend_facts(name, offline).ok()?;
+                        let report = crate::recommend::evaluate(&facts);
+                        Some((report.verdict, report.confidence))
+                    })
+                    .flatten();
+                build_from_source(mode, prefer, verdict)
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// `plan_install` with the choice of source or binary. Returns the plan and
+    /// the names of the official packages that are built from source (their
+    /// entries have `+source` after the repository). With `SourceMode::Binary` a
+    /// package that exists only as source (the AUR's) is refused, and the
+    /// message names its `-bin` counterpart when the AUR has one.
+    pub fn plan_install_with(
+        &self,
+        pkgs: &[String],
+        offline: bool,
+        mode: SourceMode,
+    ) -> Result<(Plan, Vec<String>)> {
         let (official, aur) = self.classify_install(pkgs, offline)?;
+        if mode == SourceMode::Binary && !aur.is_empty() {
+            let mut why = Vec::new();
+            for d in &aur {
+                let bin = format!("{}-bin", d.name);
+                let has_bin = !offline
+                    && !d.name.ends_with("-bin")
+                    && self.aur.info(&bin).ok().flatten().is_some();
+                why.push(if has_bin {
+                    format!(
+                        "{0} exists on the AUR only as source; its prebuilt counterpart is {bin}",
+                        d.name
+                    )
+                } else {
+                    format!("{0} exists on the AUR only as source", d.name)
+                });
+            }
+            return Err(Error::Help(format!(
+                "--binary means nothing is compiled, but {}. Name the prebuilt package, or drop --binary to build it",
+                why.join("; ")
+            )));
+        }
+        let by_source = self.official_by_source(&official, mode, offline);
+        let binary: Vec<String> = official
+            .iter()
+            .filter(|n| !by_source.contains(n))
+            .cloned()
+            .collect();
 
         let mut packages = Vec::new();
         let mut total_download_size = 0u64;
         let mut total_installed_size_delta = 0i64;
+        let mut warnings = Vec::new();
 
-        if !official.is_empty() {
-            let names = self.pacman.resolve_install(&official)?;
+        if !binary.is_empty() {
+            let names = self.pacman.resolve_install(&binary)?;
             let resolved = self.alpm.sync_resolved(&names);
-            let mut official_plan = build_plan(PlanAction::Install, &official, resolved, 1);
+            let mut official_plan = build_plan(PlanAction::Install, &binary, resolved, 1);
             total_download_size += official_plan.total_download_size;
             total_installed_size_delta += official_plan.total_installed_size_delta;
             packages.append(&mut official_plan.packages);
+        }
+
+        for name in &by_source {
+            let src = self.arch_source(name)?;
+            let installed = self.alpm.installed_version(name);
+            total_installed_size_delta += self
+                .alpm
+                .sync_resolved(std::slice::from_ref(name))
+                .first()
+                .map_or(0, |r| r.installed_size as i64)
+                - installed
+                    .as_ref()
+                    .and_then(|_| self.alpm.installed_size(name))
+                    .unwrap_or(0) as i64;
+            packages.push(PlannedPackage {
+                name: name.clone(),
+                version: src.version.clone(),
+                repo: format!("{}{}", src.repo, crate::install_mode::SOURCE_SUFFIX),
+                explicit: true,
+                previous_version: installed,
+            });
+        }
+        if !by_source.is_empty() {
+            warnings.push(format!(
+                "built from source here, from Arch's packaging source at the tag of the repository's version: {}. The build runs in the sandbox, `makepkg` installs what it needs to build, and the next upgrade replaces the result with the repository's binary unless you pin it",
+                by_source.join(", ")
+            ));
         }
 
         for details in aur {
@@ -262,16 +362,46 @@ impl Sources {
             total_download_size,
             total_installed_size_delta,
             removals: Vec::new(),
-            warnings: Vec::new(),
+            warnings,
             provider_choices: Vec::new(),
         };
-        if !official.is_empty() {
+        if !binary.is_empty() {
             attach_removals(
                 &mut plan,
-                AlpmBackend::simulate(None, SimOp::Install(&official)),
+                AlpmBackend::simulate(None, SimOp::Install(&binary)),
             );
         }
-        Ok(plan)
+        Ok((plan, by_source))
+    }
+
+    /// Where an official package's source is: its package base and the
+    /// repository's version.
+    pub fn arch_source(&self, name: &str) -> Result<ArchSource> {
+        let meta = self
+            .alpm
+            .repo_meta(name)
+            .ok_or_else(|| Error::PackageNotFound(name.to_string()))?;
+        let version = self
+            .alpm
+            .sync_version(name)
+            .ok_or_else(|| Error::PackageNotFound(name.to_string()))?;
+        let repo = self
+            .alpm
+            .sync_resolved(std::slice::from_ref(&name.to_string()))
+            .first()
+            .map(|r| r.repo.clone())
+            .unwrap_or_default();
+        Ok(ArchSource {
+            name: name.to_string(),
+            base: meta.base,
+            repo,
+            version,
+        })
+    }
+
+    /// Fetches the packaging source of `src` at its tag; the key of the checkout.
+    pub fn arch_source_sync(&self, src: &ArchSource) -> Result<String> {
+        self.aur_build.sync_arch(&src.base, &src.version)
     }
 
     /// Actually installs `names` (official repos only) via `sudo pacman
@@ -303,7 +433,12 @@ impl Sources {
         let cache_dirs = self.pacman.cache_dirs()?;
         let mut found = Vec::new();
         let mut missing = Vec::new();
-        for pkg in plan.packages.iter().filter(|p| p.repo != "aur") {
+        // (an official package built here has no cached file to read; its build is inspected)
+        for pkg in plan
+            .packages
+            .iter()
+            .filter(|p| p.repo != "aur" && !crate::install_mode::is_source_repo(&p.repo))
+        {
             match rollback::find_package_file(&cache_dirs, &pkg.name, &pkg.version) {
                 Some(path) => {
                     let manifest = inspect_package(&path)?;
@@ -4060,6 +4195,17 @@ fn collect_extras(dir: &std::path::Path, max_depth: usize) -> Vec<audit::ExtraFi
     let mut out = Vec::new();
     walk(dir, dir, 0, max_depth, &mut out);
     out
+}
+
+/// Where the source of an official package is.
+#[derive(Debug, Clone)]
+pub struct ArchSource {
+    pub name: String,
+    /// The package base: Arch's packaging repository is named after it.
+    pub base: String,
+    pub repo: String,
+    /// The repository's version, which is the tag.
+    pub version: String,
 }
 
 /// A plan to install local package files, and the files.

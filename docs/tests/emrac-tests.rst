@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 708
+     - 713
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **801**
+     - **806**
 
-emrac-core library (708)
+emrac-core library (713)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -427,6 +427,15 @@ emrac-core library (708)
 * ``package_triggers_match_by_name_operation_and_negation``
 * ``pre_hooks_come_first_and_each_pass_keeps_its_order``
 * ``the_last_matching_target_decides``
+
+``install_mode::tests`` (5)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_built_file_names_its_package``
+* ``a_plan_entry_says_whether_it_is_built_here``
+* ``only_a_package_base_name_goes_into_an_address``
+* ``tags_in_arch_packaging_have_a_dash_for_the_epoch``
+* ``the_choice_is_yours_then_the_setting_then_the_verdict``
 
 ``journal::tests`` (7)
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -1431,6 +1440,27 @@ Last full run: after u20, 69 of 69 passed.
 * an AUR package has provenance from the AUR and no rebuild or compatibility
 
 (69 checks.)
+
+End-to-end: source or binary on install (dev/e2e/sourceinstall.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An official package built from Arch packaging source here, --binary refusing to compile,
+the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after u23, 12 of 12 passed.
+
+* the plan says an official package is built here and what that means
+* --binary on an AUR package refuses and names the prebuilt one
+* --source and --binary together are refused
+* install.prefer is checked and defaults to the repository
+* by default the repository's binary is what the plan has
+* a tag that does not exist is an error that says what was asked
+* --source builds sl here in the sandbox and installs the result
+* the packaging source it used is the repository's version
+* what was installed was built here, not downloaded
+* the transaction is in the history
+* a binary install of the same package is the repository's file
+* install.prefer recommend uses the verdict of recommend, --binary still wins
+
+(12 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

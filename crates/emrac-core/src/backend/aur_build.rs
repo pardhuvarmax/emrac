@@ -171,6 +171,58 @@ impl AurBuildBackend {
         Ok(AurSyncOutcome::Changed { diff, new_pkgbuild })
     }
 
+    /// Fetches Arch's packaging repository of `base` at the tag of `version`
+    /// (what the repository's binary was built from) into its own checkout and
+    /// returns the key the other functions know it by (`arch-<base>`). The
+    /// address can be replaced for tests with `EMRAC_ARCH_PACKAGING_URL` (`{base}`
+    /// stands for the name). Only the one tag is fetched.
+    pub fn sync_arch(&self, base: &str, version: &str) -> Result<String> {
+        if !crate::install_mode::valid_base(base) {
+            return Err(Error::Help(format!(
+                "'{base}' is not a package base name that can be fetched"
+            )));
+        }
+        let key = format!("arch-{base}");
+        let dir = self.build_dir(&key)?;
+        let template = env::var("EMRAC_ARCH_PACKAGING_URL").unwrap_or_else(|_| {
+            "https://gitlab.archlinux.org/archlinux/packaging/packages/{base}.git".to_string()
+        });
+        let url = template.replace("{base}", base);
+        if !(url.starts_with("https://") || url.starts_with("file://")) {
+            return Err(Error::Help(format!(
+                "{url} is not an https:// address; the packaging source is only fetched over https"
+            )));
+        }
+        if let Some(parent) = dir.parent() {
+            fs::create_dir_all(parent).map_err(|source| Error::Io {
+                context: format!("couldn't create '{}'", parent.display()),
+                source,
+            })?;
+        }
+        let mut last = None;
+        for tag in crate::install_mode::tag_candidates(version) {
+            // a clean checkout of exactly that tag, every time: nothing local survives
+            let _ = fs::remove_dir_all(&dir);
+            match self.git(
+                None,
+                &[
+                    "clone",
+                    "--depth",
+                    "1",
+                    "--branch",
+                    &tag,
+                    &url,
+                    &dir.to_string_lossy(),
+                ],
+            ) {
+                Ok(()) => return Ok(key),
+                Err(e) => last = Some(e),
+            }
+        }
+        let _ = fs::remove_dir_all(&dir);
+        Err(last.unwrap_or_else(|| Error::Help("no tag to fetch".into())))
+    }
+
     /// Fast-forwards the local checkout to what `sync` last fetched. Only
     /// call this after the caller has confirmed the `Changed` diff.
     pub fn advance(&self, pkg: &str) -> Result<()> {

@@ -213,6 +213,7 @@ pub fn import(
             false,
             false,
             None,
+            emrac_core::SourceMode::Auto,
         )?;
     }
     Ok(())

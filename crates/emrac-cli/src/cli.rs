@@ -227,6 +227,17 @@ pub enum Commands {
         #[arg(long)]
         allow_partial: bool,
 
+        /// Build the official packages named from Arch's packaging source here
+        /// (in the sandbox, audited, inspected before it is installed) instead
+        /// of installing the repository's binary. AUR packages are source anyway
+        #[arg(long, conflicts_with = "binary")]
+        source: bool,
+
+        /// Compile nothing: install only what exists prebuilt. A package that
+        /// exists only as source (the AUR's) is refused, naming its `-bin` one
+        #[arg(long, conflicts_with = "source")]
+        binary: bool,
+
         /// Run only the plan with this id (printed under every plan, and
         /// `digest` in --json); refuses if the plan is anything else
         #[arg(long, value_name = "ID")]

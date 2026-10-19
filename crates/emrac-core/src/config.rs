@@ -34,6 +34,30 @@ pub struct Config {
     pub clui: ClUiConfig,
     #[serde(default)]
     pub score: ScoreConfig,
+    #[serde(default)]
+    pub install: InstallConfig,
+}
+
+/// What `install` does with the packages it is asked for (u23).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstallConfig {
+    /// `repository` (the default): an official package is the repository's
+    /// binary. `recommend`: it is built from source where `emrac recommend`
+    /// says source with some confidence. `--source` and `--binary` win.
+    #[serde(default = "default_prefer")]
+    pub prefer: String,
+}
+
+fn default_prefer() -> String {
+    "repository".to_string()
+}
+
+impl Default for InstallConfig {
+    fn default() -> Self {
+        Self {
+            prefer: default_prefer(),
+        }
+    }
 }
 
 /// How much each dimension of `emrac score` counts in the overall number
@@ -537,6 +561,7 @@ impl Config {
             "safety.arch_news" => self.safety.arch_news.clone(),
             "safety.db_backup" => self.safety.db_backup.clone(),
             "safety.vulnerabilities" => self.safety.vulnerabilities.clone(),
+            "install.prefer" => self.install.prefer.clone(),
             "score.performance" => self.score.performance.to_string(),
             "score.build_time" => self.score.build_time.to_string(),
             "score.maintenance" => self.score.maintenance.to_string(),
@@ -694,6 +719,12 @@ impl Config {
                 }
                 self.safety.db_backup = value.to_string();
             }
+            "install.prefer" => {
+                if crate::install_mode::Prefer::parse(value).is_none() {
+                    return Err(invalid());
+                }
+                self.install.prefer = value.to_string();
+            }
             "safety.vulnerabilities" => {
                 if !matches!(value, "warn" | "block" | "off") {
                     return Err(invalid());
@@ -783,6 +814,7 @@ impl Config {
             "safety.arch_news" => self.safety.arch_news = default_news(),
             "safety.db_backup" => self.safety.db_backup = default_db_backup(),
             "safety.vulnerabilities" => self.safety.vulnerabilities = default_vulnerabilities(),
+            "install.prefer" => self.install.prefer = default_prefer(),
             "self.source" => self.self_service.source = default_self_source(),
             "self.channel" => self.self_service.channel = default_self_channel(),
             "self.require_signature" => self.self_service.require_signature = false,

@@ -363,6 +363,8 @@ fn run(cli: &Cli) -> Result<()> {
             pkgs,
             review,
             allow_partial,
+            source,
+            binary,
             expect_plan,
         } => commands::install::run(
             &sources,
@@ -377,6 +379,11 @@ fn run(cli: &Cli) -> Result<()> {
             json,
             *allow_partial,
             expect_plan.as_deref(),
+            match (*source, *binary) {
+                (true, _) => emrac_core::SourceMode::Source,
+                (_, true) => emrac_core::SourceMode::Binary,
+                _ => emrac_core::SourceMode::Auto,
+            },
         ),
         Commands::Remove {
             pkgs,

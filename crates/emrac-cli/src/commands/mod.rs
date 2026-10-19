@@ -38,6 +38,7 @@ pub mod score;
 pub mod search;
 pub mod self_cmd;
 pub mod snapshot;
+pub mod source_install;
 pub mod stats;
 pub mod timeline;
 pub mod ui;

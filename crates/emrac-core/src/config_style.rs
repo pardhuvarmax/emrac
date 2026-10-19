@@ -171,6 +171,14 @@ const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        name: "install",
+        icon: "⇩",
+        blurb: "what `emrac install` does with the packages you name",
+        keys: &[
+            key("prefer", Kind::Text, "repository: an official package is the repository's binary; recommend: it is built from Arch's packaging source here where `emrac recommend` says source with some confidence (medium or high). `--source` and `--binary` on the command line win", "\"repository\" | \"recommend\""),
+        ],
+    },
+    Section {
         name: "safety",
         icon: "⛨",
         blurb: "the checks made before a transaction changes anything",
@@ -433,6 +441,7 @@ mod tests {
             ("clui.theme", "mono"),
             ("clui.pacman", "native"),
             ("clui.builds", "native"),
+            ("install.prefer", "recommend"),
             ("advisor.enabled", "false"),
             ("advisor.large_download_mib", "5"),
             ("advisor.large_growth_mib", "6"),
@@ -451,7 +460,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 49, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 50, "{text}");
     }
 
     #[test]
@@ -511,6 +520,7 @@ mod tests {
             "[score]",
             "[clui]",
             "[advisor]",
+            "[install]",
             "[safety]",
             "[self]",
         ] {

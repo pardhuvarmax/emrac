@@ -22,6 +22,7 @@ pub mod graph_render;
 mod history;
 mod history_log;
 pub mod hooks;
+pub mod install_mode;
 pub mod journal;
 pub mod ledger;
 pub mod ledger_watch;
@@ -94,6 +95,7 @@ pub use history::{
     TxStatus, VerifyReport as HistoryVerify, RECENT_KEPT,
 };
 pub use history_log::{AnchorCheck, ArchivePlan};
+pub use install_mode::SourceMode;
 pub use manifest::Manifest;
 pub use package::{PackageDetails, PackageSummary};
 pub use pacnew::unified_diff;
@@ -112,9 +114,9 @@ pub use snapshot::{
     SnapshotStore,
 };
 pub use sources::{
-    audit_path, inspect_package, is_package_file_name, package_list_state, BenchmarkTargets,
-    LocalInstall, OfficialInspection, PackageList, SearchResults, SearchScope, Sources,
-    UpgradePlan,
+    audit_path, inspect_package, is_package_file_name, package_list_state, ArchSource,
+    BenchmarkTargets, LocalInstall, OfficialInspection, PackageList, SearchResults, SearchScope,
+    Sources, UpgradePlan,
 };
 pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};
 pub use voice::Voice;
