@@ -28,6 +28,8 @@ mod manifest;
 pub mod mirrors;
 mod package;
 pub mod pacman_db;
+pub mod pacman_run;
+pub mod pacman_ui;
 mod pacnew;
 mod pacnew_log;
 mod pacnew_ops;

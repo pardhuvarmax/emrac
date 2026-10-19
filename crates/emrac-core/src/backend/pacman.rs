@@ -358,10 +358,22 @@ impl PacmanBackend {
     }
 
     fn run_inherited(&self, program: &str, args: &[String]) -> Result<()> {
-        let status = Command::new(program)
-            .args(args)
-            .status()
-            .map_err(|err| Error::CommandSpawn(program.to_string(), err))?;
+        // On a terminal, pacman's transaction is shown in emrac's style (the
+        // setting `clui.pacman` turns that off); otherwise it owns the terminal.
+        let st = crate::style::Style::stdout();
+        let shown = if crate::pacman_run::wanted(&st, program, args) {
+            crate::pacman_run::run(program, args, st)
+                .map_err(|err| Error::CommandSpawn(program.to_string(), err))?
+        } else {
+            None
+        };
+        let status = match shown {
+            Some(status) => status,
+            None => Command::new(program)
+                .args(args)
+                .status()
+                .map_err(|err| Error::CommandSpawn(program.to_string(), err))?,
+        };
 
         if !status.success() {
             return Err(Error::CommandFailed {

@@ -14,7 +14,8 @@ RUN pacman -Syu --noconfirm && \
     echo 'tester ALL=(root) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/tester-pacman && \
     chmod 0440 /etc/sudoers.d/tester-pacman && \
     echo 'tester ALL=(root) NOPASSWD: /usr/local/bin/emrac ledger-append' > /etc/sudoers.d/tester-emrac && \
-    chmod 0440 /etc/sudoers.d/tester-emrac
+    chmod 0440 /etc/sudoers.d/tester-emrac && \
+    sed -i '/^NoProgressBar/d' /etc/pacman.conf
 
 USER tester
 WORKDIR /home/tester

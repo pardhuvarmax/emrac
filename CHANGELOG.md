@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u21 (after r3) — 2026-10-19 — pacman's transaction in emrac's style
+
+pacman still downloads and installs, behind emrac, and emrac shows the transaction in its own style: the steps (downloading, checking keys, integrity, file conflicts, installing, removing) are lines with a gradient bar, the percentage and `2/5`, redrawn in place and left as a `✔` line when done; the parallel download block is one live `↓ downloading 1/3` line with size, rate and time; hook lines get a `✔` and a small bar. **pacman's own prompts stay as they are**: its questions appear the moment it asks and are answered on the terminal, and its table, warnings, errors and the output of hooks pass through byte for byte. It works by giving pacman a pseudo-terminal for its output (so it draws its real bars) while its input stays on the real terminal, which keeps `sudo`'s password prompt and ticket, the questions and Ctrl-C as they were. Only on a terminal; piped, in CI, with `--json`/`--quiet`, with `clui.pacman = "native"` (the new setting, default `emrac`) or if a pseudo-terminal cannot be made, pacman owns the terminal as before. New: `pacman_ui.rs` (the renderer, 13 tests), `pacman_run.rs`, 7 more checks in `dev/e2e/clui.sh` (63; the test image now has pacman's bars on), `docs/plan/r3/u21-pacman-in-emrac-style.md`.
+
 ## Slice u20 addendum 4b (after r3) — 2026-10-19 — the heat colours made darker
 
 The red, orange, yellow, green of the bars, sparklines and the wait animation are deeper and less bright: a muted dark red, a burnt orange, an olive yellow and a forest green (true colour and 256 colours; the 16-colour and `light` palettes are as they were). The style stays the gradient along the bar; a reference with solid single-colour bars was tried and taken back.

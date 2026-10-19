@@ -141,6 +141,10 @@ pub struct ClUiConfig {
     /// `default`, `light`, `mono` or `high-contrast`.
     #[serde(default = "default_theme")]
     pub theme: String,
+    /// `emrac`: pacman's transaction is shown in emrac's style on a terminal
+    /// (its questions and errors stay as they are). `native`: pacman's own output.
+    #[serde(default = "default_pacman")]
+    pub pacman: String,
 }
 
 fn default_animations() -> String {
@@ -148,6 +152,9 @@ fn default_animations() -> String {
 }
 fn default_auto() -> String {
     "auto".to_string()
+}
+fn default_pacman() -> String {
+    "emrac".to_string()
 }
 fn default_theme() -> String {
     "default".to_string()
@@ -160,6 +167,7 @@ impl Default for ClUiConfig {
             color: default_auto(),
             unicode: default_auto(),
             theme: default_theme(),
+            pacman: default_pacman(),
         }
     }
 }
@@ -538,6 +546,7 @@ impl Config {
             "clui.color" => self.clui.color.clone(),
             "clui.unicode" => self.clui.unicode.clone(),
             "clui.theme" => self.clui.theme.clone(),
+            "clui.pacman" => self.clui.pacman.clone(),
             "advisor.enabled" => self.advisor.enabled.to_string(),
             "advisor.large_download_mib" => self.advisor.large_download_mib.to_string(),
             "advisor.large_growth_mib" => self.advisor.large_growth_mib.to_string(),
@@ -635,6 +644,12 @@ impl Config {
             "clui.theme" => {
                 crate::style::Theme::parse(value).ok_or_else(invalid)?;
                 self.clui.theme = value.to_string();
+            }
+            "clui.pacman" => {
+                if !matches!(value, "emrac" | "native") {
+                    return Err(invalid());
+                }
+                self.clui.pacman = value.to_string();
             }
             "advisor.enabled" => {
                 self.advisor.enabled = parse_bool(value).ok_or_else(invalid)?;
@@ -738,6 +753,7 @@ impl Config {
             "clui.color" => self.clui.color = default_auto(),
             "clui.unicode" => self.clui.unicode = default_auto(),
             "clui.theme" => self.clui.theme = default_theme(),
+            "clui.pacman" => self.clui.pacman = default_pacman(),
             "advisor.enabled" => self.advisor.enabled = true,
             "advisor.large_download_mib" => {
                 self.advisor.large_download_mib = default_large_download_mib()

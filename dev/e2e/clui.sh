@@ -6,7 +6,7 @@
 # animations only when `clui.animations active`, never in CI or piped, and the
 # cursor always shown again, also after Ctrl-C.
 #
-# last full run: after the coloured help pages, 56 of 56 passed
+# last full run: after the pacman style, 63 of 63 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -105,6 +105,19 @@ ck "the help text is the same with the colour taken out" "[ \"\$(ptyp \"$T $e in
 ck "piped, --color never and NO_COLOR give plain help" "! $e --help | grep -q \"$esc\" && ! pty \"$T $e --color never --help\" | grep -q \"$esc\" && ! pty \"env TERM=xterm LANG=C.UTF-8 NO_COLOR=1 $e --help\" | grep -q \"$esc\""
 ck "--color always colours piped help" "$e --color always snapshot --help | grep -q \"$esc\\[\""
 ck "the other pages (credits, support, docs, license) are in colour too" "for c in credits support docs license feedback; do pty \"$T $e \$c\" | grep -q \"$esc\\[\" || exit 1; done"
+
+# --- pacman's transaction in emrac's style (pacman does the work in a pseudo-terminal)
+sudo pacman -R --noconfirm sl >/dev/null 2>&1
+ck "on a terminal the transaction is shown in emrac's style: steps with marks, no pacman bars" "ptyp \"$T $e install sl --yes\" > $W/pu1.out; grep -q '✔ installing sl' $W/pu1.out && grep -q '✔ checking keys in keyring' $W/pu1.out && ! grep -q '\\[####' $W/pu1.out && pacman -Q sl"
+ck "pacman's own table, its question's text and its hook lines are still there" "grep -q 'Total Installed Size' $W/pu1.out && grep -q ':: Processing package changes' $W/pu1.out && grep -q 'Arming ConditionNeedsUpdate' $W/pu1.out"
+sudo pacman -R --noconfirm sl >/dev/null 2>&1
+ck "pacman's question is shown and answered on the terminal" "(sleep 5; echo y; sleep 8; echo y; sleep 5) | script -qec \"$T $e install sl\" /dev/null | tr -d '\\r' | sed -E 's/\\x1b\\[[0-9;?]*[A-Za-z]//g' > $W/pu2.out; grep -q ':: Proceed with installation? \\[Y/n\\]' $W/pu2.out && grep -q '✔ installing sl' $W/pu2.out && pacman -Q sl"
+sudo pacman -R --noconfirm sl >/dev/null 2>&1
+ck "clui.pacman native leaves pacman's own output, bars included" "$e config set clui.pacman native >/dev/null && ptyp \"$T $e install sl --yes\" > $W/pu3.out; $e config unset clui.pacman >/dev/null; grep -q '\\[####' $W/pu3.out && ! grep -q '✔ installing sl' $W/pu3.out && pacman -Q sl"
+sudo pacman -R --noconfirm sl >/dev/null 2>&1
+ck "piped, pacman is not touched: no marks, no restyled lines" "$e install sl --yes > $W/pu4.out 2>&1; ! grep -q '✔ installing' $W/pu4.out && grep -q 'installing sl' $W/pu4.out && pacman -Q sl"
+ck "the setting is checked" "! $e config set clui.pacman fancy 2>&1 && [ \"\$($e config get clui.pacman)\" = emrac ]"
+ck "a failed transaction still fails the command" "! $e install --yes no-such-package-xyz >/dev/null 2>&1"
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]
