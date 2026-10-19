@@ -112,7 +112,7 @@ sc_run=$(sed -n 's/^# last full run: *//p' "$sc" | head -1)
 bu_run=$(sed -n 's/^# last full run: *//p' "$bu" | head -1)
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$sc" >"$work/e2e_score.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$bu" >"$work/e2e_buildui.txt"
-sed -n 's/^ck "\([^"]*\)".*/\1/p' "$si" >"$work/e2e_sourceinstall.txt"
+sed -n 's/^ *ck "\([^"]*\)".*/\1/p' "$si" >"$work/e2e_sourceinstall.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$cl" >"$work/e2e_clui.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$mi" >"$work/e2e_mirrors.txt"
 sed -n 's/^ck "\([^"]*\)".*/\1/p' "$ad" >"$work/e2e_advisor.txt"

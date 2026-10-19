@@ -1483,17 +1483,35 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * the same version put back from the repository is detected, not claimed as built here
 * doctor says the policy is not honoured
 * from-source rebuild builds it again and it is verified
+* an older version is installed, so the policy mismatch is reported as such
+* the upgrade plan names the rebuild from source, not the binary
+* upgrade --skip-source-builds installs the binary and leaves the rebuild pending
+* the upgrade rebuilds the package from source and clears the pending state
+* a rebuild that fails leaves the binary, keeps the policy, says so and exits non-zero
+* a pending rebuild is in the doctor
+* a pending rebuild is in the plan of the next upgrade
 * a damaged record stops an upgrade and says why
 * a damaged record is never written over
 * the doctor calls a damaged record a problem
 * a deleted record stops an upgrade and names what it held
 * a deleted record is not written over either
 * the doctor calls a deleted record a problem
+* a plan with the policy has an id; ending the policy changes it
+* a plan made before the policy changed is refused by --expect-plan
+* pacman -Syu by hand: emrac sees the policy was not honoured
 * pacman -R by hand: the record does not claim an installed source build
 * install.prefer = recommend never overrides --source or --binary
 * install --binary of a policy package ends the policy
+* TX-01 cut off after the binary upgrade: the binary is installed and the cut-off is real
+* TX-01 the policy survived, and emrac says it is not honoured
+* TX-01 the upgrade is in the history as done (nothing to recover), and the rebuild then completes
+* TX-03 cut off after the build, before the install: the installed package is untouched
+* TX-03 the built package is kept and the record is still readable
+* TX-03/04 the next run recovers the journal and the package ends up verified
+* TX-02 killed in the middle of the build: the installed package is untouched, the record readable
+* TX-02 the next run recovers the journal and builds cleanly
 
-(30 checks.)
+(48 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
