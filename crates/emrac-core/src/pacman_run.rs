@@ -107,6 +107,7 @@ pub fn run_screen(
     };
     let mut width = usize::from(ws.ws_col);
     let mut buf = [0u8; 8192];
+    let mut watch = crate::hook_watch::Watch::default();
     loop {
         let mut pfd = libc::pollfd {
             fd: master.as_raw_fd(),
@@ -129,6 +130,7 @@ pub fn run_screen(
             if n <= 0 {
                 break; // EIO: everything that had the other end has closed it
             }
+            watch.feed(&buf[..n as usize]);
             if !show(screen.feed(&buf[..n as usize])) {
                 break;
             }
@@ -143,6 +145,7 @@ pub fn run_screen(
         }
         show(screen.tick());
     }
+    watch.finish();
     show(screen.finish());
     let at_question = screen.left_at_a_question();
     let status = child.wait();

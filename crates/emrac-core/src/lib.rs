@@ -22,6 +22,7 @@ pub mod fault;
 pub mod graph_render;
 mod history;
 mod history_log;
+pub mod hook_watch;
 pub mod hooks;
 pub mod install_mode;
 pub mod journal;

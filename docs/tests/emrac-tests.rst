@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 722
+     - 725
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **815**
+     - **818**
 
-emrac-core library (722)
+emrac-core library (725)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -409,6 +409,13 @@ emrac-core library (722)
 * ``the_archive_moves_only_old_records_and_never_the_newest_twenty``
 * ``unreadable_history_is_an_io_error_not_empty``
 * ``write_failure_is_reported``
+
+``hook_watch::tests`` (3)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_failed_hook_is_named_from_the_line_before_the_error``
+* ``lines_split_across_reads_and_coloured_lines_count``
+* ``nothing_failed_means_nothing_reported``
 
 ``hooks::tests`` (14)
 ~~~~~~~~~~~~~~~~~~~~~
@@ -1460,7 +1467,7 @@ End-to-end: source or binary on install (dev/e2e/sourceinstall.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 An official package built from Arch packaging source here, --binary refusing to compile,
-the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the fault checks, 48 of 48 passed.
+the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the hook and multi-package checks, 53 of 53 passed.
 
 * the plan says an official package is built here and what that means
 * --binary on an AUR package refuses and names the prebuilt one
@@ -1510,8 +1517,13 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * TX-03/04 the next run recovers the journal and the package ends up verified
 * TX-02 killed in the middle of the build: the installed package is untouched, the record readable
 * TX-02 the next run recovers the journal and builds cleanly
+* TX-05 a hook that fails after the commit: the packages are installed
+* TX-05 emrac names the hook, says it was committed, and exits non-zero
+* TX-05 the history records the transaction as committed
+* PL-05 an unknown name in the list stops the plan: nothing is built or installed
+* PL-05 two packages built from source are both installed, verified and listed
 
-(48 checks.)
+(53 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

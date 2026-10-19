@@ -11,7 +11,7 @@
 # The binary here is the test build (--cfg emrac_fault): EMRAC_FAULT=<point> cuts emrac
 # off at that point, as a kill or a power cut would. A normal build has no such code.
 #
-# last full run: after the fault checks, 48 of 48 passed
+# last full run: after the hook and multi-package checks, 53 of 53 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -121,6 +121,44 @@ if [ -n "$old" ]; then
   ck "TX-02 killed in the middle of the build: the installed package is untouched, the record readable" "[ \"\$(pacman -Q sl | cut -d' ' -f2)\" = \"\$(echo $old | sed 's/^sl-//; s/-x86_64.*//')\" ] && $e from-source >/dev/null 2>&1"
   ck "TX-02 the next run recovers the journal and builds cleanly" "$e from-source rebuild sl --accept-risks --yes >/tmp/t2b.out 2>&1; grep -q 'in your history (failed' /tmp/t2b.out && $e from-source 2>&1 | grep -q 'source verified'"
 fi
+
+# --- a hook that fails after the commit: committed, recorded as committed, not a success
+sudo pacman -R --noconfirm sl >/dev/null 2>&1
+mkdir -p /tmp/hk && cd /tmp/hk
+cat > PKGBUILD <<'PB'
+pkgname=failhook
+pkgver=1
+pkgrel=1
+pkgdesc=x
+arch=(any)
+license=(GPL)
+package() {
+  install -Dm644 /dev/stdin "$pkgdir/usr/share/libalpm/hooks/zz-failhook.hook" <<'H'
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = *
+[Action]
+When = PostTransaction
+Exec = /usr/bin/false
+H
+}
+PB
+makepkg -f --noconfirm >/dev/null 2>&1
+sudo pacman -U --noconfirm failhook-1-1-any.pkg.tar.zst >/dev/null 2>&1
+cd ~
+$e install --binary sl --yes >/tmp/h1.out 2>&1; rc=$?
+ck "TX-05 a hook that fails after the commit: the packages are installed" "pacman -Q sl >/dev/null 2>&1 && pacman -Q failhook >/dev/null 2>&1"
+ck "TX-05 emrac names the hook, says it was committed, and exits non-zero" "[ $rc -ne 0 ] && grep -q 'transaction was committed, but a post-transaction hook failed after it: ' /tmp/h1.out"
+ck "TX-05 the history records the transaction as committed" "$e history 2>&1 | head -4 | grep -q 'committed *sl'"
+sudo pacman -R --noconfirm failhook sl >/dev/null 2>&1
+
+# --- several packages in one request
+ck "PL-05 an unknown name in the list stops the plan: nothing is built or installed" "! $e install --source sl no-such-package-xyz --yes >/tmp/m1.out 2>&1; ! pacman -Q sl >/dev/null 2>&1 && grep -q 'no-such-package-xyz' /tmp/m1.out"
+ck "PL-05 two packages built from source are both installed, verified and listed" "$e install --source sl cowsay --yes --skip-pkgbuild --accept-risks >/tmp/m2.out 2>&1; pacman -Q sl cowsay >/dev/null && $e from-source 2>&1 | grep -c 'source verified' | grep -q '^2$'"
+sudo pacman -R --noconfirm sl cowsay >/dev/null 2>&1
+$e from-source drop sl cowsay >/dev/null 2>&1
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]

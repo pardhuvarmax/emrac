@@ -52,7 +52,20 @@ fn main() {
     init_style(&cli);
 
     match run(&cli) {
-        Ok(()) => {}
+        Ok(()) => {
+            // The transaction was committed (and recorded as such), but a hook that
+            // runs after it failed: the run is not a success.
+            let hooks = emrac_core::hook_watch::take();
+            if !hooks.is_empty() {
+                emrac_core::say_err!(
+                    emrac_core::Voice::Warns,
+                    "the transaction was committed, but {} failed after it: {}. The packages are installed; what the hook was to do was not done. Look at pacman's output above, and run it again by hand once its cause is fixed.",
+                    if hooks.len() == 1 { "a post-transaction hook" } else { "post-transaction hooks" },
+                    hooks.join(", ")
+                );
+                std::process::exit(1);
+            }
+        }
         // the person said no at pacman's own question: a choice, not a failure
         Err(emrac_core::Error::PacmanDeclined) => {
             emrac_core::say!(

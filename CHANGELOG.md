@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## A hook that fails after the commit (after u23b) — 2026-10-20
+
+pacman exits 0 when a post-transaction hook fails and prints only `error: command failed to execute correctly`, so emrac used to record the transaction and say nothing. It now listens to what pacman prints, still records the transaction as committed, and then says which hook failed, that the packages are installed and the hook's work was not done, and exits non-zero. On a terminal the hook is named; when output is piped it is "a hook" (pacman's error stream is all that is watched there). Container checks (53 in `sourceinstall.sh`) also cover an unknown name in a list of packages and two packages built from source in one request. `hook_watch.rs` has 3 tests.
+
 ## Fault injection and a missing transaction (after u23b) — 2026-10-20
 
 A test-only build (`--cfg emrac_fault`) can cut emrac off at named points (`EMRAC_FAULT=after-binary-upgrade|before-build|after-build`), as a power cut would; a normal build has no such code and no switch. Container checks now cut it off after the binary upgrade, after the build before the install, and kill it in the middle of a build, and assert what is installed, what the record says, that the journal is recovered into the history, and that the next run completes (48 checks in `sourceinstall.sh`). Found by writing them: `emrac from-source rebuild` took no lock and left no journal or history entry; it is now a transaction like `install` and `upgrade`.

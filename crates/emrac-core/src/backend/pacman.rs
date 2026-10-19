@@ -380,9 +380,7 @@ impl PacmanBackend {
                 }
                 shown.status
             }
-            None => Command::new(program)
-                .args(args)
-                .status()
+            None => run_listening(program, args)
                 .map_err(|err| Error::CommandSpawn(program.to_string(), err))?,
         };
 
@@ -395,6 +393,42 @@ impl PacmanBackend {
 
         Ok(())
     }
+}
+
+/// Runs the command with the terminal as it is, except that its error output
+/// passes through emrac, which listens for a hook that fails after the commit.
+/// (Only for pacman: everything else keeps its own streams.)
+fn run_listening(program: &str, args: &[String]) -> std::io::Result<std::process::ExitStatus> {
+    use std::io::{Read, Write};
+    let is_pacman = program == "pacman" || args.iter().any(|a| a == "pacman");
+    if !is_pacman {
+        return Command::new(program).args(args).status();
+    }
+    let mut child = Command::new(program)
+        .args(args)
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+    let listener = child.stderr.take().map(|mut err| {
+        std::thread::spawn(move || {
+            let mut watch = crate::hook_watch::Watch::default();
+            let mut buf = [0u8; 4096];
+            let mut out = std::io::stderr();
+            while let Ok(n) = err.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                let _ = out.write_all(&buf[..n]);
+                let _ = out.flush();
+                watch.feed(&buf[..n]);
+            }
+            watch.finish();
+        })
+    });
+    let status = child.wait();
+    if let Some(t) = listener {
+        let _ = t.join();
+    }
+    status
 }
 
 impl Default for PacmanBackend {
