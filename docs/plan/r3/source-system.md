@@ -27,6 +27,19 @@ It is a transaction-engine requirement, not a feature of source builds: rebuildi
 1. **Default: two-phase** (as built). `pacman -Syu` installs the binaries, each policy package is rebuilt after, a failure leaves the binary, the policy and a pending mark; the exit is non-zero. This keeps rule 23: a failing recipe never blocks the rolling upgrade.
 2. **`upgrade --build-first`** (new): every policy package is built first, in a clean chroot synced to the **target** repository state (the databases the plan was made from), each artifact validated; only then the single transaction installs repository packages and the built archives together (`pacman -U` of the archives alongside `-Syu` is not one pacman call, so the plan is: `-Syu` with the built packages ignored not possible; the transaction is `pacman -U <archives>` after `-Syu`-equivalent resolution — see open question 1). Any build failure stops **before** the host changes: nothing is installed, the plan is shown again with the cause. Mixed state cannot result from a build failure.
 
+## The two modes are two risk policies, not two ways to the same result
+
+| | default (two-phase) | `--build-first` |
+|---|---|---|
+| Optimises | upgrade continuity | pre-commit validation and consistency |
+| Order | binary upgrade, then rebuild against the **updated** system | build everything in a chroot at the **planned target** state, validate, then one coordinated transaction |
+| A recipe fails | the upgrade stands; the package is pending and retryable | nothing on the host changes |
+| Window of risk | a source package may be incompatible with the new libraries until rebuilt, so the system is **not called fully consistent** while a rebuild is pending | none from builds; a failed commit can still leave changes (recovery path, not a guarantee) |
+
+The chroot of `--build-first` must match the target dependency state, not the installed system, or its packages could be incompatible the moment they are installed.
+
+**Rule 23a.** In the default mode a failed rebuild must be told apart: a *harmless* pending rebuild (no library or ABI the package uses changed) and a package that *may be broken* (a soname it links to changed or went away, a dependency's major version moved). Rule 23 keeps unrelated upgrades unblocked; it never suppresses the compatibility warning. The check exists for AUR packages (`rebuild --check`, u19); the same one runs on a pending source package and `doctor` and the upgrade report say which kind it is.
+
 ## Slices
 
 - **S1, `emrac build --source <official pkg>`** (build and validate, no install; log and provenance kept). Uses today's sandbox. Small.
