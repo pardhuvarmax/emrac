@@ -1,0 +1,32 @@
+# Test campaign: what to challenge next
+
+Each row is a way the system can be wrong that a passing suite does not show. Status is what exists in the tree
+today (unit tests, `dev/e2e/*.sh`), not what is hoped.
+
+| Pri | Campaign | Covered today | Not covered |
+|---|---|---|---|
+| P0 | State corruption | A malformed or deleted source-policy record is an error and is never written over (unit + container); JSON state is written by temp file, fsync, rename | Truncated or malformed `history.jsonl`, journal, ledger, pins, snapshots, build-times, rebuild acks; a write that fails halfway (disk full, read-only filesystem); every state file needs the same "unreadable is an error, never empty" rule |
+| P0 | External pacman activity | pre-flight refuses while pacman runs or its lock is held; a second emrac is refused by the journal state; a direct `pacman -Syu`/`-R` is reconciled afterwards | pacman or a second emrac started *during* an emrac transaction (between plan and commit, mid-rebuild); two emrac processes writing the policy file (no lock yet, safety register S-7) |
+| P0 | Crash recovery | Cut off after the binary upgrade, after a build, kill -9 mid-build (3 fault points, 6 checks); journal recovery into the history | A cut at every durable write and package-operation boundary: journal begin/finish, history append, ledger append, policy record and seal, snapshot write, `pacman -U` start/end; after each, installed packages, pending marks, journal and ledger must agree with what really happened |
+| P1 | Reproducibility | `score` has a reproducible-build dimension from the Arch rebuilders; the reproducible-build check is partial | Building the same source twice here and comparing artifacts (file lists, hashes, mtimes, build paths) with nondeterministic metadata accounted for |
+| P1 | Supply-chain changes between review and build | `makepkg --verifysource` checks source checksums; AUR review shows the diff | **Nothing binds what was reviewed to what is built**: the PKGBUILD (and `.install`, patches) can change between the review/audit and `makepkg`. See below |
+| P1 | Multi-package failures | unknown name in a list; second of two failing says "installed X; not installed Y" | one rebuild failing after several packages were already upgraded (upgrade with two policy packages); mixed outcomes in the history and the exit code |
+| P1 | Security boundaries | bubblewrap: read-only root, empty home, cleared environment, no network | escape attempts (writes outside the build tree, `/proc` tricks, symlinks in `$srcdir` and `$pkgdir`, setuid/capabilities in the built package, path traversal in package file lists, hostile `.pkg.tar` names) |
+| P2 | Long-term consistency | none | hundreds of upgrade/rebuild/rollback/policy cycles on one machine, then `history verify`, ledger compare, `from-source`, `doctor` must all agree |
+
+## The three to do first
+
+1. **Concurrent pacman activity** (P0). Start an emrac operation and, during it, change packages through pacman or a
+   second emrac; assert the second is refused or the first stops before committing, and that state is reconciled
+   afterwards. Needs: the policy-file lock (S-7), and a way to hold an emrac operation open in the container (a
+   fault point that waits, test build only, like `EMRAC_FAULT`).
+2. **Crash at every transition** (P0). Generalise the fault points into a list of named durable boundaries; a test
+   loop runs the same scenario once per point, restarts emrac, and compares four views: installed packages, pending
+   rebuild marks, the journal/history, the ledger. One assertion function, one run per point.
+3. **Review-to-build integrity** (P1). A digest of the whole packaging directory (PKGBUILD, `.install`, patches,
+   everything in the checkout but `.git`) taken when it is reviewed or audited and checked again immediately before
+   `makepkg`; any change stops the build with the changed files named and asks for a new review. The same digest is
+   kept in the build's provenance record (S2). Test: review, alter PKGBUILD / add a file / change a patch, build →
+   refused.
+
+State corruption comes with 2 (a corruption sweep over every state file) and is cheap once the shared reader exists.
