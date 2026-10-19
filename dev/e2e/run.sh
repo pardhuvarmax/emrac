@@ -92,9 +92,11 @@ buildtools)
         emrac-test bash /t.sh
     ;;
 sourceinstall)
+    echo "==> Building emrac with the fault points (--cfg emrac_fault; a normal build has none)"
+    RUSTFLAGS="--cfg emrac_fault" CARGO_TARGET_DIR="$repo_root/target/fault" cargo build --release
     echo "==> Running the source or binary install checks (needs the network: packaging source and sources)"
     podman run --rm --security-opt 'unmask=/proc/*' \
-        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/target/fault/release/emrac:/usr/local/bin/emrac:ro" \
         -v "$repo_root/dev/e2e/sourceinstall.sh:/t.sh:ro" \
         emrac-test bash /t.sh
     ;;

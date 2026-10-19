@@ -18,6 +18,7 @@ mod doctor;
 mod downgrade;
 mod error;
 pub mod exchange;
+pub mod fault;
 pub mod graph_render;
 mod history;
 mod history_log;

@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Fault injection and a missing transaction (after u23b) — 2026-10-20
+
+A test-only build (`--cfg emrac_fault`) can cut emrac off at named points (`EMRAC_FAULT=after-binary-upgrade|before-build|after-build`), as a power cut would; a normal build has no such code and no switch. Container checks now cut it off after the binary upgrade, after the build before the install, and kill it in the middle of a build, and assert what is installed, what the record says, that the journal is recovered into the history, and that the next run completes (48 checks in `sourceinstall.sh`). Found by writing them: `emrac from-source rebuild` took no lock and left no journal or history entry; it is now a transaction like `install` and `upgrade`.
+
 ## A deleted policy record is unknown intent (after u23b) — 2026-10-20
 
 Deleting `source-built.json` used to look like never having had a policy, so the next upgrade installed binaries over source builds. The record now has a seal beside it (`source-built.seal`, the names it holds): a missing record with a seal that lists policies is an error naming them, upgrades and writes refuse, and `doctor` reports a problem. Container checks (40 in `sourceinstall.sh`) now also cover: plan id changes with the policy and `--expect-plan` refuses the old one, a direct `pacman -Syu`, a direct `pacman -R`, and `install.prefer = recommend` against `--source`/`--binary`. 1 unit test.

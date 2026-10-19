@@ -8,7 +8,10 @@
 # The source-build policy: what was asked to be built from source stays so; an
 # upgrade rebuilds it from the new packaging source instead of installing the binary.
 #
-# last full run: after the deleted-record fix, 40 of 40 passed
+# The binary here is the test build (--cfg emrac_fault): EMRAC_FAULT=<point> cuts emrac
+# off at that point, as a kill or a power cut would. A normal build has no such code.
+#
+# last full run: after the fault checks, 48 of 48 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -92,6 +95,32 @@ ck "install.prefer = recommend never overrides --source or --binary" "$e config 
 cp /tmp/sb.good ~/.local/share/emrac/source-built.json
 ck "install --binary of a policy package ends the policy" "$e install --binary sl --yes >/dev/null 2>&1; $e from-source 2>&1 | grep -q 'no package is set'"
 sudo pacman -R --noconfirm sl >/dev/null 2>&1
+
+# --- cut off: the state a crash leaves, and what emrac makes of it
+if [ -n "$old" ]; then
+  now=$(pacman -Si sl | awk '/^Version/{print $3}')
+  sudo pacman -R --noconfirm sl >/dev/null 2>&1; rm -f ~/.local/share/emrac/source-built.json ~/.local/share/emrac/source-built.seal
+  $e install --source sl --yes --skip-pkgbuild --accept-risks >/dev/null 2>&1
+  sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
+  EMRAC_FAULT=after-binary-upgrade $e upgrade sl --yes --skip-pkgbuild --accept-risks >/tmp/t1.out 2>&1; rc=$?
+  ck "TX-01 cut off after the binary upgrade: the binary is installed and the cut-off is real" "[ $rc -ne 0 ] && grep -q 'cut off at' /tmp/t1.out && [ \"\$(pacman -Q sl | cut -d' ' -f2)\" = \"$now\" ] && ! pacman -Qi sl | grep -q 'Unknown Packager'"
+  ck "TX-01 the policy survived, and emrac says it is not honoured" "$e from-source 2>&1 | grep -qE 'repository file detected|policy mismatch|rebuild pending' && $e doctor 2>&1 | grep -q 'not built from source as you asked'"
+  ck "TX-01 the upgrade is in the history as done (nothing to recover), and the rebuild then completes" "$e history 2>&1 | head -4 | grep -q 'upgrade' && $e from-source rebuild sl --accept-risks --yes >/tmp/t1b.out 2>&1; ! grep -q 'in your history (failed' /tmp/t1b.out && pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'source verified'"
+
+  sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
+  EMRAC_FAULT=after-build $e from-source rebuild sl --accept-risks --yes >/tmp/t3.out 2>&1; rc=$?
+  ck "TX-03 cut off after the build, before the install: the installed package is untouched" "[ $rc -ne 0 ] && grep -q 'cut off at' /tmp/t3.out && [ \"\$(pacman -Q sl | cut -d' ' -f2)\" = \"\$(echo $old | sed 's/^sl-//; s/-x86_64.*//')\" ]"
+  ck "TX-03 the built package is kept and the record is still readable" "ls ~/.cache/emrac/build/arch-sl/*.pkg.tar.zst >/dev/null && $e from-source >/dev/null 2>&1"
+  ck "TX-03/04 the next run recovers the journal and the package ends up verified" "$e from-source rebuild sl --accept-risks --yes >/tmp/t3b.out 2>&1; grep -q 'in your history (failed' /tmp/t3b.out && $e from-source 2>&1 | grep -q 'source verified'"
+
+  sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
+  $e from-source rebuild sl --accept-risks --yes >/tmp/t2.out 2>&1 &
+  pid=$!
+  for i in $(seq 1 240); do pgrep -f 'makepkg' >/dev/null && break; sleep 0.5; done
+  kill -9 $pid 2>/dev/null; pkill -9 -f makepkg 2>/dev/null; pkill -9 -f bwrap 2>/dev/null; wait $pid 2>/dev/null; sleep 2
+  ck "TX-02 killed in the middle of the build: the installed package is untouched, the record readable" "[ \"\$(pacman -Q sl | cut -d' ' -f2)\" = \"\$(echo $old | sed 's/^sl-//; s/-x86_64.*//')\" ] && $e from-source >/dev/null 2>&1"
+  ck "TX-02 the next run recovers the journal and builds cleanly" "$e from-source rebuild sl --accept-risks --yes >/tmp/t2b.out 2>&1; grep -q 'in your history (failed' /tmp/t2b.out && $e from-source 2>&1 | grep -q 'source verified'"
+fi
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]

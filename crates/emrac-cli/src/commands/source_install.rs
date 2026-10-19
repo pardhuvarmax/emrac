@@ -66,6 +66,7 @@ pub fn build_and_install_at(
         _ => {}
     }
 
+    emrac_core::fault::point("before-build");
     let opts = build_options(sources, &key, sources.predicts_network(&key), choice)?;
     let built = build_with_retry(sources, &key, opts)?;
     // a base builds all its packages; only the one asked for is installed
@@ -119,6 +120,7 @@ pub fn build_and_install_at(
         });
     }
 
+    emrac_core::fault::point("after-build");
     sources.install_built(&files)?;
     let _ = sources.record_source_built(name, &src.version, &key);
     note_build(name, before, choice);

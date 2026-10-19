@@ -192,6 +192,9 @@ pub fn run(
     history::record(&upgrade.plan, &result);
     // The upgrade is one step, the source rebuilds another: what the rebuilds
     // come to is reported after the upgrade has been, but still decides the exit.
+    if result.is_ok() {
+        emrac_core::fault::point("after-binary-upgrade");
+    }
     let rebuilt = if result.is_ok() && !source_names.is_empty() {
         rebuild_policy(sources, &source_names, skip_source_builds, choice)
     } else {

@@ -70,7 +70,18 @@ pub fn run(
                 if !policy.iter().any(|e| &e.name == name) {
                     sources.declare_source_policy(std::slice::from_ref(name))?;
                 }
-                crate::commands::source_install::build_and_install(sources, name, choice)?;
+                // a transaction like any other: the lock, the journal, the history
+                let src = sources.arch_source(name)?;
+                let plan = sources.source_rebuild_plan(
+                    name,
+                    &src.version,
+                    &format!("{}{}", src.repo, emrac_core::install_mode::SOURCE_SUFFIX),
+                );
+                crate::commands::history::begin(&plan)?;
+                let built =
+                    crate::commands::source_install::build_and_install(sources, name, choice);
+                crate::commands::history::record(&plan, &built);
+                built?;
             }
             Ok(())
         }
