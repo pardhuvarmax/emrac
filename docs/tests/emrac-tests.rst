@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 749
+     - 750
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 61
+     - 62
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 32
    * - **Automated total**
      -
-     - **842**
+     - **844**
 
-emrac-core library (749)
+emrac-core library (750)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -539,6 +539,11 @@ emrac-core library (749)
 * ``the_order_is_good_by_speed_then_stale_then_unreliable_then_untested_in_file_order``
 * ``the_summary_takes_medians_over_successes_and_remembers_the_last_error``
 * ``urls_are_built_the_way_pacman_builds_them``
+
+``pacman_db::fingerprint_tests`` (1)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``the_fingerprint_changes_when_a_package_or_a_database_does``
 
 ``pacman_db::tests`` (4)
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1093,7 +1098,7 @@ emrac-core library (749)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (61)
+emrac command line, unit tests (62)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -1127,9 +1132,10 @@ emrac command line, unit tests (61)
 
 * ``a_binary_replaced_while_it_runs_is_the_one_now_at_its_path``
 
-``commands::plan_check::tests`` (2)
+``commands::plan_check::tests`` (3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+* ``a_change_in_pacmans_databases_makes_a_quick_plan_be_made_again``
 * ``a_plan_that_was_just_shown_is_not_made_again_and_an_old_one_is``
 * ``an_expected_plan_id_must_match_by_prefix_and_look_like_one``
 
@@ -1611,6 +1617,24 @@ emrac bisect over real transactions with fixture packages: the culprit found, th
 * a missing package file is refused up front, before the system is touched
 
 (23 checks.)
+
+End-to-end: crash and concurrency (dev/e2e/crash.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+install and upgrade cut off at each durable boundary, a power cut in the middle of pacman -U, pacman changed
+between the plan and the commit: ``dev/e2e/run.sh crash``. Last full run: after the crash sweep for install and upgrade, 18 of 18 passed.
+
+* INSTALL cut off at '${spec%%:*}': the packages, journal, history and pacman's database agree; the next command works
+* UPGRADE cut off at '${spec%%:*}': the packages, journal, history and pacman's database agree; the next command works
+* PC-01 pacman installs the very package between the plan and the commit: the plan is made again at once and the run is refused
+* PC-01 emrac did not run its own transaction on top of pacman's
+* PC-02 pacman installs an unrelated package in between: the plan is made again, found the same, and goes on
+* PC-03 pacman syncs the databases in between: the plan is made again, found the same, and goes on
+* PW-01 killed together in the middle of pacman's install: the package is not half-installed and pacman's database is consistent
+* PW-01 the next emrac command finds the cut-off transaction, records it as failed and carries on
+* PW-01 the history, the journal and the database agree afterwards, and the install can be done again
+
+(9 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

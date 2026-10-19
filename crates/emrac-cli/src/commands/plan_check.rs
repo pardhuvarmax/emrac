@@ -15,6 +15,8 @@ pub const RECHECK_AFTER: Duration = Duration::from_secs(30);
 pub struct Shown {
     digest: String,
     at: Instant,
+    /// What pacman's databases said when the plan was made.
+    state: String,
 }
 
 impl Shown {
@@ -22,6 +24,7 @@ impl Shown {
         Shown {
             digest: plan.digest(),
             at: Instant::now(),
+            state: emrac_core::pacman_db::state_fingerprint(),
         }
     }
 
@@ -30,6 +33,7 @@ impl Shown {
         Shown {
             digest: plan.digest(),
             at,
+            state: "same".to_string(),
         }
     }
 }
@@ -65,11 +69,26 @@ pub fn verify_before_commit(
     plan: &Plan,
     again: &dyn Fn(&Sources) -> Result<Plan>,
 ) -> Result<()> {
-    verify_with(shown, plan, &|| again(&Sources::init()?))
+    emrac_core::fault::point("before-recheck");
+    verify_with(
+        shown,
+        plan,
+        &|| again(&Sources::init()?),
+        &emrac_core::pacman_db::state_fingerprint,
+    )
 }
 
-fn verify_with(shown: &Shown, plan: &Plan, again: &dyn Fn() -> Result<Plan>) -> Result<()> {
-    if shown.at.elapsed() < RECHECK_AFTER {
+/// The plan is made again when it has been on screen for a while, or when pacman's
+/// databases are not as they were when it was made (a package installed or
+/// removed, a repository synced, a transaction under way): anything that could
+/// make the approved plan not the one that would run.
+fn verify_with(
+    shown: &Shown,
+    plan: &Plan,
+    again: &dyn Fn() -> Result<Plan>,
+    state: &dyn Fn() -> String,
+) -> Result<()> {
+    if shown.at.elapsed() < RECHECK_AFTER && state() == shown.state {
         return Ok(());
     }
     let now = again()?;
@@ -145,14 +164,16 @@ mod tests {
             calls.set(calls.get() + 1);
             Ok(plan("1-1"))
         };
-        let fresh = Shown::new(&p);
-        verify_with(&fresh, &p, &same).unwrap();
+        let fresh = Shown::at(&p, Instant::now());
+        verify_with(&fresh, &p, &same, &|| "same".to_string()).unwrap();
         assert_eq!(calls.get(), 0, "a quick run goes straight through");
         let old = Shown::at(&p, Instant::now() - Duration::from_secs(120));
-        verify_with(&old, &p, &same).unwrap();
+        verify_with(&old, &p, &same, &|| "same".to_string()).unwrap();
         assert_eq!(calls.get(), 1);
         let drifted = || Ok(plan("1-2"));
-        let e = verify_with(&old, &p, &drifted).unwrap_err().to_string();
+        let e = verify_with(&old, &p, &drifted, &|| "same".to_string())
+            .unwrap_err()
+            .to_string();
         assert!(
             e.contains("changed while you were deciding") && e.contains("changed: a 1-1 → 1-2"),
             "{e}"
@@ -160,8 +181,24 @@ mod tests {
         assert!(e.contains("Nothing was changed"));
         let failing = || Err(Error::PlanChanged("boom".into()));
         assert!(
-            verify_with(&old, &p, &failing).is_err(),
+            verify_with(&old, &p, &failing, &|| "same".to_string()).is_err(),
             "a plan that can't be made again stops the run"
         );
+    }
+
+    #[test]
+    fn a_change_in_pacmans_databases_makes_a_quick_plan_be_made_again() {
+        let p = plan("1-1");
+        let fresh = Shown::at(&p, Instant::now());
+        // the databases changed since the plan was shown: it is made again, within a second
+        let moved = || "changed".to_string();
+        let drifted = || Ok(plan("1-2"));
+        let e = verify_with(&fresh, &p, &drifted, &moved)
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("changed while you were deciding"), "{e}");
+        // if the new plan is the same one, it goes on (an unrelated package changed)
+        let same = || Ok(plan("1-1"));
+        verify_with(&fresh, &p, &same, &moved).unwrap();
     }
 }

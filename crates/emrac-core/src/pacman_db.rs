@@ -288,3 +288,74 @@ mod tests {
         );
     }
 }
+
+/// A short digest of what pacman's databases say right now: the installed packages
+/// (the names of the entries under `local`, which carry their versions), the
+/// size and time of each synced repository database, and whether a lock is held.
+/// Cheap (a directory listing); two readings differ when pacman changed something
+/// in between.
+pub fn state_fingerprint() -> String {
+    fingerprint_of(Path::new("/var/lib/pacman"))
+}
+
+pub fn fingerprint_of(root: &Path) -> String {
+    use sha2::{Digest, Sha256};
+    let mut lines: Vec<String> = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(root.join("local")) {
+        for e in rd.flatten() {
+            lines.push(format!("l {}", e.file_name().to_string_lossy()));
+        }
+    }
+    if let Ok(rd) = std::fs::read_dir(root.join("sync")) {
+        for e in rd.flatten() {
+            if let Ok(m) = e.metadata() {
+                let secs = m
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_secs());
+                lines.push(format!(
+                    "s {} {} {secs}",
+                    e.file_name().to_string_lossy(),
+                    m.len()
+                ));
+            }
+        }
+    }
+    if root.join("db.lck").exists() {
+        lines.push("lock".to_string());
+    }
+    lines.sort();
+    let mut h = Sha256::new();
+    h.update(lines.join("\n"));
+    h.finalize()
+        .iter()
+        .take(8)
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+#[cfg(test)]
+mod fingerprint_tests {
+    use super::*;
+
+    #[test]
+    fn the_fingerprint_changes_when_a_package_or_a_database_does() {
+        let root = std::env::temp_dir().join(format!("emrac-fp-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("local/a-1-1")).unwrap();
+        std::fs::create_dir_all(root.join("sync")).unwrap();
+        std::fs::write(root.join("sync/core.db"), "x").unwrap();
+        let a = fingerprint_of(&root);
+        assert_eq!(a, fingerprint_of(&root), "stable while nothing changes");
+        std::fs::create_dir_all(root.join("local/b-2-1")).unwrap();
+        let b = fingerprint_of(&root);
+        assert_ne!(a, b, "a package was installed");
+        std::fs::write(root.join("sync/core.db"), "xy").unwrap();
+        assert_ne!(b, fingerprint_of(&root), "a database was synced");
+        let c = fingerprint_of(&root);
+        std::fs::write(root.join("db.lck"), "").unwrap();
+        assert_ne!(c, fingerprint_of(&root), "pacman holds its lock");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

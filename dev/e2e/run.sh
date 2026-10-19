@@ -18,6 +18,7 @@ podman build -t emrac-test -f dev/container/Containerfile dev/container
 # dev/e2e/run.sh preflight  a pending upgrade and a fake kernel: the partial-upgrade gate and the kernel checks
 # dev/e2e/run.sh preview  what emrac says a plan will do (config files, hooks) against what pacman does
 # dev/e2e/run.sh recovery pacman fails mid-install (injected): what emrac finds and how it mends it
+# dev/e2e/run.sh crash   install and upgrade cut off at each boundary; a power cut in pacman -U; pacman between plan and commit
 # dev/e2e/run.sh bisect  emrac bisect over real transactions: the culprit found, the system put back
 # dev/e2e/run.sh buildtools an AUR build with a build-only dependency: what emrac offers to remove
 # dev/e2e/run.sh stats    emrac stats from a build-times file, emrac benchmark of an installed package
@@ -83,6 +84,15 @@ recovery)
     podman run --rm --user root --security-opt 'unmask=/proc/*' \
         -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
         -v "$repo_root/dev/e2e/recovery.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+crash)
+    echo "==> Building emrac with the fault points (--cfg emrac_fault; a normal build has none)"
+    RUSTFLAGS="--cfg emrac_fault" CARGO_TARGET_DIR="$repo_root/target/fault" cargo build --release
+    echo "==> Running the crash checks (install and upgrade cut off at each boundary, a power cut in pacman -U, pacman between plan and commit)"
+    podman run --rm --user root --security-opt 'unmask=/proc/*' \
+        -v "$repo_root/target/fault/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/crash.sh:/t.sh:ro" \
         emrac-test bash /t.sh
     ;;
 bisect)

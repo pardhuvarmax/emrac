@@ -314,6 +314,11 @@ impl Sources {
             let names = self.pacman.resolve_install(&binary)?;
             let resolved = self.alpm.sync_resolved(&names);
             let mut official_plan = build_plan(PlanAction::Install, &binary, resolved, 1);
+            // What is installed at the moment of the plan is part of the plan: a package
+            // pacman puts in between (so that the install becomes a reinstall) changes it.
+            for p in &mut official_plan.packages {
+                p.previous_version = self.alpm.installed_version(&p.name);
+            }
             total_download_size += official_plan.total_download_size;
             total_installed_size_delta += official_plan.total_installed_size_delta;
             packages.append(&mut official_plan.packages);
