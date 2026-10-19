@@ -35,6 +35,18 @@ pub fn run(sources: &Sources, plan: &Plan, opts: &Options) -> Result<()> {
             }
             return true;
         }
+        if c.id == "signature-policy" {
+            return match safety.signatures.as_str() {
+                "off" => false,
+                "warn" => {
+                    if c.status == Status::Problem {
+                        c.status = Status::Warning;
+                    }
+                    true
+                }
+                _ => true,
+            };
+        }
         if c.id != "partial-upgrade" {
             return true;
         }

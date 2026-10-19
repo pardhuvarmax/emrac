@@ -3769,6 +3769,7 @@ impl Sources {
         let mut facts = crate::preflight::gather(plan, offline, aur_builds, &|n| {
             self.alpm.package_info(n).is_some()
         });
+        facts.unattended = !self.pacman.is_interactive();
         let marks = crate::repo_trust::load();
         let current = crate::repo_trust::current();
         facts.rollbacks = crate::repo_trust::rollbacks(&marks, &current);

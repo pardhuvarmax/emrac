@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Signature policy in pre-flight (after u23b) — 2026-10-20
+
+`--yes` makes pacman take its default answers, including importing a key it fetched. That does not make the key trusted while `SigLevel` requires trust, so the thing to check is the configuration: pre-flight now reads `SigLevel` for the whole configuration and every repository (`pacman-conf`) and reports it (`Signatures`). Arch's defaults pass. A weakened level (`Never`, `TrustAll`, `Optional` for packages) is a warning on an interactive run and a **problem that stops an unattended run** (`--yes`), with the fix named. The setting `safety.signatures` (`block` by default, `warn`, `off`) is for repositories you keep unsigned on purpose, such as a local one. Not done: logging the fingerprints of imported keys, and blocking an import outright (that needs pacman's output read through the pty runner). 2 tests; the container suites set `warn` for their unsigned test repository and `preflight.sh` checks both outcomes (26 checks).
+
 ## Origin is verified, not assumed (after u23b) — 2026-10-19
 
 A package with the recorded version is no longer called "built here" on the version alone. After a source build emrac records what pacman's database says about the installed package (build date, packager); `emrac from-source` now reports one of **source verified** (they agree), **repository file detected** (same version, another file: `pacman -S`, `emrac reinstall`), **origin unverified** (a record without evidence), **rebuild pending**, **policy mismatch** (another version is installed) or not installed. Build date and packager are supporting evidence, not proof. `doctor` and every upgrade plan list a policy that is not being honoured, and `from-source rebuild` takes the repository-file and mismatch cases. Fixed on the way: the lookup of an installed package skipped on a directory without a `desc`. `source_built.rs` has 6 tests; `sourceinstall.sh` 32 checks.

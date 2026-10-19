@@ -75,6 +75,11 @@ pub struct Facts {
     pub downgrades: Vec<(String, String, String)>,
     /// Repositories whose database is older than one seen before.
     pub rollbacks: Vec<crate::repo_trust::Rollback>,
+    /// pacman's `SigLevel` for the whole configuration (`options`) and for each
+    /// repository: `(scope, level)`.
+    pub sig_levels: Vec<(String, String)>,
+    /// pacman takes its default answer to every question (`--yes`).
+    pub unattended: bool,
 }
 
 impl Facts {
@@ -103,6 +108,8 @@ impl Facts {
             lock: crate::pacman_db::Lock::Absent,
             downgrades: Vec::new(),
             rollbacks: Vec::new(),
+            sig_levels: Vec::new(),
+            unattended: false,
         }
     }
 
@@ -155,6 +162,58 @@ fn mib(bytes: u64) -> String {
     format!("{} MiB", bytes / MIB)
 }
 
+/// The scopes whose `SigLevel` lets an unsigned package, or a key nothing vouches
+/// for, through: `Never`, `TrustAll`, or `Optional` for packages. (A database may
+/// be optional: that is Arch's default.)
+pub fn weak_signature_scopes(levels: &[(String, String)]) -> Vec<String> {
+    levels
+        .iter()
+        .filter(|(_, level)| {
+            level.split_whitespace().any(|t| {
+                matches!(
+                    t,
+                    "Never"
+                        | "PackageNever"
+                        | "TrustAll"
+                        | "PackageTrustAll"
+                        | "DatabaseTrustAll"
+                        | "DatabaseNever"
+                        | "Optional"
+                        | "PackageOptional"
+                )
+            })
+        })
+        .map(|(scope, _)| scope.clone())
+        .collect()
+}
+
+fn sig_levels() -> Vec<(String, String)> {
+    let conf = |args: &[&str]| -> Option<String> {
+        let out = std::process::Command::new("pacman-conf")
+            .args(args)
+            .output()
+            .ok()?;
+        out.status.success().then(|| {
+            String::from_utf8_lossy(&out.stdout)
+                .trim()
+                .replace('\n', " ")
+        })
+    };
+    let mut levels = Vec::new();
+    if let Some(l) = conf(&["SigLevel"]) {
+        levels.push(("options".to_string(), l));
+    }
+    for repo in conf(&["--repo-list"])
+        .unwrap_or_default()
+        .split_whitespace()
+    {
+        if let Some(l) = conf(&["-r", repo, "SigLevel"]) {
+            levels.push((repo.to_string(), l));
+        }
+    }
+    levels
+}
+
 /// The judgement. Every applicable check is returned, passing ones included.
 pub fn evaluate(f: &Facts) -> Vec<Check> {
     let mut out = Vec::new();
@@ -186,6 +245,45 @@ pub fn evaluate(f: &Facts) -> Vec<Check> {
             );
             c.fix = Some(
                 "sudo rm /var/lib/pacman/db.lck   (once you are sure no pacman is running)".into(),
+            );
+            out.push(c);
+        }
+    }
+
+    // Signature policy: `--yes` takes pacman's defaults, and pacman's default
+    // for importing a key it fetched is yes. An imported key is not a trusted
+    // one while SigLevel requires trust, so the weakened levels are what matter.
+    if installing && !f.sig_levels.is_empty() {
+        let weak = weak_signature_scopes(&f.sig_levels);
+        if weak.is_empty() {
+            out.push(check(
+                "signature-policy",
+                "Signatures",
+                Status::Ok,
+                "packages must be signed by a trusted key; a key is never trusted because of --yes",
+            ));
+        } else {
+            let mut c = check(
+                "signature-policy",
+                "Signatures",
+                if f.unattended {
+                    Status::Problem
+                } else {
+                    Status::Warning
+                },
+                format!(
+                    "signature checks are weakened in {} (SigLevel Never, TrustAll or Optional){}",
+                    weak.join(", "),
+                    if f.unattended {
+                        "; --yes would take pacman's defaults here, including importing keys"
+                    } else {
+                        ""
+                    }
+                ),
+            );
+            c.fix = Some(
+                "run without --yes so pacman asks, or set SigLevel = Required DatabaseOptional for those repositories"
+                    .into(),
             );
             out.push(c);
         }
@@ -735,6 +833,7 @@ pub fn gather(
             .flatten()
     });
     f.lock = crate::pacman_db::lock();
+    f.sig_levels = sig_levels();
     (f.battery, f.on_ac) = power_facts();
     if !offline && (plan.total_download_size > 0 || aur_builds) {
         f.net = mirror_facts();
@@ -1228,5 +1327,57 @@ mod tests {
             ]),
             ["linux", "linux-lts"]
         );
+    }
+
+    fn levels(list: &[(&str, &str)]) -> Vec<(String, String)> {
+        list.iter()
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn arch_defaults_are_not_weak_and_the_weak_levels_are_named() {
+        let arch = levels(&[
+            (
+                "options",
+                "PackageRequired PackageTrustedOnly DatabaseOptional DatabaseTrustedOnly",
+            ),
+            (
+                "core",
+                "PackageRequired PackageTrustedOnly DatabaseOptional DatabaseTrustedOnly",
+            ),
+        ]);
+        assert!(weak_signature_scopes(&arch).is_empty());
+        let weak = levels(&[
+            ("options", "PackageRequired PackageTrustedOnly"),
+            ("local", "PackageOptional DatabaseOptional"),
+            ("chaotic", "PackageRequired PackageTrustAll"),
+            ("off", "PackageNever"),
+        ]);
+        assert_eq!(weak_signature_scopes(&weak), ["local", "chaotic", "off"]);
+    }
+
+    #[test]
+    fn weak_signature_levels_stop_an_unattended_run_and_only_warn_an_interactive_one() {
+        let mut f = facts(PlanAction::Upgrade, &["bash"]);
+        f.sig_levels = levels(&[("local", "Optional TrustAll")]);
+        let sig = |f: &Facts| {
+            evaluate(f)
+                .into_iter()
+                .find(|c| c.id == "signature-policy")
+                .unwrap()
+        };
+        assert_eq!(sig(&f).status, Status::Warning);
+        f.unattended = true;
+        assert_eq!(sig(&f).status, Status::Problem);
+        f.sig_levels = levels(&[(
+            "core",
+            "PackageRequired PackageTrustedOnly DatabaseOptional",
+        )]);
+        assert_eq!(sig(&f).status, Status::Ok);
+        // a removal imports no keys
+        let mut r = facts(PlanAction::Remove, &["bash"]);
+        r.sig_levels = levels(&[("local", "Never")]);
+        assert!(evaluate(&r).iter().all(|c| c.id != "signature-policy"));
     }
 }

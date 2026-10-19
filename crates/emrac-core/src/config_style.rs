@@ -208,6 +208,12 @@ const SECTIONS: &[Section] = &[
                 "\"warn\" | \"block\" | \"off\"",
             ),
             key(
+                "signatures",
+                Kind::Text,
+                "what to do when pacman's SigLevel is weakened (Never, TrustAll or Optional) for a repository and the run takes pacman's default answers (--yes): block stops it, warn only says so, off does not look. An interactive run only ever warns",
+                "\"block\" | \"warn\" | \"off\"",
+            ),
+            key(
                 "db_backup",
                 Kind::Text,
                 "on keeps a small backup of pacman's local package database before each transaction (the newest 3, in ~/.local/share/emrac/pacman-db) and checks it before and after with pacman -Dk; off does neither",
@@ -451,6 +457,7 @@ mod tests {
             ("safety.arch_news", "warn"),
             ("safety.db_backup", "off"),
             ("safety.vulnerabilities", "block"),
+            ("safety.signatures", "warn"),
             ("self.source", "file:///tmp/a \"b\"\\c/releases.json"),
             ("self.channel", "prerelease"),
             ("self.require_signature", "true"),
@@ -460,7 +467,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 50, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 51, "{text}");
     }
 
     #[test]

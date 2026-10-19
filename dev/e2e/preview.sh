@@ -99,6 +99,7 @@ mkdir -p /srv/fixrepo
 mkpkg cfgchg 1 base; mkpkg cfgsame 1 base; mkpkg cfggone 1 base
 (cd /srv/fixrepo && repo-add fixrepo.db.tar.gz cfgchg-1-1-any.pkg.tar.zst cfgsame-1-1-any.pkg.tar.zst cfggone-1-1-any.pkg.tar.zst >/dev/null 2>&1)
 printf '\n[fixrepo]\nSigLevel = Never\nServer = file:///srv/fixrepo\n' >> /etc/pacman.conf
+as_tester $e config set safety.signatures warn >/dev/null 2>&1
 pacman -Sy --noconfirm >/dev/null 2>&1
 pacman -S --noconfirm cfgchg cfgsame cfggone >/dev/null 2>&1
 # version 2: one changes its file, one does not, one stops shipping it

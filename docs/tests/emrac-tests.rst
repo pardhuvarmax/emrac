@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 719
+     - 721
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **812**
+     - **814**
 
-emrac-core library (719)
+emrac-core library (721)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -620,7 +620,7 @@ emrac-core library (719)
 * ``an_override_is_reapplied_on_install_and_upgrade_only``
 * ``only_changes_that_are_missed_need_a_decision``
 
-``preflight::tests`` (12)
+``preflight::tests`` (14)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_kernel_image_is_found_as_a_whole_word_only``
@@ -629,12 +629,14 @@ emrac-core library (719)
 * ``a_waiting_upgrade_makes_a_partial_upgrade_a_problem_that_lists_the_packages``
 * ``an_older_version_is_a_problem_and_a_rolled_back_repository_a_warning``
 * ``an_unreadable_boot_degrades_to_notes_and_a_fixed_space_floor``
+* ``arch_defaults_are_not_weak_and_the_weak_levels_are_named``
 * ``missing_fallback_images_are_named_one_by_one``
 * ``mount_tables_and_mirror_addresses_are_parsed``
 * ``power_matters_only_on_battery_and_only_for_risky_work``
 * ``removing_the_last_kernel_is_a_problem_and_removing_one_of_two_is_not``
 * ``space_on_root_and_for_downloads_is_judged_and_added_when_they_share_a_disk``
 * ``the_network_check_needs_a_download_and_distinguishes_some_from_none``
+* ``weak_signature_levels_stop_an_unattended_run_and_only_warn_an_interactive_one``
 
 ``purge::tests`` (2)
 ~~~~~~~~~~~~~~~~~~~~
@@ -1274,6 +1276,8 @@ Run as root in the container with a small local repository, so that an
 upgrade is really waiting and a kernel package exists: ``dev/e2e/run.sh
 preflight``. Last full run: after u20, 24 of 24 passed.
 
+* an unattended run is stopped while a repository's SigLevel is weakened
+* safety.signatures = warn only says so
 * the fixtures are in place: fixa 1.0 installed, 2.0 waiting
 * installing a new package while an upgrade waits is refused and names it
 * --dry-run says the same and changes nothing
@@ -1299,7 +1303,7 @@ preflight``. Last full run: after u20, 24 of 24 passed.
 * installing an older version than the installed one is a pre-flight problem naming it
 * a repository database older than one seen is a warning
 
-(24 checks.)
+(26 checks.)
 
 End-to-end: the plan preview against pacman (dev/e2e/preview.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

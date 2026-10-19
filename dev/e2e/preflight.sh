@@ -44,6 +44,8 @@ cd /srv/fixrepo && repo-add fixrepo.db.tar.gz fixa-1.0-1-any.pkg.tar.zst fixnew-
 printf '\n[fixrepo]\nSigLevel = Never\nServer = file:///srv/fixrepo\n' >> /etc/pacman.conf
 pacman -Sy --noconfirm >/dev/null 2>&1
 pacman -S --noconfirm fixa fakekernel >/dev/null 2>&1
+ck "an unattended run is stopped while a repository's SigLevel is weakened" "as_tester \$e install fixnew --yes >/tmp/sig.out 2>&1; ! pacman -Q fixnew >/dev/null 2>&1 && grep -q 'Signatures' /tmp/sig.out && grep -q 'fixrepo' /tmp/sig.out"
+ck "safety.signatures = warn only says so" "as_tester \$e config set safety.signatures warn >/dev/null && as_tester \$e install fixnew --dry-run --yes 2>&1 | grep -q 'Signatures'"
 # a newer fixa appears in the repository: an upgrade is now waiting
 mk fixa 2.0 ''
 cd /srv/fixrepo && rm -f fixa-1.0-1-any.pkg.tar.zst && repo-add fixrepo.db.tar.gz fixa-2.0-1-any.pkg.tar.zst >/dev/null 2>&1

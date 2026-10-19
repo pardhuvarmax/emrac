@@ -25,6 +25,7 @@ mkdir -p /srv/fixrepo
 mkpkg phantom; mkpkg fine
 (cd /srv/fixrepo && repo-add fixrepo.db.tar.gz phantom-1-1-any.pkg.tar.zst fine-1-1-any.pkg.tar.zst >/dev/null 2>&1)
 printf '\n[fixrepo]\nSigLevel = Never\nServer = file:///srv/fixrepo\n' >> /etc/pacman.conf
+as_tester $e config set safety.signatures warn >/dev/null 2>&1
 pacman -Syu --noconfirm >/dev/null 2>&1
 
 ck "a transaction that worked says nothing about missing files" \

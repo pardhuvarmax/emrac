@@ -426,29 +426,29 @@ table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb
   <h3>Source or binary <small>since r3</small></h3>
   <table class="box resp">
     <tbody>
-      <tr><td><code>recommend</code> &middot; <code>explain</code></td><td>Source or binary for a package, from stated rules, with the reasoning input by input and what would change it. Builds are timed, so the estimates improve.</td></tr>
+      <tr><td>Recommend and explain</td><td>Source or binary for a package, from stated rules, with the reasoning input by input and what would change it. Builds are timed, so the estimates improve.</td></tr>
       <tr><td><code>install --source</code> / <code>--binary</code></td><td><code>--source</code> builds an official package from Arch&rsquo;s packaging source at the tag of the repository&rsquo;s version: audited, built in the sandbox, the result inspected, then installed with <code>pacman -U</code>. <code>--binary</code> compiles nothing and refuses a package that exists only as source, naming its <code>-bin</code> one. <code>install.prefer = recommend</code> lets <code>recommend</code> choose when you do not.</td></tr>
       <tr><td><code>from-source</code></td><td>What you asked to build from source is a recorded policy, apart from pins. An upgrade marks those packages, installs the repository&rsquo;s binaries first, then rebuilds each from the new packaging source. A failed rebuild keeps the binary and the policy, marks it pending, and makes the upgrade exit non-zero; it never falls back silently. <code>list</code>, <code>add</code>, <code>drop</code>, <code>rebuild</code>.</td></tr>
       <tr><td>Origin is checked</td><td>&ldquo;Built here&rdquo; is not claimed from the version alone: emrac compares the build date and packager pacman recorded. It says <i>source verified</i>, <i>repository file detected</i> (after <code>pacman -S</code> or <code>reinstall</code>), <i>origin unverified</i>, <i>rebuild pending</i> or <i>policy mismatch</i>; <code>doctor</code> and every plan list a policy that is not being honoured. A record that cannot be read stops upgrades instead of reading as &ldquo;no policy&rdquo;.</td></tr>
-      <tr><td><code>score</code> &middot; <code>advisor</code> &middot; <code>vulns</code></td><td>A report card for a package (reproducibility, provenance, compatibility, packaging quality, upstream health, an overall number and weights you can set); advice under a big plan; Arch security data with a gate before installs.</td></tr>
+      <tr><td>Score and advice</td><td><code>score</code> is a report card for a package (reproducibility, provenance, compatibility, packaging quality, upstream health, an overall number and weights you can set); the advisor gives advice under a big plan; <code>vulns</code> shows Arch security data, with a gate before installs.</td></tr>
     </tbody>
   </table>
   <h3>Previews, policy and mirrors <small>since r3</small></h3>
   <table class="box resp">
     <tbody>
-      <tr><td>Hook, config and policy previews</td><td>A plan lists the pacman hooks that will run (and which could stop it), the config files you edited that will get a <code>.pacnew</code> or <code>.pacsave</code>, and the files you overrode or diverted that it touches. <code>override</code> and <code>divert</code> keep those choices across upgrades, reinstalls and removals.</td></tr>
+      <tr><td>Previews</td><td>A plan lists the pacman hooks that will run (and which could stop it), the config files you edited that will get a <code>.pacnew</code> or <code>.pacsave</code>, and the files you overrode or diverted that it touches. <code>override</code> and <code>divert</code> keep those choices across upgrades, reinstalls and removals.</td></tr>
       <tr><td>After a failure</td><td>What pacman leaves behind when a transaction fails is found and reported; the tools an AUR build installed only to build are offered for removal.</td></tr>
       <tr><td><code>mirrors</code></td><td>Mirror Intelligence: measure, rank, write and apply.</td></tr>
-      <tr><td><code>export</code> &middot; <code>import</code> &middot; <code>bundle</code></td><td>A file of the machine and a report; only what is safe is applied. Offline bundles carry packages on a drive to a machine without a network, verified before they are used.</td></tr>
+      <tr><td>Machines</td><td><code>export</code> and <code>import</code>: a file of the machine and a report; only what is safe is applied. <code>bundle</code>: carry packages on a drive to a machine without a network, verified before they are used.</td></tr>
     </tbody>
   </table>
   <h3>How it looks and what it shows <small>since r3</small></h3>
   <table class="box resp">
     <tbody>
-      <tr><td>pacman and builds in emrac&rsquo;s style</td><td>On a terminal, pacman&rsquo;s transaction is drawn by emrac (a table for the database sync, downloads that animate in place); pacman still runs, asks and prints its prompts. AUR builds and reviews show phases, a live line, errors and the log. Piped or <code>--json</code> output stays plain.</td></tr>
-      <tr><td>Themes and colour</td><td>Marks, boxes, tables, heat-coloured bars and sparklines, themes, animations, and a designed <code>--version</code>; every help page is in colour.</td></tr>
-      <tr><td><code>timeline</code> &middot; <code>stats</code> &middot; <code>benchmark</code> &middot; <code>graph</code></td><td>Transactions, snapshots and build times on one line; build statistics and a binary-versus-source benchmark; dependency graphs drawn in the terminal.</td></tr>
-      <tr><td><code>man</code> &middot; <code>docs</code> &middot; <code>license</code> &middot; <code>credits</code> &middot; <code>support</code> &middot; <code>feedback</code> &middot; <code>bug-report</code></td><td>Help and project pages inside the program, and <code>man emrac</code>. <code>emrac install</code> also takes package files, as <code>pacman -U</code> does.</td></tr>
+      <tr><td>Terminal output</td><td>On a terminal, pacman&rsquo;s transaction is drawn by emrac (a table for the database sync, downloads that animate in place); pacman still runs, asks and prints its prompts. AUR builds and reviews show phases, a live line, errors and the log. Piped or <code>--json</code> output stays plain.</td></tr>
+      <tr><td>Themes</td><td>Marks, boxes, tables, heat-coloured bars and sparklines, themes, animations, and a designed <code>--version</code>; every help page is in colour.</td></tr>
+      <tr><td>Views</td><td><code>timeline</code> shows transactions, snapshots and build times on one line; <code>stats</code> and <code>benchmark</code> give build statistics and a binary-versus-source comparison; <code>graph</code> draws dependency graphs in the terminal.</td></tr>
+      <tr><td>Help pages</td><td><code>man</code>, <code>docs</code>, <code>license</code>, <code>credits</code>, <code>support</code>, <code>feedback</code> and <code>bug-report</code> inside the program, and <code>man emrac</code>. <code>emrac install</code> also takes package files, as <code>pacman -U</code> does.</td></tr>
     </tbody>
   </table>
 

@@ -19,6 +19,11 @@ impl PacmanBackend {
         Self { interactive: false }
     }
 
+    /// Whether pacman asks its own questions (no `--noconfirm`).
+    pub fn is_interactive(&self) -> bool {
+        self.interactive
+    }
+
     pub fn set_interactive(&mut self, interactive: bool) {
         self.interactive = interactive;
     }

@@ -104,6 +104,7 @@ mkdir -p /srv/fixrepo
 mkpkg 10 "package data, much newer"
 cp /tmp/tp-10-1-any.pkg.tar.zst /srv/fixrepo/ && (cd /srv/fixrepo && repo-add fixrepo.db.tar.gz tp-10-1-any.pkg.tar.zst >/dev/null 2>&1)
 printf '\n[fixrepo]\nSigLevel = Never\nServer = file:///srv/fixrepo\n' >> /etc/pacman.conf
+as_tester $e config set safety.signatures warn >/dev/null 2>&1
 pacman -Sy --noconfirm >/dev/null 2>&1
 pacman -U --noconfirm $V1 >/dev/null 2>&1
 $e override set /usr/bin/tp-tool --mode 4750 --allow-setuid >/dev/null 2>&1

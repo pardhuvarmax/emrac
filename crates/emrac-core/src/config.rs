@@ -280,6 +280,15 @@ pub struct SafetyConfig {
     /// Critical Arch Security Tracker entry: `"warn"` shows it, `"block"` stops, `"off"` does not look.
     #[serde(default = "default_vulnerabilities")]
     pub vulnerabilities: String,
+    /// What to do when `SigLevel` is weakened (`Never`, `TrustAll`, `Optional`)
+    /// for a repository and the run takes pacman's default answers (`--yes`):
+    /// `"block"` stops it, `"warn"` only says so, `"off"` does not look.
+    #[serde(default = "default_signatures")]
+    pub signatures: String,
+}
+
+fn default_signatures() -> String {
+    "block".to_string()
 }
 
 fn default_vulnerabilities() -> String {
@@ -309,6 +318,7 @@ impl Default for SafetyConfig {
             arch_news: default_news(),
             db_backup: default_db_backup(),
             vulnerabilities: default_vulnerabilities(),
+            signatures: default_signatures(),
         }
     }
 }
@@ -561,6 +571,7 @@ impl Config {
             "safety.arch_news" => self.safety.arch_news.clone(),
             "safety.db_backup" => self.safety.db_backup.clone(),
             "safety.vulnerabilities" => self.safety.vulnerabilities.clone(),
+            "safety.signatures" => self.safety.signatures.clone(),
             "install.prefer" => self.install.prefer.clone(),
             "score.performance" => self.score.performance.to_string(),
             "score.build_time" => self.score.build_time.to_string(),
@@ -725,6 +736,12 @@ impl Config {
                 }
                 self.install.prefer = value.to_string();
             }
+            "safety.signatures" => {
+                if !matches!(value, "warn" | "block" | "off") {
+                    return Err(invalid());
+                }
+                self.safety.signatures = value.to_string();
+            }
             "safety.vulnerabilities" => {
                 if !matches!(value, "warn" | "block" | "off") {
                     return Err(invalid());
@@ -814,6 +831,7 @@ impl Config {
             "safety.arch_news" => self.safety.arch_news = default_news(),
             "safety.db_backup" => self.safety.db_backup = default_db_backup(),
             "safety.vulnerabilities" => self.safety.vulnerabilities = default_vulnerabilities(),
+            "safety.signatures" => self.safety.signatures = default_signatures(),
             "install.prefer" => self.install.prefer = default_prefer(),
             "self.source" => self.self_service.source = default_self_source(),
             "self.channel" => self.self_service.channel = default_self_channel(),
