@@ -19,6 +19,8 @@ Status words: **kept** (code + a test), **partly** (kept in the main path, a gap
 | 9 | A pending rebuild never blocks unrelated upgrades or causes a downgrade | kept | pending is a flag in `source-built.json`, not a pin and not an ignore |
 | 10 | Every guarantee has a failure-condition test | partly | this register's last column; gaps below |
 
+11. **Target state.** Every planned operation is resolved against one coherent target system state; emrac does not knowingly commit a transaction that leaves an unsupported mixture of versions. Binary and source-built packages follow the same planner. Status: partly (fresh syncs, partial-upgrade guard, plan id re-check; source rebuilds happen after the commit, not against the target state: `docs/plan/r3/source-system.md`).
+
 ## Source-build lifecycle (rules 16-34)
 
 Kept: intent persisted across upgrades and emrac updates; failure keeps binary, intent and pending; `drop` is explicit; a package whose installed version differs from the one built is reported **unknown build intent**; the policy file is written atomically (temp file, fsync, rename); a rebuild is idempotent (a clean checkout every time; `record_to` replaces the entry).
