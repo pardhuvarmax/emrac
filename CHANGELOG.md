@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u22 addendum 2 (after r3) — 2026-10-19 — the high-risk hint knows a snapshot is saved
+
+Under a HIGH update risk, `emrac upgrade` said "a snapshot first is cheap: `emrac snapshot`, or `emrac config set snapshot.before_upgrade true`" even with `snapshot.before_upgrade` already on. It now says "a snapshot is saved first; if this goes wrong, `emrac restore` returns to it" when the run will save one (the setting or the flag), and keeps the suggestion otherwise. `report::snapshot_hint` (1 test).
+
 ## Slice u22 addendum (after r3) — 2026-10-19 — `emrac install` takes package files
 
 `emrac install ./foo-1.0-1-x86_64.pkg.tar.zst` installs a package file on this machine (one you built, or downloaded) the way `sudo pacman -U` does, through emrac's own plan, audit, pre-flight, confirmation, journal and history. The plan says what it is by the version installed now (an install, an upgrade, a reinstall or a downgrade), the size change, what libalpm would remove on the side and, as a warning, that the file has no signature next to it (it is accepted only because `LocalFileSigLevel` allows it); what is inside is read without extracting or running anything (critical findings are refused, high ones ask, a question `--yes` does not answer), and the transaction itself is shown in emrac's style. Package names and files cannot be mixed in one command. `--dry-run`, `--json` and `--expect-plan` work as for any install. New: `Sources::plan_install_files`, `commands/install_file.rs`, 5 more checks in `dev/e2e/buildui.sh` (18).

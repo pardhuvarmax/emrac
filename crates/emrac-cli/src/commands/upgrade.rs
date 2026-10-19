@@ -70,6 +70,7 @@ pub fn run(
             &crate::commands::report::changes_of(&upgrade.plan.packages),
             aur,
             news_gate.as_ref().map_or(0, |g| g.critical),
+            snapshot_first,
         );
     }
     if !upgrade.plan.is_empty() {

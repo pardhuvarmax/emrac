@@ -16,7 +16,14 @@ pub fn changes_of(packages: &[emrac_core::PlannedPackage]) -> Vec<Change> {
 }
 
 /// Under the plan of an upgrade: how risky it is and why.
-pub fn print_risk(changes: &[Change], aur_rebuilds: usize, critical_news: usize) {
+/// `snapshot_first`: this run saves a restore point before it changes anything
+/// (the setting or `--snapshot`), so the hint says so instead of suggesting one.
+pub fn print_risk(
+    changes: &[Change],
+    aur_rebuilds: usize,
+    critical_news: usize,
+    snapshot_first: bool,
+) {
     let r = upgrade_report::risk(changes, aur_rebuilds, critical_news);
     let line = if r.reasons.is_empty() {
         "nothing in it touches the kernel, the C library, the bootloader or the boot".to_string()
@@ -25,9 +32,16 @@ pub fn print_risk(changes: &[Change], aur_rebuilds: usize, critical_news: usize)
     };
     println!("Update risk      : {} ({line})", r.level.word());
     if r.level == Level::High {
-        println!(
-            "                   a snapshot first is cheap: `emrac snapshot`, or `emrac config set snapshot.before_upgrade true`"
-        );
+        println!("                   {}", snapshot_hint(snapshot_first));
+    }
+}
+
+/// What the high-risk line says about a snapshot.
+pub fn snapshot_hint(snapshot_first: bool) -> &'static str {
+    if snapshot_first {
+        "a snapshot is saved first; if this goes wrong, `emrac restore` returns to it"
+    } else {
+        "a snapshot first is cheap: `emrac snapshot`, or `emrac config set snapshot.before_upgrade true`"
     }
 }
 
@@ -152,4 +166,27 @@ pub fn run(sources: &Sources, json: bool) -> Result<()> {
     }
     print_report(&report, json);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_high_risk_hint_says_a_snapshot_is_saved_when_it_will_be() {
+        let on = snapshot_hint(true);
+        assert!(
+            on.contains("is saved first") && on.contains("emrac restore"),
+            "{on}"
+        );
+        assert!(
+            !on.contains("is cheap"),
+            "no suggestion to do what is being done"
+        );
+        let off = snapshot_hint(false);
+        assert!(
+            off.contains("emrac snapshot") && off.contains("snapshot.before_upgrade true"),
+            "{off}"
+        );
+    }
 }

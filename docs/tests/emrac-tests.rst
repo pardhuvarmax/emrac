@@ -25,13 +25,13 @@ Totals
      - 701
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 59
+     - 60
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 32
    * - **Automated total**
      -
-     - **792**
+     - **793**
 
 emrac-core library (701)
 ------------------------
@@ -1017,7 +1017,7 @@ emrac-core library (701)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (59)
+emrac command line, unit tests (60)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -1057,6 +1057,11 @@ emrac command line, unit tests (59)
 
 * ``the_reasons_that_weigh_most_come_first_and_a_side_shows_only_its_own``
 * ``the_side_comes_before_the_package_and_only_two_words_are_sides``
+
+``commands::report::tests`` (1)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``the_high_risk_hint_says_a_snapshot_is_saved_when_it_will_be``
 
 ``commands::ui::tests`` (3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
