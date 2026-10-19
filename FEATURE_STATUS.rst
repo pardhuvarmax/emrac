@@ -238,7 +238,7 @@ Complete Feature Catalog
    * - 1
      - Unified Package Management
      - Partial
-     - ``install``/``remove``/``upgrade`` with ``--dry-run``, a preview with a plan id and, for an upgrade, a risk rating, a confirmation, pre-flight checks; every executed change is recorded (``history``) and can be reversed (``rollback``/``undo``/``redo``). The plan is built from freshly synced repositories (u22), lists what conflicts and replacements will remove and which provider pacman will pick (u24, u25), and warns when an AUR rebuild will hit a dependency conflict (u26). pacman asks its own questions unless ``--yes``; silence on stdin is never consent (u23). ``upgrade`` covers official packages and the AUR, holds back pins (``pin``/``unpin``), and can save a package-set snapshot first (``snapshot.before_upgrade``). Also ``downgrade``, ``reinstall``, ``rebuild``, ``purge`` and ``snapshot``/``restore``. No transaction queue, an interrupted transaction is recorded but not resumed, no ``lock``
+     - ``install``/``remove``/``upgrade`` with ``--dry-run``, a preview with a plan id and, for an upgrade, a risk rating, a confirmation, pre-flight checks; every executed change is recorded (``history``) and can be reversed (``rollback``/``undo``/``redo``). The plan is built from freshly synced repositories (u22), lists what conflicts and replacements will remove and which provider pacman will pick (u24, u25), and warns when an AUR rebuild will hit a dependency conflict (u26). pacman asks its own questions unless ``--yes``; silence on stdin is never consent (u23). ``upgrade`` covers official packages and the AUR, holds back pins (``pin``/``unpin``), and can save a package-set snapshot first (``snapshot.before_upgrade``). Also ``downgrade``, ``reinstall``, ``rebuild``, ``purge`` and ``snapshot``/``restore``. No transaction queue, an interrupted transaction is recorded but not resumed, no ``lock``. ``install`` also takes package files (``emrac install ./x.pkg.tar.zst``, what ``pacman -U`` does) and pacman's transaction is shown in emrac's style on a terminal (u21, u22)
      - ``docs/feats/SPEC.md`` III.1; ``docs/plan/r1/`` u3-u8; ``docs/plan/r2/u17-preflight.md``; ``docs/plan/r2/u18-plan-integrity.md``
    * - 2
      - Source Build System
@@ -293,7 +293,7 @@ Complete Feature Catalog
    * - 12
      - Build Monitoring
      - Partial
-     - Sandboxed build output is shown live and its tail is kept to recognise network failures (no terminal inside the sandbox: no colours or progress bars); resource limits report why a build was killed; no structured progress, stage tracking or summaries
+     - An AUR build on a terminal (u22) is makepkg's phases with a clock, the compiler lines folded into one live line (a bar from cmake, ninja or meson, the file and verb, warnings counted), errors at once, the whole output in a log; plus why a build was killed. Reports across builds beyond ``stats`` and a dashboard (needs the TUI) are not built
      - ``docs/feats/SPEC.md`` III.12; ``docs/plan/r1/u20-limits.md``
    * - 13
      - Cache Management
@@ -308,12 +308,12 @@ Complete Feature Catalog
    * - 15
      - Security & Integrity
      - Partial
-     - emrac-level checks before anything is installed: ``audit`` (static PKGBUILD, scriptlet and shipped-file analysis with info/warning/high/critical tiers: high needs ``--accept-risks``, critical is refused), the package manifest (setuid files, hooks, sudoers, accounts, units), the build sandbox and limits, signatures verified on the host, and the untouched pacman/makepkg verification underneath. Before an AUR build: trust signals (lookalike names, a changed maintainer, sources changed under the same version, changed signing keys). Before any transaction: pre-flight checks (space, ``/boot``, power, mirrors, the kernel safety net), a partial-upgrade gate, an older-version gate, a pacman database backup and check, and plan ids so that what was approved is what runs. Compiled binaries inside a package are only counted. No Landlock layer, no advisory feed
+     - emrac-level checks before anything is installed: ``audit`` (static PKGBUILD, scriptlet and shipped-file analysis with info/warning/high/critical tiers: high needs ``--accept-risks``, critical is refused), the package manifest (setuid files, hooks, sudoers, accounts, units), the build sandbox and limits, signatures verified on the host, and the untouched pacman/makepkg verification underneath. Before an AUR build: trust signals (lookalike names, a changed maintainer, sources changed under the same version, changed signing keys). Before any transaction: pre-flight checks (space, ``/boot``, power, mirrors, the kernel safety net), a partial-upgrade gate, an older-version gate, a pacman database backup and check, and plan ids so that what was approved is what runs. Compiled binaries inside a package are only counted. No Landlock layer, no advisory feed. Also the Arch Security Tracker (``vulns``, a pre-install gate, the score's security gate, u19) and the Arch rebuilders' reproducibility results (u20)
      - ``docs/feats/SPEC.md`` III.15; ``docs/design/trust.md``; ``docs/design/source-build.md``
    * - 16
      - Package Health
      - Partial
-     - ``doctor [--online] [--report]``: unmet dependencies, lock and database age, pending upgrades against freshly synced repositories, kernel and modules, disk, caches, orphans, ``.pacnew`` files, failed units, pins, tools, config and sandbox, repository data older than one seen, the pacman database backup, an interrupted transaction, AUR packages the libraries have left behind, and the ledger and its audit watch, with a fix for each; ``--report`` writes a sanitized bug report. ``self check`` and ``self diagnose`` do the same for emrac's own installation, and ``report`` says what an upgrade left to do. ``verify`` and ``orphans`` complement it. No mirror health or duplicate-library checks
+     - ``doctor`` (with a known-vulnerabilities row), ``report``, ``score`` and ``rebuild --check`` with acknowledgements. Duplicate package or library detection and mirror health in ``doctor`` (``mirrors`` measures them) are not built
      - ``docs/feats/SPEC.md`` III.16; ``docs/plan/r1/u21-doctor.md``
    * - 17
      - Analytics
@@ -368,7 +368,7 @@ Signature & Advanced Features
    * - 3
      - Package Score
      - Done
-     - ``emrac score <pkg>``: Performance (from ``benchmark``), Build time, Maintenance, Security, Popularity and Source worthiness, each from a stated rule and input; unknown when there is no data; no overall number on purpose; ``--details`` shows the rules (u18)
+     - ``emrac score <pkg>`` (u18, u20): eleven dimensions (Performance, Build time, Maintenance, Security, Reproducibility, Provenance, Compatibility, Packaging quality, Upstream health, Popularity, Source worthiness), each from a stated rule, input and evidence tier; unknown when there is no data; an overall number from the known dimensions with weights (``[score]``, ``--weights``, ``--care``; the proxy dimensions count 0 until you ask); security gates shown apart from the number; ``--details`` shows the rules
      - ``docs/feats/SPEC.md`` IV.3; ``docs/plan/r3/u18-package-score.md``
    * - 4
      - Build Profiles with Inheritance
@@ -427,8 +427,8 @@ Signature & Advanced Features
      - ``docs/feats/SPEC.md`` IV.14
    * - 15
      - Build Dashboard
-     - Not started
-     - Needs the TUI
+     - Partial
+     - The live build line of an AUR build (u22: phases with a clock, progress, the file being compiled, errors at once, a log) is the terminal form; the full dashboard needs the TUI
      - ``docs/feats/SPEC.md`` IV.15
    * - 16
      - Health Center (doctor)
@@ -537,7 +537,7 @@ Part V is the command surface of features covered above.
      - ``pin``/``unpin`` are built (with ``--reason`` and ``--until``); ``lock``/``unlock`` are not
      - ``docs/feats/SPEC.md`` Part V
 
-Core scope: 59 tracked: 10 done, 33 partial, 16 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
+Core scope: 59 tracked: 10 done, 34 partial, 15 not started (the five MVP commands, 21 categories, 20 signature features, 7 additional ideas, 6 plumbing groups).
 
 Extended scope
 ----------------
@@ -768,9 +768,9 @@ Ideas from other projects, safety and recovery, workflow, the maintainer workflo
      - Sources fetched and verified first; the build runs with no network.
      - ``docs/feats/ideas.md``; ``docs/plan/r1/u17-manifest.md``; ``docs/plan/r1/u19-sandbox.md``
    * - Reproducible-build check
-     - Idea
-     - Build twice in separate sandboxes and compare hashes.
-     - ``docs/feats/ideas.md``
+     - Partial
+     - The Arch rebuilders' result for the exact installed version is the score's Reproducibility dimension and its attestation feeds Provenance (u20). Not built: building twice in separate sandboxes and comparing hashes yourself.
+     - ``docs/feats/ideas.md``; ``docs/plan/r3/u20-score-sources.md``
    * - Signed, tamper-evident transaction log
      - Done
      - SHA-256 chain, root-owned ledger, audit watch (chained and witnessed, not cryptographically signed).
@@ -820,9 +820,9 @@ Ideas from other projects, safety and recovery, workflow, the maintainer workflo
      - ``--offline`` for lookups and plans from local data; no verified bundle (see section 11).
      - ``docs/feats/ideas.md``
    * - Mirror ranking and parallel downloads
-     - Idea
-     - Built into the engine.
-     - ``docs/feats/ideas.md``
+     - Partial
+     - Ranking is built (``mirrors test`` and ``mirrors rank``, u16); downloading in parallel is pacman's own ``ParallelDownloads``, shown by emrac as one block (u22).
+     - ``docs/feats/ideas.md``; ``docs/plan/r3/u16-mirror-intelligence.md``
    * - Preset sharing
      - Idea
      - Signed optimization-flag presets.
@@ -832,13 +832,13 @@ Ideas from other projects, safety and recovery, workflow, the maintainer workflo
      - Run ``check()`` and "does the binary start" before commit.
      - ``docs/feats/ideas.md``
    * - Binary vs source benchmarking
-     - Idea
-     - Measure whether a source build was worth it (``recommend`` predicts, ``benchmark`` would measure).
-     - ``docs/feats/ideas.md``
+     - Partial
+     - ``benchmark`` measures an installed package's start time and memory (u9) and ``recommend`` predicts what a source build gains; comparing a source build against the binary package side by side is not built.
+     - ``docs/feats/ideas.md``; ``docs/plan/r3/u9-stats-benchmark.md``
    * - Vulnerability-aware planning
-     - Idea
-     - Arch security advisory data in the plan.
-     - ``docs/feats/ideas.md``
+     - Partial
+     - The Arch Security Tracker is in the plan: the pre-flight checks what a plan would install (``safety.vulnerabilities`` warn, block or off), ``emrac vulns`` lists installed packages with stale entries recognised, the doctor has a row, the score has a gate. Not built: choosing the fixed version, advisories (ASA) per package version, AUR packages (the tracker does not cover them).
+     - ``docs/feats/ideas.md``; ``docs/plan/r3/u19-arch-security.md``
    * - Safe unattended updates
      - Idea
      - Scheduled runs that commit only if checks pass.
@@ -944,9 +944,9 @@ Ideas from other projects, safety and recovery, workflow, the maintainer workflo
      - Keep last N or N days.
      - ``docs/feats/ideas.md``
    * - Man pages
-     - Idea
-     - Generated from the command definitions.
-     - ``docs/feats/ideas.md``
+     - Done
+     - ``emrac man [command]`` shows a page (``--roff``, ``--generate DIR`` writes one for every command), and the package installs them, so ``man emrac`` works (u13).
+     - ``docs/feats/ideas.md``; ``docs/plan/r3/u13-help-pages.md``
    * - Structured logging
      - Idea
      - One log per transaction ID, JSON on request.
@@ -1174,7 +1174,7 @@ Self-management service (self-service-feat.md)
      - Phase 5: explicit target, compatibility check.
      - ``docs/feats/self-service-feat.md``; ``docs/plan/r2/u12-self-service.md``; ``docs/design/release-index.md``; ``docs/design/self-upgrade.md``
 
-Extended scope: 139 tracked: 32 done, 19 partial, 88 idea.
+Extended scope: 139 tracked: 33 done, 23 partial, 83 idea.
 
 Future scope
 --------------
@@ -1205,8 +1205,8 @@ AUR defense (planned for r4)
      - ``docs/feats/aur-defense-feat.md``; ``docs/plan/r1/u15-audit.md``; ``docs/plan/r1/u16-audit-coverage.md``; ``docs/plan/r1/u18-close-gaps.md``
    * - Layer 3 Diff review and soak time
      - Partial
-     - The diff is shown on every update; soak time, an approval hash ledger and trusted/blocked maintainer lists are not built.
-     - ``docs/feats/aur-defense-feat.md``
+     - The diff is shown on every update, designed to be read (u22: a summary of the assignments that matter, numbered hunks, the changed part of a line picked out, the sources and checksums marked); soak time, an approval hash ledger and trusted/blocked maintainer lists are not built.
+     - ``docs/feats/aur-defense-feat.md``; ``docs/plan/r3/u22-builds-and-reviews.md``
    * - Layer 4 Isolated build with behavior tracing
      - Partial
      - Sandbox, no-network build and limits exist; syscall tracing, canary files, the sinkhole and the ecosystem network tier do not.
@@ -1591,15 +1591,15 @@ Totals
      - Total
    * - Core
      - 10
-     - 33
-     - 16
+     - 34
+     - 15
      - 0
      - 59
    * - Extended
-     - 32
-     - 19
+     - 33
+     - 23
      - 0
-     - 88
+     - 83
      - 139
    * - Future
      - 2
@@ -1608,10 +1608,10 @@ Totals
      - 62
      - 77
    * - **All**
-     - **44**
-     - **57**
-     - **24**
-     - **150**
+     - **45**
+     - **62**
+     - **23**
+     - **145**
      - **275**
 
 Some features appear in more than one scope's list (soak time, the offline
@@ -1621,5 +1621,5 @@ rows are categories, so one row there can cover many of the extended rows.
 Source: ``docs/feats/SPEC.md`` Parts III, IV, V and X, ``docs/feats/``
 (additions, ideas, Wandrover, self-management, AUR defense, forensics,
 research), checked against ``crates/`` and ``CHANGELOG.md`` as of Slice r3
-plus ``u1``-``u8`` after it. ``docs/feats/feats.md`` carries the same rows
+plus ``u1``-``u22`` after it. ``docs/feats/feats.md`` carries the same rows
 in one flat list.

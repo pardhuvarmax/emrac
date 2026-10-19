@@ -2,7 +2,7 @@
 
 One list of everything emrac has, is specified to have, or has been proposed: what is built, what is partly built, what is specified or only an idea, what is research, and what was decided against. It collects the other documents instead of replacing them; each row says where the detail lives.
 
-State of the tree: release `r3` plus the update slices `u1` to `u8` after it (commit `9b51a2d`). Built things are checked against the code and `CHANGELOG.md`; the older status tags inside `ideas.md` and `additions.md` are out of date, so this file follows the code.
+State of the tree: release `r3` plus the update slices `u1` to `u22` after it (commit `8c26474`). Built things are checked against the code and `CHANGELOG.md`; the older status tags inside `ideas.md` and `additions.md` are out of date, so this file follows the code.
 
 ## Status legend
 
@@ -19,10 +19,10 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 
 | Section | Built | Partial | Specified | Idea | Research | Not planned | Total |
 |---|---|---|---|---|---|---|---|
-| 1. Built: what works today | 56 | 0 | 0 | 0 | 0 | 0 | 56 |
-| 2. The specification (SPEC.md): catalogue and signature features | 5 | 32 | 19 | 0 | 0 | 0 | 56 |
+| 1. Built: what works today | 71 | 0 | 0 | 0 | 0 | 0 | 71 |
+| 2. The specification (SPEC.md): catalogue and signature features | 5 | 33 | 18 | 0 | 0 | 0 | 56 |
 | 3. Ideas from additions.md (A, B, C) | 13 | 8 | 0 | 18 | 0 | 0 | 39 |
-| 4. Ideas from ideas.md | 10 | 7 | 1 | 38 | 0 | 0 | 56 |
+| 4. Ideas from ideas.md | 11 | 11 | 1 | 33 | 0 | 0 | 56 |
 | 5. Wandrover: cross-distribution package resolution | 0 | 0 | 0 | 9 | 0 | 0 | 9 |
 | 6. Self-management service (Emrac-SMS) | 5 | 0 | 0 | 0 | 0 | 0 | 5 |
 | 7. AUR defense (planned for r4) | 1 | 4 | 0 | 5 | 0 | 0 | 10 |
@@ -31,7 +31,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u8` after it (co
 | 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
 | 11. Newer ideas (not yet in the other documents) | 4 | 2 | 0 | 25 | 0 | 0 | 31 |
 | 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **95** | **56** | **21** | **138** | **9** | **3** | **322** |
+| **All** | **111** | **61** | **20** | **133** | **9** | **3** | **337** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -113,6 +113,21 @@ Everything below runs in the current tree (r3 plus the updates after it). Slice 
 | Release pipeline | Built | `dev/release.sh` prepare/publish, a checked and reviewed release workflow, `releases.json` and news. | r3 small changes; `docs/design/releasing.md` |
 | Test infrastructure | Built | A generated list of every test (`docs/tests/emrac-tests.rst`), CI as an ordinary user, and container end-to-end suites against real pacman (`dev/e2e/`). | r2 u1 and each slice |
 | License | Built | GPL-3.0-or-later. | r2 u2 |
+| stats / benchmark | Built | `stats` shows builds (count, failures, time, longest, most built, a sparkline) and transactions by kind with the AUR share; `benchmark <pkg>` runs a package's programs with `--version` (after asking) and records first run, warm median, size and memory. | r3 u9; `docs/plan/r3/u9-stats-benchmark.md` |
+| timeline | Built | Transactions, builds, snapshots and config-file actions told by day, newest first (`--since`, `--pkg`). | r3 u10 |
+| Graphs drawn in the terminal | Built | `graph --format boxes` (emrac's own drawing) or `--format easy` (graph-easy) besides text, dot and JSON. | r3 u11 |
+| export / import | Built | A file of the machine (packages, a safe subset of the settings, holds, repository names); import reports first, installs through the normal path and never applies repositories or keys. | r3 u12 |
+| help pages | Built | `man`, `docs`, `license`, `credits`, `support`, `feedback`, `bug-report`; every page in colour on a terminal; `emrac --version` is a designed banner on a terminal (u20). | r3 u13, u20 |
+| bundle | Built | Packages on a drive for a machine without a network: `bundle create \| verify \| apply`, a signature required, a downgrade refused. | r3 u14 |
+| Package Advisor | Built | Advice under an install or upgrade plan: a large download, large growth, a big share of free space, many new packages, one package that is most of it. | r3 u15 |
+| Mirror Intelligence | Built | `mirrors` lists and measures the active mirrors (latency, speed, how far behind Arch), `mirrors rank` orders them, `--write`/`--apply` change the mirror list as root. | r3 u16 |
+| Look and feel | Built | Marks, boxes, tables, themes, ASCII fallback, true colour, `emrac ui`; bars, sparklines and the wait animation in the heat colours (red, orange, yellow, green); optional animations. | r3 u17, u20 |
+| score | Built | The package report card: eleven dimensions, evidence tiers, an overall number with weights, gates apart from the number. | r3 u18, u20 |
+| vulns / Arch Security Tracker | Built | `emrac vulns [--all\|--fixable\|--check]`, an ignore list that lapses when the entry gets a fix, entries judged (a fix known, open, possibly stale, ignored), a doctor row, a pre-install check (`safety.vulnerabilities`). | r3 u19; `docs/plan/r3/u19-arch-security.md` |
+| pacman in emrac's style | Built | On a terminal pacman's transaction is drawn by emrac (steps with bars, a download block redrawn in place, the database sync as a table, hooks) while pacman does the work; its questions, warnings and errors are untouched; answering no is a cancel. `clui.pacman`. | r3 u21, u22; `docs/plan/r3/u21-pacman-in-emrac-style.md` |
+| AUR builds and reviews in emrac's style | Built | Build phases with a clock, a live compiler line, errors at once, a log (`clui.builds`); the PKGBUILD, its diff, the audit and the trust signals laid out to be read. | r3 u22; `docs/plan/r3/u22-builds-and-reviews.md` |
+| install a package file | Built | `emrac install ./x.pkg.tar.zst`: what `pacman -U` does, through the plan, the audit of what is inside, pre-flight, confirmation, journal and history. | r3 u22 |
+| rebuild --ack | Built | Acknowledge a "may need building again" note (or a broken binary package); it lapses when the package is built again or the note says something new. | r3 u22 |
 
 ## 2. The specification (SPEC.md): catalogue and signature features
 
@@ -120,7 +135,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 
 | Feature | Status | What it is | Where |
 |---|---|---|---|
-| III.1 Unified Package Management | Partial | install/upgrade/downgrade/remove/purge/reinstall/verify, dry-run, plans, history and rollback exist. Not yet: manual source/binary override on install, binary-vs-source install choice. | `SPEC.md` |
+| III.1 Unified Package Management | Partial | install/upgrade/downgrade/remove/purge/reinstall/verify, dry-run, plans, history and rollback exist; `install` also takes package files (`emrac install ./x.pkg.tar.zst`, what `pacman -U` does, through the same plan, audit, pre-flight and history); pacman's transaction is shown in emrac's style on a terminal (u21). Not yet: manual source/binary override on install, binary-vs-source install choice. | `SPEC.md` |
 | III.2 Source Build System | Partial | AUR fetch, review, audit, sandboxed two-step build, caches. Not yet: incremental/parallel builds, build queue, background builds, pause/resume, log collection, replay. |  |
 | III.3 Intelligent Recommendation Engine | Partial | `recommend` (score, verdict, confidence, build time) and `explain`. Not yet: performance-gain estimate by measurement, historical learning, personalized recommendations. |  |
 | III.4 ETA Prediction Engine | Specified | Source, download, install and total ETA with live refinement and confidence. |  |
@@ -131,11 +146,11 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | III.9 News & Advisory System | Partial | Arch news with read/unread and a critical gate. Not yet: package-specific news, security advisories, severity filtering. |  |
 | III.10 Build Profiles | Specified | Built-in and custom profiles (compiler, linker, optimization, LTO, PGO, tuning, debug, strip, jobs, cache policy). |  |
 | III.11 Compiler & Build Optimization | Specified | GCC/Clang, linker choice, CPU tuning, LTO, PGO, custom flags. `recommend` already reads makepkg flags, but nothing sets them. |  |
-| III.12 Build Monitoring | Partial | Live sandbox output and why a build was killed. Not yet: progress, stage tracking, summaries, reports. |  |
+| III.12 Build Monitoring | Partial | An AUR build on a terminal (u22) is makepkg's phases with a clock, the compiler's lines folded into one live line (spinner, a bar from cmake/ninja/meson, the file and verb, warnings counted), errors at once, the whole output in a log and the last lines on a failure; plus why a build was killed. Not yet: reports across builds beyond `stats`, a dashboard (needs the TUI). | r3 u22; `docs/plan/r3/u22-builds-and-reviews.md` |
 | III.13 Cache Management | Partial | `cache` over four categories with lean policy. Not yet: browsable explorer, selective-by-name removal. |  |
 | III.14 History & Recovery | Partial | Transaction history (chained, ledgered), rollback, snapshots, journal. Not yet: build/installation/upgrade histories as separate views, package timelines. |  |
-| III.15 Security & Integrity | Partial | Audit, manifest, sandbox, limits, trust signals, repository trust, database protection. Signature checks themselves stay pacman's and makepkg's. |  |
-| III.16 Package Health | Partial | `doctor` and `report`. Not yet: duplicate package/library detection, mirror health. |  |
+| III.15 Security & Integrity | Partial | Audit, manifest, sandbox, limits, trust signals, repository trust, database protection, the Arch Security Tracker (`vulns`, a pre-install gate, the score's security gate, u19) and the Arch rebuilders' reproducibility results (u20). Signature checks themselves stay pacman's and makepkg's. | r3 u19, u20 |
+| III.16 Package Health | Partial | `doctor` (with a known-vulnerabilities row), `report`, and `score` (eleven dimensions with an overall number); `rebuild --check` with acknowledgements. Not yet: duplicate package/library detection, mirror health in `doctor` (`mirrors` measures them). | r3 u18, u19, u20 |
 | III.17 Analytics | Specified | Build statistics, success rates, downloads, cache usage, resource reports. |  |
 | III.18 Unified Interfaces | Partial | CLI with `--json`, `--dry-run`, `--yes`, completion, and (u17) marks, boxes, tables, themes and optional animations on a terminal. No TUI at all (browser, inspector, queue and build monitors, log viewer, news reader, history browser, command palette). |  |
 | III.19 Configuration | Partial | TOML user config. Not yet: system-wide config, repository and profile config, themes, keybindings, aliases, environment profiles. |  |
@@ -143,7 +158,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | III.21 Extensibility (future) | Specified | Plugin system, public API, remote build workers, distributed compilation, reproducible-build verification, binary cache servers, team build profiles, benchmark database. The plugin system is WASM-sandboxed with enforcement and security checks (see section 9). AI-assisted items in the spec are excluded by the no-AI decision. | `SPEC.md` |
 | IV.1 Install Planner | Partial | Packages, sizes, removals, provider choices, risk, plan id, hooks, config files, policy. Not yet: compile time, services to restart before the commit, estimated time. |  |
 | IV.2 Explain Decisions | Partial | `explain` for the source/binary decision only. | r3 u3 |
-| IV.3 Package Score | Built | `score <pkg>` (u18): a report card of Performance, Build time, Maintenance, Security, Popularity and Source worthiness, each from a stated rule; unknown (never invented) when there is no data; no overall number on purpose; `--details` shows every rule. | `docs/plan/r3/u18-package-score.md` |
+| IV.3 Package Score | Built | `score <pkg>` (u18, u20): a report card of eleven dimensions (Performance, Build time, Maintenance, Security, Reproducibility, Provenance, Compatibility, Packaging quality, Upstream health, Popularity, Source worthiness), each from a stated rule and an evidence tier; unknown (never invented) when there is no data; an overall number from the dimensions that are known, with weights (`[score]`, `--weights`, `--care`; the proxies count 0 until you ask) and what it is made of; security gates (a confirmed High or Critical tracker entry) shown apart from the number; `--details` shows every rule. | `docs/plan/r3/u18-package-score.md`; `docs/plan/r3/u20-score-sources.md` |
 | IV.4 Build Profiles with Inheritance | Specified | Profiles that extend other profiles. |  |
 | IV.5 Build Recipes | Specified | `recipe save\|apply`: a concrete, shareable snapshot of compiler, flags, environment, hooks, profile. |  |
 | IV.6 Build Diff | Partial | PKGBUILD diff on rebuild exists; `diff-build` (binary vs source runtime comparison) does not. |  |
@@ -155,7 +170,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | IV.12 Dependency Graph Explorer | Partial | Text, dot, JSON, and graphs drawn in the terminal: `--format boxes` (native) and `--format easy` (graph-easy). The interactive explorer needs the TUI. | `docs/plan/r3/u11-graph-render.md` |
 | IV.13 Package Inspector | Partial | The pieces exist separately; not the single aggregated view. |  |
 | IV.14 Repository Analytics | Specified | Per-repository totals, pending updates, bandwidth saved, mirror latency. |  |
-| IV.15 Build Dashboard | Specified | Live compilation view; needs the TUI. |  |
+| IV.15 Build Dashboard | Partial | The live build line of u22 (phases, clock, progress, errors, log) is the terminal form; the full dashboard of a compilation needs the TUI. | r3 u22 |
 | IV.16 Health Center | Partial | `doctor` and `report`; not an interactive center. |  |
 | IV.17 Smart Updates | Partial | Pins with reason and expiry; no rule-based `smart-update` skip logic. |  |
 | IV.18 Build Statistics | Partial | `stats` (u9): builds, failures, time, longest, most built; transactions by kind and the AUR share. Hours and storage saved are not shown: they would be guesses. | `docs/plan/r3/u9-stats-benchmark.md` |
@@ -238,7 +253,7 @@ Grouped as in `ideas.md`. Tags there are older than the code, so the status here
 | Optional local repository of verified builds | Idea | Reuse across machines. |  |
 | Multi-source backends | Idea | pacman repos, AUR, Flatpak, systemd units behind one interface. |  |
 | Split fetch and build phases | Built | Sources fetched and verified first; the build runs with no network. | u17, u19 |
-| Reproducible-build check | Idea | Build twice in separate sandboxes and compare hashes. |  |
+| Reproducible-build check | Partial | The Arch rebuilders' result for the exact installed version is the score's Reproducibility dimension and its attestation feeds Provenance (u20). Not built: building twice in separate sandboxes and comparing hashes yourself. | r3 u20 |
 | Signed, tamper-evident transaction log | Built | SHA-256 chain, root-owned ledger, audit watch (chained and witnessed, not cryptographically signed). | r2 u7-u9 |
 | SBOM / provenance output | Idea | What source, flags and toolchain went into each build. |  |
 | Post-commit health check with auto-rollback | Partial | The post-upgrade report and the after-failure check exist; automatic rollback on failed checks does not. | r2 u20, r3 u6 |
@@ -251,12 +266,12 @@ Grouped as in `ideas.md`. Tags there are older than the code, so the status here
 | Plan diff view | Partial | A drifted plan shows what changed; there is no command to diff two saved plans. | r2 u18 |
 | Pacman hook compatibility | Built | pacman runs its hooks as always, and plans now preview them. | r3 u4 |
 | Offline / air-gapped mode | Partial | `--offline` for lookups and plans from local data; no verified bundle (see section 11). |  |
-| Mirror ranking and parallel downloads | Idea | Built into the engine. |  |
+| Mirror ranking and parallel downloads | Partial | Ranking is built (`mirrors test` and `mirrors rank`, u16); downloading in parallel is pacman's own `ParallelDownloads`, shown by emrac as one block (u22). | r3 u16 |
 | Plugin system (WASM-sandboxed, with security checks) and backend plugin interface | Specified | `emrac plugin list\|search\|install\|remove\|update\|enable\|disable\|verify`. Plugins are compiled WebAssembly modules, never scripts. Enforcement: deny-by-default host calls, capabilities declared in a manifest and granted by the user, memory/time/call limits, every host call logged. Security checks: hash and signature verified before install, requested capabilities shown in the install preview and audited like a package manifest, versions pinned, an update that asks for more capabilities needs a new approval. Also the way new sources (Flatpak and others) are added without touching core transaction logic. | `SPEC.md` III.21, Part V Plugins; `ideas.md`; `plugin-feat.md` |
 | Preset sharing | Idea | Signed optimization-flag presets. |  |
 | Smoke tests in the sandbox | Idea | Run `check()` and "does the binary start" before commit. |  |
-| Binary vs source benchmarking | Idea | Measure whether a source build was worth it (`recommend` predicts, `benchmark` would measure). |  |
-| Vulnerability-aware planning | Idea | Arch security advisory data in the plan. |  |
+| Binary vs source benchmarking | Partial | `benchmark` measures an installed package's start time and memory (u9) and `recommend` predicts what a source build gains; comparing a source build against the binary package side by side is not built. | r3 u9 |
+| Vulnerability-aware planning | Partial | The Arch Security Tracker is in the plan: the pre-flight checks what a plan would install (`safety.vulnerabilities` warn, block or off), `emrac vulns` lists installed packages with stale entries recognised, the doctor has a row, the score has a gate. Not built: choosing the fixed version, advisories (ASA) per package version, AUR packages (the tracker does not cover them). | r3 u19 |
 | Safe unattended updates | Idea | Scheduled runs that commit only if checks pass. |  |
 | "Why" explanations | Built | `why` for installed packages and `explain` for recommendations. | u12, r3 u3 |
 | Arch news gate | Built | See section 1. | r2 u20 |
@@ -283,7 +298,7 @@ Grouped as in `ideas.md`. Tags there are older than the code, so the status here
 | `emrac sandbox shell` | Idea | Drop into the sandbox of a failed build. |  |
 | `plan` / `apply` | Partial | Dry-run, plan ids and `--expect-plan` exist; saving and applying a plan later does not. | r2 u18 |
 | Snapshot retention policy | Idea | Keep last N or N days. |  |
-| Man pages | Idea | Generated from the command definitions. |  |
+| Man pages | Built | `emrac man [command]` shows a page (`--roff`, `--generate DIR` writes one for every command), and the package installs them, so `man emrac` works (u13). | r3 u13 |
 | Structured logging | Idea | One log per transaction ID, JSON on request. |  |
 
 ## 5. Wandrover: cross-distribution package resolution
@@ -322,7 +337,7 @@ Specified in `self-service-feat.md`; its five phases are built.
 |---|---|---|---|
 | Layer 1 Metadata and trust | Partial | Lookalikes, maintainer signals, shadowing exist; the signed blocklist and upload-burst detection do not. | r2 u20 |
 | Layer 2 PKGBUILD, `.install` and source analysis | Partial | Most rules exist (`audit`); patch scanning and a few rules are the spec's additions. | u15, u16, u18 |
-| Layer 3 Diff review and soak time | Partial | The diff is shown on every update; soak time, an approval hash ledger and trusted/blocked maintainer lists are not built. |  |
+| Layer 3 Diff review and soak time | Partial | The diff is shown on every update, designed to be read (u22: a summary of the assignments that matter, numbered hunks, the changed part of a line picked out, the sources and checksums marked); soak time, an approval hash ledger and trusted/blocked maintainer lists are not built. | r3 u22 |
 | Layer 4 Isolated build with behavior tracing | Partial | Sandbox, no-network build and limits exist; syscall tracing, canary files, the sinkhole and the ecosystem network tier do not. | u19, u20 |
 | Layer 5 Built-package inspection | Built | The manifest. | u17 |
 | Layer 6 Install detonation | Idea | Run scriptlets and hooks in a throwaway root and report undeclared changes. |  |
