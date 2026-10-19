@@ -149,57 +149,47 @@ fn looks_like_prompt(plain: &str) -> bool {
             || plain.trim_end().ends_with(':'))
 }
 
-/// Takes cursor movement and erasing out of the stream (pacman uses them to
-/// redraw its bars; emrac draws its own) and keeps colours and everything else.
-#[derive(Default)]
-struct Unescaper {
-    held: Vec<u8>,
+/// The step of the red-to-green ramp for a frame of a build's spinner: the
+/// colour of the spinner moves from red to green and back, as in a wait.
+pub fn pulse_for_build(frame: usize) -> u8 {
+    crate::style::pulse_step(frame)
 }
 
-impl Unescaper {
-    fn feed(&mut self, data: &[u8]) -> Vec<u8> {
-        let mut out = Vec::with_capacity(data.len());
-        for &b in data {
-            if self.held.is_empty() {
-                if b == 0x1b {
-                    self.held.push(b);
-                } else {
-                    out.push(b);
-                }
-                continue;
-            }
-            self.held.push(b);
-            match self.held.len() {
-                2 => {
-                    if b != b'[' {
-                        // not a CSI: not ours to touch
-                        out.append(&mut self.held);
-                    }
-                }
-                _ => {
-                    if (0x40..=0x7e).contains(&b) {
-                        if b == b'm' {
-                            out.append(&mut self.held);
-                        } else {
-                            self.held.clear();
-                        }
-                    } else if !((0x20..=0x3f).contains(&b)) || self.held.len() > 32 {
-                        out.append(&mut self.held);
-                    }
-                }
-            }
-        }
-        out
+/// What draws a program's output on the terminal: bytes from the program in,
+/// bytes for the terminal out. The two screens (pacman's transaction and a
+/// package build) are pure, so they are tested without a terminal.
+pub trait Screen {
+    /// What to write for `data` from the program.
+    fn feed(&mut self, data: &[u8]) -> Vec<u8>;
+    /// Nothing has arrived for a moment: an unfinished line is shown as it is.
+    fn flush_stale(&mut self) -> Vec<u8>;
+    /// Time passes (about ten times a second): spinners and clocks move.
+    fn tick(&mut self) -> Vec<u8> {
+        Vec::new()
     }
+    /// The terminal changed width.
+    fn resize(&mut self, width: usize) -> Vec<u8>;
+    /// The program ended: whatever is held is written.
+    fn finish(&mut self) -> Vec<u8>;
+}
 
-    fn rest(&mut self) -> Vec<u8> {
-        std::mem::take(&mut self.held)
+impl Screen for Renderer {
+    fn feed(&mut self, data: &[u8]) -> Vec<u8> {
+        Renderer::feed(self, data)
+    }
+    fn flush_stale(&mut self) -> Vec<u8> {
+        Renderer::flush_stale(self)
+    }
+    fn resize(&mut self, width: usize) -> Vec<u8> {
+        Renderer::resize(self, width)
+    }
+    fn finish(&mut self) -> Vec<u8> {
+        Renderer::finish(self)
     }
 }
 
 pub struct Renderer {
     st: Style,
-    esc: Unescaper,
     seg: Vec<u8>,
     /// A record has just been taken and the end-of-line bytes after it are ours.
     swallowing: bool,
@@ -209,6 +199,10 @@ pub struct Renderer {
     dirty: bool,
     retrieving: bool,
     dl_total_seen: bool,
+    /// Columns of the live line on the screen, for erasing it after a resize.
+    drawn_len: usize,
+    /// pacman asked the terminal to hide the cursor and has not shown it again.
+    cursor_hidden: bool,
     out: Vec<u8>,
 }
 
@@ -216,7 +210,6 @@ impl Renderer {
     pub fn new(st: Style) -> Renderer {
         Renderer {
             st,
-            esc: Unescaper::default(),
             seg: Vec::new(),
             swallowing: false,
             live: None,
@@ -224,14 +217,15 @@ impl Renderer {
             dirty: false,
             retrieving: false,
             dl_total_seen: false,
+            drawn_len: 0,
+            cursor_hidden: false,
             out: Vec::new(),
         }
     }
 
     /// What to write to the terminal for `data` from pacman.
     pub fn feed(&mut self, data: &[u8]) -> Vec<u8> {
-        let clean = self.esc.feed(data);
-        for &b in &clean {
+        for &b in data {
             if b == b'\r' || b == b'\n' {
                 self.terminator(b);
             } else {
@@ -262,9 +256,12 @@ impl Renderer {
         if !self.seg.is_empty() {
             self.raw_partial();
         }
-        let rest = self.esc.rest();
-        self.out.extend(rest);
         self.commit_live();
+        if self.cursor_hidden {
+            // pacman hid the cursor for its bars and was stopped before it showed it
+            self.out.extend_from_slice(b"\x1b[?25h");
+            self.cursor_hidden = false;
+        }
         std::mem::take(&mut self.out)
     }
 
@@ -272,12 +269,23 @@ impl Renderer {
         if self.drawn {
             self.out.extend_from_slice(ERASE);
             self.drawn = false;
+            self.drawn_len = 0;
+        }
+    }
+
+    fn track_cursor(&mut self, raw: &[u8]) {
+        let text = String::from_utf8_lossy(raw);
+        if let Some(hide) = text.rfind("\x1b[?25l") {
+            self.cursor_hidden = text.rfind("\x1b[?25h").is_none_or(|show| show < hide);
+        } else if text.contains("\x1b[?25h") {
+            self.cursor_hidden = false;
         }
     }
 
     fn raw_partial(&mut self) {
         self.erase_live();
         let seg = std::mem::take(&mut self.seg);
+        self.track_cursor(&seg);
         self.out.extend(seg);
         self.swallowing = false;
     }
@@ -327,6 +335,7 @@ impl Renderer {
             }
             Class::Raw => {
                 self.erase_live();
+                self.track_cursor(&seg);
                 self.out.extend(seg);
                 self.out.push(c);
                 self.swallowing = false;
@@ -397,9 +406,33 @@ impl Renderer {
             return;
         };
         let line = self.rec_line(&rec, None);
+        let text = self.render(&line);
         self.out.extend_from_slice(ERASE);
-        self.out.extend(self.render(&line).into_bytes());
+        self.drawn_len = crate::style::display_width(&text);
+        self.out.extend(text.into_bytes());
         self.drawn = true;
+    }
+
+    /// The terminal changed width: what is drawn is erased, wherever the
+    /// terminal has wrapped it to, and the live line is drawn again to fit.
+    pub fn resize(&mut self, width: usize) -> Vec<u8> {
+        if width == self.st.width || width == 0 {
+            return Vec::new();
+        }
+        if self.drawn {
+            let rows = self.drawn_len.div_ceil(width).max(1);
+            self.out.push(b'\r');
+            if rows > 1 {
+                self.out
+                    .extend_from_slice(format!("\x1b[{}A", rows - 1).as_bytes());
+            }
+            self.out.extend_from_slice(b"\x1b[J");
+            self.drawn = false;
+            self.dirty = true;
+        }
+        self.st.width = width;
+        self.redraw();
+        std::mem::take(&mut self.out)
     }
 
     fn print(&mut self, line: &Line) {
@@ -619,15 +652,56 @@ mod tests {
     }
 
     #[test]
-    fn cursor_movement_is_dropped_and_colours_are_kept() {
-        let input = "\x1b[?25lhello\x1b[1F\x1b[2K \x1b[32mgreen\x1b[0m\r\n";
-        let out = run(&[input], false);
-        assert_eq!(out, "hello \x1b[32mgreen\x1b[0m\r\n");
-        // a sequence cut in two by the read is still understood
+    fn a_programs_own_cursor_movement_is_kept_and_only_pacmans_bars_lose_theirs() {
+        // a hook that redraws its own line keeps its movements and colours
+        let hook = "\x1b[?25lspin\r\x1b[2Kdone \x1b[32mgreen\x1b[0m\x1b[1A\r\n";
+        let out = run(&[hook], false);
+        assert!(out.starts_with("\x1b[?25lspin"), "{out:?}");
+        assert!(
+            out.contains("\x1b[2K") && out.contains("\x1b[1A"),
+            "{out:?}"
+        );
+        // a sequence cut in two by the read is kept whole
         let out = run(&["a\x1b[", "1Fb\r\n"], false);
-        assert_eq!(out, "ab\r\n");
+        assert_eq!(out, "a\x1b[1Fb\r\n");
+        // the sequences that belong to pacman's own download block go with it
+        let block = format!(
+            ":: Retrieving packages...\r\n foo-1-1-x86_64\r\n Total (0/1)  0 B 0 B/s 00:00 {BAR0}\r\r\n\x1b[1F foo-1-1-x86_64  1 B 1 B/s 00:00 {BAR33}\r\n"
+        );
+        assert!(!run(&[&block], false).contains("\x1b[1F"));
     }
 
+    #[test]
+    fn a_cursor_pacman_hid_is_shown_again_if_it_was_stopped() {
+        let mut r = Renderer::new(st(false));
+        r.feed(b"\x1b[?25lresolving dependencies...\r\n");
+        let end = r.finish();
+        assert!(end.ends_with(b"\x1b[?25h"), "{end:?}");
+        // when pacman showed it itself, nothing is added
+        let mut r = Renderer::new(st(false));
+        r.feed(b"\x1b[?25lx\r\n");
+        r.feed(b"\x1b[?25h");
+        assert_eq!(r.finish(), b"\x1b[?25h", "its own, once");
+    }
+
+    #[test]
+    fn a_resize_erases_the_wrapped_live_line_and_draws_it_again_to_fit() {
+        let mut r = Renderer::new(st(false));
+        let drawn = r.feed(format!("(1/1) installing a   {BAR33}\r").as_bytes());
+        let drawn = String::from_utf8_lossy(&drawn).into_owned();
+        assert!(drawn.contains("installing a"));
+        let cols = crate::style::display_width(drawn.trim_start_matches("\r\x1b[2K"));
+        assert!(cols > 60 && cols < 100, "{cols}");
+        // narrower than the line: it had wrapped onto two rows
+        let out = String::from_utf8_lossy(&r.resize(50)).into_owned();
+        assert!(out.starts_with("\r\x1b[1A\x1b[J"), "{out:?}");
+        assert!(out.contains("installing a"));
+        assert!(crate::style::display_width(out.rsplit("\x1b[J").next().unwrap()) < 50);
+        // the same width is nothing, and a line that was never drawn is not redrawn
+        assert!(r.resize(50).is_empty());
+        let mut idle = Renderer::new(st(false));
+        assert!(idle.resize(60).is_empty());
+    }
     #[test]
     fn parallel_downloads_show_one_total_and_hide_the_files() {
         let input = format!(

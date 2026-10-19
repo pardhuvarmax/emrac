@@ -9,7 +9,7 @@ use std::io::Write;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::process::{Command, ExitStatus, Stdio};
 
-use crate::pacman_ui::Renderer;
+use crate::pacman_ui::{Renderer, Screen};
 use crate::style::Style;
 
 /// Whether this run is shown in emrac's style: a terminal that can draw it, input
@@ -42,9 +42,20 @@ fn winsize() -> libc::winsize {
 
 extern "C" fn ignore(_: libc::c_int) {}
 
-/// Runs the command and shows what it says. `Ok(None)`: a pseudo-terminal could
-/// not be made, nothing ran, the caller should run it as it always did.
+/// Runs the command and shows what it says in pacman's style. `Ok(None)`: a
+/// pseudo-terminal could not be made, nothing ran, the caller should run it as
+/// it always did.
 pub fn run(program: &str, args: &[String], st: Style) -> std::io::Result<Option<ExitStatus>> {
+    run_screen(program, args, None, &mut Renderer::new(st))
+}
+
+/// Runs the command with its output on a pseudo-terminal, drawn by `screen`.
+pub fn run_screen(
+    program: &str,
+    args: &[String],
+    cwd: Option<&std::path::Path>,
+    screen: &mut dyn Screen,
+) -> std::io::Result<Option<ExitStatus>> {
     let ws = winsize();
     let (mut m, mut s) = (-1, -1);
     if unsafe { libc::openpty(&mut m, &mut s, std::ptr::null_mut(), std::ptr::null(), &ws) } != 0 {
@@ -57,15 +68,19 @@ pub fn run(program: &str, args: &[String], st: Style) -> std::io::Result<Option<
     }
     let slave_err = slave.try_clone()?;
 
-    // Ctrl-C goes to pacman (it is in the same foreground group); emrac stays
-    // to finish the screen. A handler, not "ignore", so pacman starts with the
-    // default again.
+    // Ctrl-C goes to the program (it is in the same foreground group); emrac
+    // stays to finish the screen. A handler, not "ignore", so the program
+    // starts with the default again.
     let old = unsafe { libc::signal(libc::SIGINT, ignore as *const () as libc::sighandler_t) };
-    let spawned = Command::new(program)
+    let mut command = Command::new(program);
+    command
         .args(args)
         .stdout(Stdio::from(slave))
-        .stderr(Stdio::from(slave_err))
-        .spawn();
+        .stderr(Stdio::from(slave_err));
+    if let Some(dir) = cwd {
+        command.current_dir(dir);
+    }
+    let spawned = command.spawn();
     let mut child = match spawned {
         Ok(c) => c,
         Err(e) => {
@@ -74,8 +89,15 @@ pub fn run(program: &str, args: &[String], st: Style) -> std::io::Result<Option<
         }
     };
 
-    let mut renderer = Renderer::new(st);
     let mut stdout = std::io::stdout();
+    let mut show = |bytes: Vec<u8>| -> bool {
+        bytes.is_empty()
+            || stdout
+                .write_all(&bytes)
+                .and_then(|()| stdout.flush())
+                .is_ok()
+    };
+    let mut width = usize::from(ws.ws_col);
     let mut buf = [0u8; 8192];
     loop {
         let mut pfd = libc::pollfd {
@@ -83,35 +105,37 @@ pub fn run(program: &str, args: &[String], st: Style) -> std::io::Result<Option<
             events: libc::POLLIN,
             revents: 0,
         };
-        let ready = unsafe { libc::poll(&mut pfd, 1, 150) };
+        let ready = unsafe { libc::poll(&mut pfd, 1, 100) };
+        // the terminal may have been resized: the program is told, and the
+        // live line is drawn again to fit
+        let now = winsize();
+        if usize::from(now.ws_col) != width {
+            width = usize::from(now.ws_col);
+            unsafe { libc::ioctl(master.as_raw_fd(), libc::TIOCSWINSZ, &now) };
+            if !show(screen.resize(width)) {
+                break;
+            }
+        }
         if ready > 0 {
             let n = unsafe { libc::read(master.as_raw_fd(), buf.as_mut_ptr().cast(), buf.len()) };
             if n <= 0 {
                 break; // EIO: everything that had the other end has closed it
             }
-            let out = renderer.feed(&buf[..n as usize]);
-            if stdout
-                .write_all(&out)
-                .and_then(|()| stdout.flush())
-                .is_err()
-            {
+            if !show(screen.feed(&buf[..n as usize])) {
                 break;
             }
         } else if ready == 0 {
-            let out = renderer.flush_stale();
-            if !out.is_empty() {
-                let _ = stdout.write_all(&out).and_then(|()| stdout.flush());
-            }
-            // pacman is gone and something else still holds the other end
+            show(screen.flush_stale());
+            // the program is gone and something else still holds the other end
             if matches!(child.try_wait(), Ok(Some(_))) {
                 break;
             }
         } else if std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
             break;
         }
+        show(screen.tick());
     }
-    let out = renderer.finish();
-    let _ = stdout.write_all(&out).and_then(|()| stdout.flush());
+    show(screen.finish());
     let status = child.wait();
     unsafe { libc::signal(libc::SIGINT, old) };
     status.map(Some)

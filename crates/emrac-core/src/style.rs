@@ -689,15 +689,40 @@ pub fn strip_ansi(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
-        if c == '\x1b' && chars.peek() == Some(&'[') {
-            chars.next();
-            for n in chars.by_ref() {
-                if n.is_ascii_alphabetic() {
-                    break;
+        if c != '\x1b' {
+            out.push(c);
+            continue;
+        }
+        match chars.peek() {
+            // CSI: colours, cursor movement, erasing
+            Some('[') => {
+                chars.next();
+                for n in chars.by_ref() {
+                    if n.is_ascii_alphabetic() || n == '~' {
+                        break;
+                    }
                 }
             }
-        } else {
-            out.push(c);
+            // a character set (`ESC ( B`, which makepkg prints after its colours)
+            Some('(' | ')' | '*' | '+') => {
+                chars.next();
+                chars.next();
+            }
+            // OSC, such as the session marker sudo prints: up to BEL or `ESC \`
+            Some(']') => {
+                chars.next();
+                while let Some(n) = chars.next() {
+                    if n == '\x07' {
+                        break;
+                    }
+                    if n == '\x1b' {
+                        chars.next();
+                        break;
+                    }
+                }
+            }
+            // a lone escape is just text
+            _ => out.push('\x1b'),
         }
     }
     out
@@ -2292,5 +2317,17 @@ mod tests {
         assert_eq!(line[0].role, Role::Heat(10), "the lowest is green");
         assert_eq!(line[2].role, Role::Heat(0), "the tallest is red");
         assert_eq!(line_text(&line), "\u{2581}\u{2585}\u{2588}");
+    }
+
+    #[test]
+    fn strip_ansi_also_takes_out_character_sets_and_operating_system_commands() {
+        assert_eq!(
+            strip_ansi("\x1b[1;34m==>\x1b(B\x1b[m\x1b[1m Starting build()...\x1b(B\x1b[m"),
+            "==> Starting build()..."
+        );
+        assert_eq!(strip_ansi("a\x1b]3008;start=x;user=y\x1b\\b"), "ab");
+        assert_eq!(strip_ansi("a\x1b]0;title\x07b"), "ab");
+        assert_eq!(strip_ansi("plain"), "plain");
+        assert_eq!(strip_ansi("x\x1b"), "x\x1b");
     }
 }

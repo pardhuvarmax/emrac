@@ -21,6 +21,7 @@ podman build -t emrac-test -f dev/container/Containerfile dev/container
 # dev/e2e/run.sh buildtools an AUR build with a build-only dependency: what emrac offers to remove
 # dev/e2e/run.sh stats    emrac stats from a build-times file, emrac benchmark of an installed package
 # dev/e2e/run.sh score    emrac score: the report card of a package
+# dev/e2e/run.sh buildui  an AUR build in emrac's style: phases, a live line, errors, the log
 # dev/e2e/run.sh clui     how emrac looks under a pseudo-terminal and piped: marks, colour, ASCII, animations
 # dev/e2e/run.sh mirrors  Mirror Intelligence: measure, rank, write, apply (as root)
 # dev/e2e/run.sh advisor  the Package Advisor: advice under a big plan
@@ -87,6 +88,13 @@ buildtools)
     podman run --rm --security-opt 'unmask=/proc/*' \
         -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
         -v "$repo_root/dev/e2e/buildtools.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+buildui)
+    echo "==> Running the AUR build screen checks (a local checkout posing as an AUR package)"
+    podman run --rm --security-opt 'unmask=/proc/*' \
+        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/buildui.sh:/t.sh:ro" \
         emrac-test bash /t.sh
     ;;
 score)

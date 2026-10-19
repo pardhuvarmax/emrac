@@ -22,18 +22,18 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 687
+     - 700
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 50
+     - 59
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 32
    * - **Automated total**
      -
-     - **769**
+     - **791**
 
-emrac-core library (687)
+emrac-core library (700)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -203,6 +203,20 @@ emrac-core library (687)
 * ``something_shared_with_a_kept_tool_stays``
 * ``what_only_a_removed_tool_needed_goes_with_it``
 * ``what_the_built_package_needs_stays_and_so_does_what_hangs_on_it``
+
+``build_ui::tests`` (10)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_build_becomes_phases_with_a_live_line_and_a_summary_of_each``
+* ``a_resize_redraws_the_live_line_to_fit``
+* ``a_restyled_line_does_not_leave_a_blank_line_behind``
+* ``a_stream_with_carriage_returns_is_the_same_build``
+* ``colour_only_decorates_and_the_spinner_colour_moves``
+* ``errors_and_warnings_are_told_apart``
+* ``outside_the_compile_phases_everything_passes_and_questions_are_never_held``
+* ``progress_is_read_from_cmake_ninja_cargo_gcc_and_kbuild_lines``
+* ``the_tail_keeps_the_last_lines_for_a_failure``
+* ``times_are_said_plainly``
 
 ``bundle::tests`` (8)
 ~~~~~~~~~~~~~~~~~~~~~
@@ -508,16 +522,18 @@ emrac-core library (687)
 * ``only_a_pacman_command_on_a_terminal_is_wanted``
 * ``the_size_is_never_zero``
 
-``pacman_ui::tests`` (13)
+``pacman_ui::tests`` (15)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_check_that_starts_on_a_line_of_its_own_is_not_finished_at_0_percent``
+* ``a_cursor_pacman_hid_is_shown_again_if_it_was_stopped``
 * ``a_live_update_is_one_line_redrawn_and_a_finished_one_stays``
+* ``a_programs_own_cursor_movement_is_kept_and_only_pacmans_bars_lose_theirs``
 * ``a_progress_line_is_understood_and_nothing_else_is``
 * ``a_question_is_passed_at_once_and_the_answer_is_not_hidden``
+* ``a_resize_erases_the_wrapped_live_line_and_draws_it_again_to_fit``
 * ``an_unfinished_line_is_shown_after_a_moment_not_held_for_ever``
 * ``colour_only_decorates``
-* ``cursor_movement_is_dropped_and_colours_are_kept``
 * ``hooks_with_counters_are_restyled``
 * ``one_file_with_no_total_is_shown_as_itself``
 * ``parallel_downloads_show_one_total_and_hide_the_files``
@@ -905,7 +921,7 @@ emrac-core library (687)
 * ``the_elf_reader_agrees_with_readelf_on_a_real_binary_and_a_library``
 * ``transaction_starts_are_found_in_the_log``
 
-``style::tests`` (36)
+``style::tests`` (37)
 ~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_bar_is_filled_in_proportion_and_a_little_is_not_nothing``
@@ -932,6 +948,7 @@ emrac-core library (687)
 * ``padding_counts_columns``
 * ``paint_does_nothing_without_colour_and_wraps_with_it``
 * ``rows_can_carry_notes_under_them``
+* ``strip_ansi_also_takes_out_character_sets_and_operating_system_commands``
 * ``strip_ansi_removes_only_sequences``
 * ``text_is_wrapped_at_spaces_by_columns``
 * ``the_activity_colour_runs_red_to_green_and_back_and_never_stands_still``
@@ -995,7 +1012,7 @@ emrac-core library (687)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (50)
+emrac command line, unit tests (59)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -1058,6 +1075,19 @@ emrac command line, unit tests (50)
 * ``anything_else_is_no_even_when_the_default_is_yes``
 * ``end_of_input_is_never_consent_whatever_the_default``
 * ``yes_in_any_case_and_with_spaces_is_yes_either_way``
+
+``review_view::tests`` (9)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_diff_is_parsed_into_files_and_hunks_with_their_numbers``
+* ``a_long_line_is_wrapped_under_its_own_margin_not_cut``
+* ``a_pkgbuild_has_numbered_lines_and_marks_the_ones_that_fetch``
+* ``code_is_coloured_by_what_each_word_is_and_keeps_its_text``
+* ``findings_are_badged_by_severity_and_show_what_was_found``
+* ``the_ascii_views_are_ascii_and_a_diff_of_nothing_is_a_heading``
+* ``the_diff_view_shows_the_summary_the_numbers_and_what_changed_inside_a_line``
+* ``the_summary_names_what_changed_in_the_assignments_that_matter``
+* ``trust_signals_are_labelled_and_wrapped_under_their_label``
 
 ``view::tests`` (21)
 ~~~~~~~~~~~~~~~~~~~~
@@ -1376,6 +1406,29 @@ Last full run: after u20, 69 of 69 passed.
 
 (69 checks.)
 
+End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A local checkout posing as an AUR package: the phases of makepkg with a clock, the
+compiler lines folded into a live line, errors at once, the log, sandboxed and not:
+``dev/e2e/run.sh buildui``. Last full run: after the review views, 13 of 13 passed.
+
+* unsandboxed, on a terminal: phases, a clock and a summary; the compiler lines are folded away
+* the summary counts the files and the warning
+* the whole output is in a log that has every compiler line
+* sandboxed too: the same phases and a summary
+* piped, the build is makepkg's own output
+* clui.builds native leaves makepkg's own output on a terminal
+* a failing build shows its error at once, the last lines and the log
+* and the command fails
+* the setting is checked
+* on a terminal the PKGBUILD changes are a summary and a numbered diff
+* a change of sources is marked and says what to check
+* the audit's finding is a badge, the rule, the place and the line it found
+* piped, the review is the plain text it always was
+
+(13 checks.)
+
 End-to-end: how emrac looks (dev/e2e/clui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1509,36 +1562,23 @@ End-to-end: offline bundles (dev/e2e/bundle.sh)
 
 ``emrac bundle create | verify | apply`` with real packages, including a bundle
 whose signature is bad and whose manifest was edited to match: ``dev/e2e/run.sh bundle``.
-Last full run: after u14, 26 of 26 passed.
+Last full run: after the review views, 13 of 13 passed.
 
-* the help explains the old-keyring problem
-* a bundle of the keyring alone can be made
-* create makes a bundle of a package and its dependencies
-* every package has a signature file
-* the user can copy and delete the bundle
-* the manifest lists a checksum for each file
-* create will not use a folder that exists
-* create with no packages and no --for is refused
-* a package the repositories do not have is refused, and no folder is left
-* verify passes on a good bundle
-* a changed byte is found by verify
-* apply refuses a damaged bundle and installs nothing
-* a missing signature file is found
-* a file nobody listed is found
-* apply --dry-run shows the install and changes nothing
-* apply installs through the normal path
-* the install is in the history
-* applying it again finds nothing to do
-* --for leaves out what the target already has
-* --for with nothing to do says so
-* with --for and no names, the target's pending upgrades are bundled
-* verify cannot tell: the manifest was made to agree
-* pacman itself refuses the bad signature and nothing is installed
-* a bundle older than what is installed is refused, not applied
-* --json gives the changes
-* a folder with no manifest is refused
+* unsandboxed, on a terminal: phases, a clock and a summary; the compiler lines are folded away
+* the summary counts the files and the warning
+* the whole output is in a log that has every compiler line
+* sandboxed too: the same phases and a summary
+* piped, the build is makepkg's own output
+* clui.builds native leaves makepkg's own output on a terminal
+* a failing build shows its error at once, the last lines and the log
+* and the command fails
+* the setting is checked
+* on a terminal the PKGBUILD changes are a summary and a numbered diff
+* a change of sources is marked and says what to check
+* the audit's finding is a badge, the rule, the place and the line it found
+* piped, the review is the plain text it always was
 
-(26 checks.)
+(13 checks.)
 
 End-to-end: help pages and the bug report (dev/e2e/helppages.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

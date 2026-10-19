@@ -351,11 +351,21 @@ fn print_hooks(hooks: &HookPreview) {
 }
 
 pub fn print_pkgbuild(pkg: &str, content: &str) {
+    let st = Style::stdout();
+    if st.fancy {
+        print!("{}", crate::review_view::pkgbuild_view(&st, pkg, content));
+        return;
+    }
     say!(Voice::Notes, "PKGBUILD for '{pkg}' (first build):\n");
     println!("{content}");
 }
 
 pub fn print_pkgbuild_diff(pkg: &str, diff: &str) {
+    let st = Style::stdout();
+    if st.fancy {
+        print!("{}", crate::review_view::diff_view(&st, pkg, diff));
+        return;
+    }
     say!(
         Voice::Remembers,
         "PKGBUILD changes for '{pkg}' since your last build:\n"
@@ -1033,6 +1043,11 @@ pub fn print_trust(name: &str, signals: &[emrac_core::aur_trust::Signal]) {
     if signals.is_empty() {
         return;
     }
+    let st = Style::stdout();
+    if st.fancy {
+        println!("{}", crate::review_view::trust_view(&st, name, signals));
+        return;
+    }
     println!("Trust signals for '{name}':");
     for s in signals {
         let mark = match s.level {
@@ -1460,6 +1475,20 @@ pub fn critical_summary(report: &AuditReport) -> String {
 /// say, on stderr so structured stdout stays clean.
 pub fn print_audit(report: &AuditReport, to_stderr: bool) {
     if report.findings.iter().all(|f| f.severity == Severity::Info) {
+        return;
+    }
+    let st = if to_stderr {
+        Style::stderr()
+    } else {
+        Style::stdout()
+    };
+    if st.fancy {
+        let text = crate::review_view::findings_view(&st, report);
+        if to_stderr {
+            eprintln!("{text}");
+        } else {
+            println!("{text}");
+        }
         return;
     }
     let mut buf = Vec::new();

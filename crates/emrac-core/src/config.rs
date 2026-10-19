@@ -145,6 +145,11 @@ pub struct ClUiConfig {
     /// (its questions and errors stay as they are). `native`: pacman's own output.
     #[serde(default = "default_pacman")]
     pub pacman: String,
+    /// `emrac`: an AUR build is shown in emrac's style on a terminal (phases,
+    /// a live line for the compiler, errors at once, the output kept in a log).
+    /// `native`: makepkg's own output.
+    #[serde(default = "default_pacman")]
+    pub builds: String,
 }
 
 fn default_animations() -> String {
@@ -168,6 +173,7 @@ impl Default for ClUiConfig {
             unicode: default_auto(),
             theme: default_theme(),
             pacman: default_pacman(),
+            builds: default_pacman(),
         }
     }
 }
@@ -547,6 +553,7 @@ impl Config {
             "clui.unicode" => self.clui.unicode.clone(),
             "clui.theme" => self.clui.theme.clone(),
             "clui.pacman" => self.clui.pacman.clone(),
+            "clui.builds" => self.clui.builds.clone(),
             "advisor.enabled" => self.advisor.enabled.to_string(),
             "advisor.large_download_mib" => self.advisor.large_download_mib.to_string(),
             "advisor.large_growth_mib" => self.advisor.large_growth_mib.to_string(),
@@ -651,6 +658,12 @@ impl Config {
                 }
                 self.clui.pacman = value.to_string();
             }
+            "clui.builds" => {
+                if !matches!(value, "emrac" | "native") {
+                    return Err(invalid());
+                }
+                self.clui.builds = value.to_string();
+            }
             "advisor.enabled" => {
                 self.advisor.enabled = parse_bool(value).ok_or_else(invalid)?;
             }
@@ -754,6 +767,7 @@ impl Config {
             "clui.unicode" => self.clui.unicode = default_auto(),
             "clui.theme" => self.clui.theme = default_theme(),
             "clui.pacman" => self.clui.pacman = default_pacman(),
+            "clui.builds" => self.clui.builds = default_pacman(),
             "advisor.enabled" => self.advisor.enabled = true,
             "advisor.large_download_mib" => {
                 self.advisor.large_download_mib = default_large_download_mib()

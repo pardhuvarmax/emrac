@@ -156,6 +156,7 @@ const SECTIONS: &[Section] = &[
             key("unicode", Kind::Text, "auto: Unicode marks, lines and bars when the locale is UTF-8, ASCII otherwise; always; never", "\"auto\" | \"always\" | \"never\""),
             key("theme", Kind::Text, "the colours: default, light (for a light background), mono (bold and dim only) or high-contrast", "\"default\" | \"light\" | \"mono\" | \"high-contrast\""),
             key("pacman", Kind::Text, "emrac: on a terminal, pacman's transaction (downloads, checks, installs, hooks) is shown in emrac's style while pacman does the work; its questions, warnings and errors are untouched. native: pacman's own output", "\"emrac\" | \"native\""),
+            key("builds", Kind::Text, "emrac: on a terminal, an AUR build is shown in emrac's style: the phases of makepkg with a clock, the compiler's lines folded into one live line (a bar when the build says how far it is, what it is compiling), warnings counted, errors shown at once, the whole output kept in a log. native: makepkg's own output", "\"emrac\" | \"native\""),
         ],
     },
     Section {
@@ -431,6 +432,7 @@ mod tests {
             ("clui.unicode", "never"),
             ("clui.theme", "mono"),
             ("clui.pacman", "native"),
+            ("clui.builds", "native"),
             ("advisor.enabled", "false"),
             ("advisor.large_download_mib", "5"),
             ("advisor.large_growth_mib", "6"),
@@ -449,7 +451,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 48, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 49, "{text}");
     }
 
     #[test]

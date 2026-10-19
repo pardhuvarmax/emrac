@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod output;
 mod prompt;
+mod review_view;
 mod view;
 
 use emrac_core::{Config, Limits, Result, Sources};

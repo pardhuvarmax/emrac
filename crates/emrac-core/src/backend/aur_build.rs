@@ -63,6 +63,53 @@ pub enum AurSyncOutcome {
     Changed { diff: String, new_pkgbuild: String },
 }
 
+/// How a build is shown: in emrac's style (the phases of makepkg with a clock, the
+/// compiler chatter folded into one live line, errors at once, the whole output
+/// in a log) or as it comes (`clui.builds = "native"`, not a terminal, `--json`).
+struct Look {
+    st: crate::style::Style,
+    log: Option<(PathBuf, std::fs::File)>,
+}
+
+impl Look {
+    /// `None` when the build should simply own the terminal. `needs_tty_input`:
+    /// the step may ask questions (the dependency step), so input must be a terminal.
+    fn new(pkg: &str, needs_tty_input: bool) -> Option<Look> {
+        let st = crate::style::Style::stdout();
+        if !st.fancy
+            || crate::Config::load().is_ok_and(|c| c.clui.builds == "native")
+            || (needs_tty_input && unsafe { libc::isatty(0) } != 1)
+        {
+            return None;
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let log = crate::build_ui::log_dir().and_then(|d| crate::build_ui::new_log(&d, pkg, now));
+        Some(Look { st, log })
+    }
+
+    fn screen(&self) -> crate::build_ui::BuildScreen {
+        crate::build_ui::BuildScreen::new(self.st)
+    }
+
+    fn logged<'a>(
+        &self,
+        screen: &'a mut crate::build_ui::BuildScreen,
+    ) -> crate::build_ui::Logged<'a> {
+        crate::build_ui::Logged {
+            inner: screen,
+            log: self.log.as_ref().and_then(|(_, f)| f.try_clone().ok()),
+        }
+    }
+
+    /// Said when a step failed: the last lines of the build and where the log is.
+    fn report_failure(&self, screen: &crate::build_ui::BuildScreen) {
+        let log = self.log.as_ref().map(|(p, _)| p.as_path());
+        eprint!("{}", screen.failure_report(log));
+    }
+}
+
 /// Builds AUR packages via `git` + `makepkg` — the only module that shells
 /// out to either. Each package gets its own persistent checkout under
 /// `~/.cache/emrac/build/<pkg>`, reused across runs so repeat builds only
@@ -195,13 +242,14 @@ impl AurBuildBackend {
     /// existing package file is used.
     pub fn build_in(&self, dir: &Path, opts: BuildOptions) -> Result<()> {
         if !opts.sandbox {
-            let status = Command::new("makepkg")
-                .args(["-s", "--needed"])
-                .args(opts.force.then_some("--force"))
-                .args((!opts.interactive).then_some("--noconfirm"))
-                .current_dir(dir)
-                .status()
-                .map_err(|err| Error::CommandSpawn("makepkg".to_string(), err))?;
+            let mut args: Vec<String> = vec!["-s".into(), "--needed".into()];
+            if opts.force {
+                args.push("--force".into());
+            }
+            if !opts.interactive {
+                args.push("--noconfirm".into());
+            }
+            let status = self.run_makepkg(dir, &args)?;
             return match status.code() {
                 Some(0) | Some(MAKEPKG_ALREADY_BUILT) => Ok(()),
                 _ => Err(failed("build", &status, "")),
@@ -214,13 +262,14 @@ impl AurBuildBackend {
         }
 
         // 1. Dependencies and verified sources, on the host.
-        let status = Command::new("makepkg")
-            .args(["-s", "--verifysource", "--needed"])
-            .args(opts.force.then_some("--force"))
-            .args((!opts.interactive).then_some("--noconfirm"))
-            .current_dir(dir)
-            .status()
-            .map_err(|err| Error::CommandSpawn("makepkg".to_string(), err))?;
+        let mut args: Vec<String> = vec!["-s".into(), "--verifysource".into(), "--needed".into()];
+        if opts.force {
+            args.push("--force".into());
+        }
+        if !opts.interactive {
+            args.push("--noconfirm".into());
+        }
+        let status = self.run_makepkg(dir, &args)?;
         if !status.success() {
             return Err(failed("dependencies and sources", &status, ""));
         }
@@ -265,8 +314,36 @@ impl AurBuildBackend {
             // makepkg refuses to start while a package file for this version
             // exists, whatever the phase, unless it is told to overwrite.
             command.extend(force_arg.iter().map(|a| a.to_string()));
-            let (outcome, output) = sandbox::run(&spec, &command, &opts.limits, use_scope)
-                .map_err(|err| Error::CommandSpawn("bwrap".to_string(), err))?;
+            let look = Look::new(&dir_name(dir), false);
+            let mut screen = look.as_ref().map(Look::screen);
+            let mut logged = match (&look, screen.as_mut()) {
+                (Some(l), Some(sc)) => Some(l.logged(sc)),
+                _ => None,
+            };
+            let (outcome, output) = sandbox::run(
+                &spec,
+                &command,
+                &opts.limits,
+                use_scope,
+                logged
+                    .as_mut()
+                    .map(|l| l as &mut dyn crate::pacman_ui::Screen),
+            )
+            .map_err(|err| Error::CommandSpawn("bwrap".to_string(), err))?;
+            drop(logged);
+            let failed_run = match &outcome {
+                Outcome::TimedOut => true,
+                Outcome::Exited(status, _) => {
+                    !status.success()
+                        && !(status.code() == Some(MAKEPKG_ALREADY_BUILT)
+                            && phase == "build and package")
+                }
+            };
+            if failed_run {
+                if let (Some(l), Some(sc)) = (&look, &screen) {
+                    l.report_failure(sc);
+                }
+            }
             match &outcome {
                 Outcome::TimedOut => {
                     return Err(Error::BuildFailed {
@@ -304,6 +381,34 @@ impl AurBuildBackend {
             }
         }
         Ok(())
+    }
+
+    /// `makepkg` in `dir`, on the host. On a terminal its output is drawn in
+    /// emrac's style through a pseudo-terminal (its questions and the sudo
+    /// prompt are untouched); otherwise it owns the terminal.
+    fn run_makepkg(&self, dir: &Path, args: &[String]) -> Result<std::process::ExitStatus> {
+        if let Some(look) = Look::new(&dir_name(dir), true) {
+            let mut screen = look.screen();
+            let shown = {
+                let mut logged = look.logged(&mut screen);
+                crate::pacman_run::run_screen("makepkg", args, Some(dir), &mut logged)
+            };
+            match shown {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        look.report_failure(&screen);
+                    }
+                    return Ok(status);
+                }
+                Ok(None) => {}
+                Err(err) => return Err(Error::CommandSpawn("makepkg".to_string(), err)),
+            }
+        }
+        Command::new("makepkg")
+            .args(args)
+            .current_dir(dir)
+            .status()
+            .map_err(|err| Error::CommandSpawn("makepkg".to_string(), err))
     }
 
     fn sandbox_spec(&self, dir: &Path, network: bool, limits: &Limits) -> SandboxSpec {
@@ -401,6 +506,14 @@ impl Default for AurBuildBackend {
 
 /// Points a split package's directory at its base's checkout, which sits
 /// beside it in the build cache.
+/// The package a build directory is for (its last component).
+fn dir_name(dir: &Path) -> String {
+    dir.file_name().map_or_else(
+        || "package".to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
+}
+
 fn link_to_base(dir: &Path, base: &str) -> Result<()> {
     std::os::unix::fs::symlink(base, dir).map_err(|source| Error::Io {
         context: format!("couldn't link '{}' to '{base}'", dir.display()),

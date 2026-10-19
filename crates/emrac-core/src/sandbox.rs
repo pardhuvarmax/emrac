@@ -251,6 +251,97 @@ fn run_command_capture(
     Ok((outcome, text))
 }
 
+/// `run_command_tail`, with the output drawn by `screen` (a package build in
+/// emrac's style) instead of being echoed. The program's output is still kept
+/// for the tail, and the screen is ticked while the build runs so its clock and
+/// spinner move.
+pub fn run_command_screen(
+    mut cmd: Command,
+    timeout: Option<Duration>,
+    screen: &mut dyn crate::pacman_ui::Screen,
+) -> std::io::Result<(Outcome, String)> {
+    use std::io::{Read, Write};
+    use std::sync::mpsc;
+
+    enum Msg {
+        Chunk(Vec<u8>),
+        Done(std::io::Result<Outcome>),
+    }
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let streams: [Option<Box<dyn Read + Send>>; 2] = [
+        child
+            .stdout
+            .take()
+            .map(|s| Box::new(s) as Box<dyn Read + Send>),
+        child
+            .stderr
+            .take()
+            .map(|s| Box::new(s) as Box<dyn Read + Send>),
+    ];
+    for source in streams.into_iter().flatten() {
+        let tx = tx.clone();
+        let mut source = source;
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 8192];
+            while let Ok(n) = source.read(&mut buf) {
+                if n == 0 || tx.send(Msg::Chunk(buf[..n].to_vec())).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+    {
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(Msg::Done(wait_for(child, timeout)));
+        });
+    }
+    drop(tx);
+
+    let mut stdout = std::io::stdout();
+    let mut show = |bytes: Vec<u8>| {
+        if !bytes.is_empty() {
+            let _ = stdout.write_all(&bytes).and_then(|()| stdout.flush());
+        }
+    };
+    let mut tail: Vec<u8> = Vec::new();
+    let mut outcome: Option<std::io::Result<Outcome>> = None;
+    let mut width = crate::style::Style::stdout().width;
+    loop {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(Msg::Chunk(chunk)) => {
+                show(screen.feed(&chunk));
+                tail.extend_from_slice(&chunk);
+                if tail.len() > TAIL_BYTES {
+                    let excess = tail.len() - TAIL_BYTES;
+                    tail.drain(..excess);
+                }
+            }
+            Ok(Msg::Done(o)) => {
+                // after a timeout a straggler could still hold a pipe open
+                let timed_out = matches!(o, Ok(Outcome::TimedOut));
+                outcome = Some(o);
+                if timed_out {
+                    break;
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => show(screen.flush_stale()),
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+        let now = crate::style::Style::stdout().width;
+        if now != width {
+            width = now;
+            show(screen.resize(width));
+        }
+        show(screen.tick());
+    }
+    show(screen.finish());
+    let outcome = outcome.unwrap_or(Ok(Outcome::TimedOut))?;
+    Ok((outcome, String::from_utf8_lossy(&tail).into_owned()))
+}
+
 fn wait_for(mut child: std::process::Child, timeout: Option<Duration>) -> std::io::Result<Outcome> {
     let deadline = timeout.map(|t| Instant::now() + t);
     loop {
@@ -428,6 +519,7 @@ pub fn run(
     command: &[String],
     limits: &Limits,
     use_scope: bool,
+    screen: Option<&mut dyn crate::pacman_ui::Screen>,
 ) -> std::io::Result<(Outcome, String)> {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -458,7 +550,10 @@ pub fn run(
             .args(command);
         c
     };
-    let outcome = run_command_tail(cmd, limits.timeout());
+    let outcome = match screen {
+        Some(screen) => run_command_screen(cmd, limits.timeout(), screen),
+        None => run_command_tail(cmd, limits.timeout()),
+    };
     let events = std::fs::read_to_string(&events_file)
         .map(|t| parse_wrapper_events(&t))
         .unwrap_or_default();
