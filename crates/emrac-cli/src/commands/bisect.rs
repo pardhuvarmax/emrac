@@ -78,6 +78,29 @@ fn go_to(point: &Point, offline: bool, extra: &[String]) -> Result<()> {
     crate::commands::restore::apply(&sources, &plan)
 }
 
+/// The way back: the starting state, except that protected packages stay as they
+/// are now. If the search itself left one of them different (a test that changed
+/// it), the ordinary packages are still put back and the protected difference is
+/// reported, rather than refusing the whole return.
+fn way_back(origin: &Point, extra: &[String]) -> Point {
+    let now = installed_now();
+    let mut point = origin.clone();
+    point
+        .packages
+        .retain(|p| emrac_core::protected::protection(&p.name, extra).is_none());
+    for (name, version) in &now {
+        if emrac_core::protected::protection(name, extra).is_some() {
+            point.packages.push(emrac_core::SnapshotPackage {
+                name: name.clone(),
+                version: version.clone(),
+                explicit: true,
+                foreign: false,
+            });
+        }
+    }
+    point
+}
+
 /// `(name, version)` of everything installed, read afresh.
 fn installed_now() -> Vec<(String, String)> {
     Sources::init()
@@ -340,7 +363,11 @@ pub fn run(sources: &Sources, args: &Args) -> Result<()> {
     // Whatever happened, the last thing done is to go back to where it started —
     // and to check it against the exact list taken at the start.
     say!(Voice::Plans, "putting the system back to where it was.");
-    let back = go_to(&timeline.points[last], args.offline, &extra);
+    let back = go_to(
+        &way_back(&timeline.points[last], &extra),
+        args.offline,
+        &extra,
+    );
     let left = bisect::manifest_diff(&original, &installed_now());
     let mut incomplete = false;
     if left.is_empty() {
@@ -358,6 +385,9 @@ pub fn run(sources: &Sources, args: &Args) -> Result<()> {
         );
         for line in left.iter().take(12) {
             println!("  {line}");
+        }
+        if let Some(why) = &stopped {
+            say!(Voice::Warns, "the search had stopped: {why}");
         }
         if let Err(err) = &back {
             say!(Voice::Warns, "putting it back failed — {err}");

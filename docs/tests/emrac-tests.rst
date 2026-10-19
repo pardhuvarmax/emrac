@@ -1560,7 +1560,7 @@ End-to-end: bisect (dev/e2e/bisect.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 emrac bisect over real transactions with fixture packages: the culprit found, the system put back:
-``dev/e2e/run.sh bisect``. Last full run: after the hard boundary, 19 of 19 passed.
+``dev/e2e/run.sh bisect``. Last full run: after the guard checks, 23 of 23 passed.
 
 * the fixtures are in place: fixb 3.0 installed and broken
 * --dry-run lists the window, says every version can be found, and changes nothing
@@ -1580,9 +1580,13 @@ emrac bisect over real transactions with fixture packages: the culprit found, th
 * a window where every state needs a protected change is refused before anything is touched
 * bisect.mode = analysis never changes anything, whatever the flags
 * there is no setting that lifts the protection: isolated is refused as not built
+* a step that would change a protected package is refused before it changes anything
+* the failed return is reported with the exact differences and the recovery command, not as success
+* after it, only the protected package differs (the ordinary ones were put back), and the snapshot still exists
+* the machine was put right by hand and is as it was
 * a missing package file is refused up front, before the system is touched
 
-(19 checks.)
+(23 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

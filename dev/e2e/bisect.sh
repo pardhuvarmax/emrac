@@ -4,7 +4,7 @@
 # (fixb 3.0 ships /usr/share/fixb/broken); `emrac bisect` has to find it by putting
 # the system back into the states it had, and then put it back as it was.
 #
-# last full run: after the hard boundary, 19 of 19 passed
+# last full run: after the guard checks, 23 of 23 passed
 set -u
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; tail -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -84,6 +84,18 @@ as_tester $e config set bisect.mode analysis >/dev/null
 ck "bisect.mode = analysis never changes anything, whatever the flags" "as_tester $e bisect --good $good --bad tx-6 --test true --yes >/tmp/p5.out 2>&1; grep -q 'bisect.mode is analysis' /tmp/p5.out && [ \"\$(pacman -Q | sha256sum)\" = \"$before\" ]"
 as_tester $e config unset bisect.mode >/dev/null
 ck "there is no setting that lifts the protection: isolated is refused as not built" "! as_tester $e config set bisect.mode isolated >/tmp/p6.out 2>&1; grep -q 'planned' /tmp/p6.out"
+
+# the second line of defence: the system drifts during the search (the test changes a
+# protected package itself), so the next step would have to change it back. The step is
+# refused, the search stops, and the failed return is reported as such, never as success.
+as_tester $e config set bisect.protected_extra fixc >/dev/null
+as_tester $e bisect --good $good --bad tx-6 --yes --test 'sudo pacman -U --noconfirm /var/cache/pacman/pkg/fixc-1.0-1-any.pkg.tar.zst >/dev/null 2>&1; test ! -e /usr/share/fixb/broken' >/tmp/g1.out 2>&1; rc=$?
+ck "a step that would change a protected package is refused before it changes anything" "[ $rc -ne 0 ] && grep -q 'bisect stopped before changing anything: reaching' /tmp/g1.out && grep -q 'would change fixc (yours)' /tmp/g1.out"
+ck "the failed return is reported with the exact differences and the recovery command, not as success" "grep -q 'NOT back as it was' /tmp/g1.out && grep -q 'fixc is 1.0-1, it was 2.0-1' /tmp/g1.out && grep -q 'emrac restore bisect-' /tmp/g1.out && ! grep -q 'the system is back as it was' /tmp/g1.out && grep -q 'not back where it started' /tmp/g1.out"
+ck "after it, only the protected package differs (the ordinary ones were put back), and the snapshot still exists" "[ \"\$(cat /usr/share/fixc/version)\" = 1.0 ] && [ -e /usr/share/fixd/version ] && [ \$(grep -c ' is \| missing\|not installed before' /tmp/g1.out) -le 2 ] && as_tester $e snapshot list 2>&1 | grep -q bisect-"
+pacman -U --noconfirm /var/cache/pacman/pkg/fixc-2.0-1-any.pkg.tar.zst >/dev/null 2>&1
+as_tester $e config unset bisect.protected_extra >/dev/null
+ck "the machine was put right by hand and is as it was" "[ \"\$(pacman -Q | sha256sum)\" = \"$before\" ]"
 
 # a version no cache, repository or archive has: refused before anything changes
 rm -f /var/cache/pacman/pkg/fixb-1.0-1-any.pkg.tar.zst /srv/fixrepo/fixb-1.0-1-any.pkg.tar.zst /home/tester/.cache/emrac/archive/fixb/* 2>/dev/null
