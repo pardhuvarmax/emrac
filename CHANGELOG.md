@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## What was reviewed is what is built (after u24) — 2026-10-20
+
+Nothing used to bind the files an audit or a review read to the files `makepkg` built: a PKGBUILD, `.install` file or patch could change in between (another process, a script, the PKGBUILD itself). The recipe is now hashed when it is reviewed or audited (AUR packages after the review, official packages after the audit, local directories after the audit) and checked immediately before the build, and the sandboxed build compares again after each host-side step, because `makepkg --packagelist` and the dependency and source step both source the PKGBUILD and run its top-level code on the host. A difference stops the build before anything is built and names the files (`PKGBUILD changed`, `x.patch was removed`); running the command again reviews what is there now. In a git checkout the recipe is the tracked files, so downloaded source archives are not part of it. The test build gained `EMRAC_FAULT_TAMPER='<point>:<command>'` to change files at a named point. 5 unit tests; `sourceinstall.sh` 62 checks (5 for this).
+
 ## Bisect: the way back holds protected packages still (u24 addendum 2) — 2026-10-20
 
 If a test command changes a protected package during the search, the next step is refused (it would have to change it back), and the return no longer fails whole: ordinary packages are put back, protected ones stay where they are, and the difference left is printed with `emrac restore <snapshot> --prune`; the command fails and says why the search had stopped. 4 container checks (23 in `bisect.sh`).

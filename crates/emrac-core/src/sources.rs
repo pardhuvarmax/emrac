@@ -807,6 +807,39 @@ impl Sources {
         self.aur_build.built_files(name)
     }
 
+    /// Notes what the packaging files of `key` are now, as what was reviewed: the
+    /// build checks that nothing changed after this.
+    pub fn note_reviewed(&self, key: &str) -> Result<()> {
+        let dir = self.aur_build.build_dir(key)?;
+        crate::recipe_digest::note(key, crate::recipe_digest::read(&dir)?);
+        Ok(())
+    }
+
+    /// Before a build: the packaging files are what was reviewed. With nothing
+    /// noted yet (a build that was not reviewed first) the files as they are
+    /// become the baseline, which the host step is then held to.
+    pub fn check_reviewed(&self, key: &str) -> Result<()> {
+        let dir = self.aur_build.build_dir(key)?;
+        let now = crate::recipe_digest::read(&dir)?;
+        match crate::recipe_digest::noted(key) {
+            None => {
+                crate::recipe_digest::note(key, now);
+                Ok(())
+            }
+            Some(reviewed) => {
+                let changes = crate::recipe_digest::changes(&reviewed, &now, true);
+                if changes.is_empty() {
+                    Ok(())
+                } else {
+                    Err(Error::RecipeChanged {
+                        package: key.to_string(),
+                        files: changes.join(", "),
+                    })
+                }
+            }
+        }
+    }
+
     /// What building `name` will make `makepkg -s` install on the host first, from
     /// its `.SRCINFO` (read, never run): new packages, and installed packages that
     /// must be upgraded to take them (a partial upgrade). `None` when there is no

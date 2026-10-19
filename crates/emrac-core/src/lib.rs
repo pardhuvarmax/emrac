@@ -48,6 +48,7 @@ pub mod preflight;
 pub mod protected;
 mod purge;
 pub mod rebuild_ack;
+pub mod recipe_digest;
 pub mod recommend;
 pub mod reconcile;
 mod reinstall;

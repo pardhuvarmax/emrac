@@ -217,6 +217,9 @@ pub fn build_and_install(sources: &Sources, name: &str, choice: BuildChoice) -> 
     } else {
         sources.installed_names_set()
     };
+    // nothing may have changed since it was reviewed
+    emrac_core::fault::point("before-build");
+    sources.check_reviewed(name)?;
     let opts = build_options(sources, name, sources.predicts_network(name), choice)?;
     let files = build_with_retry(sources, name, opts)?;
 

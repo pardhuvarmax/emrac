@@ -9,9 +9,10 @@
 # upgrade rebuilds it from the new packaging source instead of installing the binary.
 #
 # The binary here is the test build (--cfg emrac_fault): EMRAC_FAULT=<point> cuts emrac
-# off at that point, as a kill or a power cut would. A normal build has no such code.
+# off at that point, as a kill or a power cut would, and EMRAC_FAULT_TAMPER='<point>:<command>'
+# changes files there (between a review and a build). A normal build has no such code.
 #
-# last full run: after the hook and multi-package checks, 56 of 56 passed
+# last full run: after the review-to-build checks, 62 of 62 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -164,6 +165,30 @@ sudo pacman -R --noconfirm sl >/dev/null 2>&1; $e from-source drop sl >/dev/null
 ck "a package with no packaging repository is said so, and --binary is named" "! $e install --source tree --yes >/tmp/m4.out 2>&1; grep -q 'no public packaging repository' /tmp/m4.out && grep -q -- '--binary' /tmp/m4.out"
 
 $e from-source drop sl cowsay >/dev/null 2>&1
+
+# --- what was reviewed is what is built (the test build can change files at a named point)
+sudo pacman -R --noconfirm sl >/dev/null 2>&1
+rm -f ~/.local/share/emrac/source-built.json ~/.local/share/emrac/source-built.seal
+EMRAC_FAULT_TAMPER='before-build:echo "# changed after the audit" >> ~/.cache/emrac/build/arch-sl/PKGBUILD' $e install --source sl --yes --skip-pkgbuild --accept-risks >/tmp/r1.out 2>&1; rc=$?
+ck "RV-01 a PKGBUILD edited after the audit stops the build and names the file" "[ $rc -ne 0 ] && grep -q 'changed after you reviewed them (PKGBUILD changed)' /tmp/r1.out && ! pacman -Q sl >/dev/null 2>&1"
+ck "RV-01 the message says what to do" "grep -q 'run the command again' /tmp/r1.out && grep -q 'Nothing was built' /tmp/r1.out"
+EMRAC_FAULT_TAMPER='before-build:cd ~/.cache/emrac/build/arch-sl && git checkout -q -- . && echo "evil" > extra-added.patch' $e install --source sl --yes --skip-pkgbuild --accept-risks >/tmp/r2.out 2>&1; rc=$?
+ck "RV-02 an untracked added file does not change what is reviewed (the recipe is the tracked files), the build goes on" "[ $rc -eq 0 ] && pacman -Q sl >/dev/null 2>&1"
+sudo pacman -R --noconfirm sl >/dev/null 2>&1; $e from-source drop sl >/dev/null 2>&1
+EMRAC_FAULT_TAMPER='before-build:rm -f ~/.cache/emrac/build/arch-sl/PKGBUILD' $e install --source sl --yes --skip-pkgbuild --accept-risks >/tmp/r3.out 2>&1; rc=$?
+ck "RV-03 a deleted PKGBUILD is a change too, and nothing is built" "[ $rc -ne 0 ] && ! pacman -Q sl >/dev/null 2>&1 && grep -qi 'PKGBUILD' /tmp/r3.out"
+mkdir -p /tmp/selfmod && cat > /tmp/selfmod/PKGBUILD <<'PB'
+pkgname=selfmod
+pkgver=1
+pkgrel=1
+pkgdesc=x
+arch=(any)
+license=(GPL)
+sed -i 's/pkgdesc=x/pkgdesc=rewritten-by-itself/' "$startdir/PKGBUILD"
+package() { :; }
+PB
+ck "RV-04 a PKGBUILD that rewrites itself while the host step sources it is caught before the sandboxed build" "! $e build /tmp/selfmod --yes --accept-risks >/tmp/r4.out 2>&1; grep -q 'changed after you reviewed them (PKGBUILD changed)' /tmp/r4.out"
+ck "RV-05 an unchanged recipe builds as before" "mkdir -p /tmp/clean && printf 'pkgname=clean\npkgver=1\npkgrel=1\npkgdesc=x\narch=(any)\nlicense=(GPL)\npackage() { :; }\n' > /tmp/clean/PKGBUILD && $e build /tmp/clean --yes --accept-risks >/tmp/r5.out 2>&1; ls /tmp/clean/*.pkg.tar.zst"
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]

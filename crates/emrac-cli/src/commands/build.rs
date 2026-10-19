@@ -39,6 +39,7 @@ pub fn run(
                 say!(Voice::Notes, "okay, '{target}' not built.");
                 continue;
             }
+            sources.check_reviewed(target)?;
             let opts = build_options(sources, target, sources.predicts_network(target), choice)?;
             build_with_retry(sources, target, opts)?
         };
@@ -81,6 +82,9 @@ fn build_directory(
     dir: &Path,
     choice: BuildChoice,
 ) -> Result<Vec<std::path::PathBuf>> {
+    // what the audit reads is what the build is held to
+    let key = dir.display().to_string();
+    sources.note_reviewed(&key)?;
     let report = audit_path(dir)?;
     output::print_audit(&report, true);
     match report.verdict() {
@@ -105,6 +109,8 @@ fn build_directory(
         .findings
         .iter()
         .any(|f| f.severity >= Severity::Info && f.rule.starts_with("network-in-"));
+    emrac_core::fault::point("before-build");
+    sources.check_reviewed(&key)?;
     let opts = build_options(
         sources,
         &dir.display().to_string(),

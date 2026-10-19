@@ -321,8 +321,35 @@ impl AurBuildBackend {
         }
 
         sandbox::probe().map_err(Error::SandboxUnavailable)?;
-        if !opts.force && self.built_files_in(dir).is_ok() {
-            return Ok(());
+        // What the files are as the build starts. Everything below that runs on
+        // the host (`makepkg --packagelist`, the dependency and source step) sources
+        // the PKGBUILD, which runs its top-level code, and none of it may leave
+        // different files behind.
+        let recipe_before = crate::recipe_digest::read(dir)?;
+        let unchanged = |dir: &Path| -> Result<()> {
+            let changes = crate::recipe_digest::changes(
+                &recipe_before,
+                &crate::recipe_digest::read(dir)?,
+                false,
+            );
+            if changes.is_empty() {
+                Ok(())
+            } else {
+                Err(Error::RecipeChanged {
+                    package: dir
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    files: changes.join(", "),
+                })
+            }
+        };
+        if !opts.force {
+            let built = self.built_files_in(dir).is_ok();
+            unchanged(dir)?;
+            if built {
+                return Ok(());
+            }
         }
 
         // 1. Dependencies and verified sources, on the host.
@@ -337,6 +364,8 @@ impl AurBuildBackend {
         if !status.success() {
             return Err(failed("dependencies and sources", &status, ""));
         }
+
+        unchanged(dir)?;
 
         // 2 and 3, sandboxed.
         let spec = self.sandbox_spec(dir, opts.allow_network, &opts.limits);

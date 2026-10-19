@@ -43,6 +43,8 @@ pub fn build_and_install_at(
 
     // The same audit as for the AUR: what is about to be built is read first.
     let pkgbuild = sources.read_pkgbuild(&key)?;
+    // what the audit reads is what the build is held to
+    sources.note_reviewed(&key)?;
     let report = sources.audit_aur_text(&key, &pkgbuild, None);
     output::print_audit(&report, true);
     match report.verdict() {
@@ -67,6 +69,7 @@ pub fn build_and_install_at(
     }
 
     emrac_core::fault::point("before-build");
+    sources.check_reviewed(&key)?;
     let opts = build_options(sources, &key, sources.predicts_network(&key), choice)?;
     let built = build_with_retry(sources, &key, opts)?;
     // a base builds all its packages; only the one asked for is installed

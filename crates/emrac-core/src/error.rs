@@ -125,6 +125,10 @@ pub enum Error {
     #[error("{0}")]
     PlanChanged(String),
 
+    /// The packaging files changed between the review and the build.
+    #[error("the packaging files of '{package}' changed after you reviewed them ({files}). Nothing was built. Look at what changed (`git -C ~/.cache/emrac/build/{package} status` and `diff`), then run the command again: it is reviewed again from what is there now.")]
+    RecipeChanged { package: String, files: String },
+
     /// The record of source-build policies cannot be trusted; the text says why.
     #[error("{0}")]
     SourcePolicy(String),
@@ -423,6 +427,7 @@ impl Error {
             | Error::PlanChanged(_)
             | Error::Rebuild(_)
             | Error::SourcePolicy(_)
+            | Error::RecipeChanged { .. }
             | Error::SourceRebuildPending(_)
             | Error::Recommend(_)
             | Error::Policy(_)

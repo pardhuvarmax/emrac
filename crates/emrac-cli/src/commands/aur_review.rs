@@ -18,6 +18,22 @@ pub fn review_aur_package(
     yes: bool,
     accept_risks: bool,
 ) -> Result<bool> {
+    let go = review_inner(sources, name, skip_pkgbuild, skip_diff, yes, accept_risks)?;
+    if go {
+        // what was just reviewed is what the build will be held to
+        sources.note_reviewed(name)?;
+    }
+    Ok(go)
+}
+
+fn review_inner(
+    sources: &Sources,
+    name: &str,
+    skip_pkgbuild: bool,
+    skip_diff: bool,
+    yes: bool,
+    accept_risks: bool,
+) -> Result<bool> {
     let outcome = sources.aur_sync(name)?;
 
     // The audit covers exactly what is about to be built, and runs whatever

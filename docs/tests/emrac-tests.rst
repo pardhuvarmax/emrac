@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 743
+     - 748
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **836**
+     - **841**
 
-emrac-core library (743)
+emrac-core library (748)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -682,6 +682,15 @@ emrac-core library (743)
 * ``an_acknowledgement_is_kept_replaced_and_removed``
 * ``it_applies_to_that_build_and_lapses_when_the_package_is_built_again``
 * ``it_covers_what_was_said_and_not_something_new``
+
+``recipe_digest::tests`` (5)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_change_an_addition_and_a_removal_are_named``
+* ``a_symlink_is_its_target_not_what_it_points_at``
+* ``build_output_and_the_checkout_itself_are_not_part_of_the_recipe``
+* ``in_a_git_checkout_only_tracked_files_count_and_edits_are_seen``
+* ``what_was_reviewed_is_remembered_per_package``
 
 ``recommend::tests`` (23)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1495,7 +1504,7 @@ End-to-end: source or binary on install (dev/e2e/sourceinstall.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 An official package built from Arch packaging source here, --binary refusing to compile,
-the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the hook and multi-package checks, 56 of 56 passed.
+the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the review-to-build checks, 62 of 62 passed.
 
 * the plan says an official package is built here and what that means
 * --binary on an AUR package refuses and names the prebuilt one
@@ -1553,8 +1562,14 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * PL-05 two packages built from source are both installed, verified and listed
 * PL-05 the second of two failing after the first landed: both outcomes are said
 * a package with no packaging repository is said so, and --binary is named
+* RV-01 a PKGBUILD edited after the audit stops the build and names the file
+* RV-01 the message says what to do
+* RV-02 an untracked added file does not change what is reviewed (the recipe is the tracked files), the build goes on
+* RV-03 a deleted PKGBUILD is a change too, and nothing is built
+* RV-04 a PKGBUILD that rewrites itself while the host step sources it is caught before the sandboxed build
+* RV-05 an unchanged recipe builds as before
 
-(56 checks.)
+(62 checks.)
 
 End-to-end: bisect (dev/e2e/bisect.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
