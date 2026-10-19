@@ -123,5 +123,6 @@ sudo pacman -R --noconfirm sl >/dev/null 2>&1
 ck "answering no to pacman's own question is a cancel, said as one, not an error" "(sleep 5; echo y; sleep 8; echo n; sleep 5) | script -qec \"$T $e install sl\" /dev/null | tr -d '\\r' | sed -E 's/\\x1b\\[[0-9;?]*[A-Za-z]//g' > $W/no1.out; grep -q 'okay, nothing was changed: you answered no' $W/no1.out && ! grep -q 'something went wrong' $W/no1.out && ! pacman -Q sl"
 ck "a cancel at pacman's question is not recorded as a failed transaction" "! $e history 2>&1 | head -4 | grep -qi 'failed'"
 
+
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]

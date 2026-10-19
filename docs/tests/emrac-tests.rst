@@ -539,7 +539,7 @@ emrac-core library (705)
 * ``hooks_with_counters_are_restyled``
 * ``one_file_with_no_total_is_shown_as_itself``
 * ``parallel_downloads_are_a_block_that_moves_and_each_file_finishes_once``
-* ``the_database_sync_is_one_block_not_a_line_per_update``
+* ``the_database_sync_is_a_table_whose_rows_keep_their_places``
 * ``the_end_finishes_a_line_that_never_got_its_newline``
 * ``the_screen_knows_when_the_program_was_left_at_a_question``
 * ``the_steps_of_a_transaction_become_emrac_lines_and_pacmans_bars_are_gone``

@@ -38,6 +38,7 @@ enum Class {
     Hook(usize, usize, String),
     Section {
         retrieving: bool,
+        sync: bool,
     },
     /// A line that only names a file about to be downloaded.
     Swallow,
@@ -129,6 +130,7 @@ fn classify(plain: &str, retrieving: bool) -> Class {
     if t.starts_with(":: ") && t.ends_with("...") && !t.contains('?') {
         return Class::Section {
             retrieving: t.contains("Retrieving") || t.contains("Synchronizing"),
+            sync: t.contains("Synchronizing"),
         };
     }
     if retrieving && plain.starts_with(' ') {
@@ -241,6 +243,9 @@ pub struct Renderer {
     /// Files of this download that finished: pacman writes a last line for
     /// some of them again, and it is not shown twice.
     finished: Vec<String>,
+    /// The section is the sync of the databases: a few repositories, shown as a
+    /// table whose rows keep their places, with a count under it.
+    sync_mode: bool,
     /// The rows of the screen the block takes now, and the width of each of its lines.
     block_widths: Vec<usize>,
     /// Columns of the live line on the screen, for erasing it after a resize.
@@ -265,6 +270,7 @@ impl Renderer {
             rows: Vec::new(),
             total: None,
             finished: Vec::new(),
+            sync_mode: false,
             block_widths: Vec::new(),
             drawn_len: 0,
             cursor_hidden: false,
@@ -353,26 +359,62 @@ impl Renderer {
         self.block_widths.clear();
     }
 
-    /// The block's lines now: every file that is in progress, then the total.
+    /// The block's lines now: every file that is in progress, then the total; for
+    /// the database sync every repository in its place, and how many are done.
     fn block_lines(&self) -> Vec<Line> {
         let mut lines: Vec<Line> = self
             .rows
             .iter()
             .map(|r| {
+                let done = self.sync_mode && r.pct >= 100;
                 self.rec_line(
                     &Rec::DlFile {
                         name: r.name.clone(),
                         rest: r.rest.clone(),
                         pct: r.pct,
                     },
-                    None,
+                    done.then_some(true),
                 )
             })
             .collect();
         if let Some(t) = &self.total {
             lines.push(self.rec_line(t, None));
         }
+        if self.sync_mode && !self.rows.is_empty() {
+            lines.push(self.sync_summary());
+        }
         lines
+    }
+
+    /// `Synchronizing repositories... 3/4 complete`.
+    fn sync_summary(&self) -> Line {
+        let done = self.rows.iter().filter(|r| r.pct >= 100).count();
+        vec![
+            Seg::plain(" "),
+            Seg::new(
+                format!(
+                    "  Synchronizing repositories{} {done}/{} complete",
+                    if self.st.unicode { "\u{2026}" } else { "..." },
+                    self.rows.len()
+                ),
+                Role::Dim,
+            ),
+        ]
+    }
+
+    /// The width the file names are padded to: wide for package files, the
+    /// longest repository for the sync.
+    fn name_width(&self) -> usize {
+        if self.sync_mode {
+            self.rows
+                .iter()
+                .map(|r| display_width_of(&r.name))
+                .max()
+                .unwrap_or(8)
+                .clamp(8, 24)
+        } else {
+            34
+        }
     }
 
     fn draw_block(&mut self) {
@@ -396,6 +438,9 @@ impl Renderer {
     /// A file that finished leaves the block for good as a line of its own, so
     /// a long download is a list of what is done above the few that are going.
     fn flush_done_rows(&mut self) {
+        if self.sync_mode {
+            return;
+        }
         let finished: Vec<Row> = self.rows.iter().filter(|r| r.pct >= 100).cloned().collect();
         let total_done = matches!(&self.total, Some(Rec::DlTotal { pct, .. }) if *pct >= 100)
             && self.rows.iter().all(|r| r.pct >= 100);
@@ -432,6 +477,7 @@ impl Renderer {
             return;
         }
         self.erase_block();
+        let summary = (self.sync_mode && !self.rows.is_empty()).then(|| self.sync_summary());
         let rows = std::mem::take(&mut self.rows);
         for r in rows {
             let done = r.pct >= 100;
@@ -449,6 +495,9 @@ impl Renderer {
             let done = matches!(&t, Rec::DlTotal { pct, .. } if *pct >= 100);
             let line = self.rec_line(&t, Some(done));
             self.print(&line);
+        }
+        if let Some(summary) = summary {
+            self.print(&summary);
         }
     }
 
@@ -508,7 +557,16 @@ impl Renderer {
                     self.dirty = true;
                 }
             }
-            Class::Swallow => self.swallowing = true,
+            Class::Swallow => {
+                if self.sync_mode {
+                    let name = plain.trim().to_string();
+                    if !self.rows.iter().any(|r| r.name == name) {
+                        self.upsert_row(&name, "waiting".to_string(), 0);
+                        self.dirty = true;
+                    }
+                }
+                self.swallowing = true;
+            }
             Class::UpToDate(name) => {
                 self.upsert_row(&name, "up to date".to_string(), 100);
                 self.swallowing = true;
@@ -521,11 +579,12 @@ impl Renderer {
                 self.print(&line);
                 self.swallowing = true;
             }
-            Class::Section { retrieving } => {
+            Class::Section { retrieving, sync } => {
                 self.commit_block();
                 self.finished.clear();
                 self.commit_live();
                 self.retrieving = retrieving;
+                self.sync_mode = sync;
                 let line = vec![Seg::new(plain.trim_end().to_string(), Role::Brand)];
                 self.print(&line);
                 self.swallowing = true;
@@ -555,7 +614,7 @@ impl Renderer {
     }
 
     fn upsert_row(&mut self, name: &str, rest: String, pct: u8) {
-        if self.finished.iter().any(|f| f == name) {
+        if !self.sync_mode && self.finished.iter().any(|f| f == name) {
             return;
         }
         match self.rows.iter_mut().find(|r| r.name == name) {
@@ -725,7 +784,7 @@ impl Renderer {
             }
             Rec::DlFile { name, rest, pct } => {
                 line.push(lead(Role::Note, arrow));
-                line.push(Seg::new(label(name, 34), Role::Plain));
+                line.push(Seg::new(label(name, self.name_width()), Role::Plain));
                 line.push(Seg::plain("  "));
                 line.extend(self.bar(*pct));
                 line.push(Seg::new(format!(" {pct:>3}%"), Role::Size));
@@ -747,6 +806,10 @@ impl Renderer {
         line.push(Seg::new(format!("  {k}/{n}"), Role::Dim));
         line
     }
+}
+
+fn display_width_of(text: &str) -> usize {
+    crate::style::display_width(text)
 }
 
 fn label_of(st: &Style, text: &str) -> String {
@@ -920,6 +983,90 @@ mod tests {
         let mut idle = Renderer::new(st(false));
         assert!(idle.resize(60).is_empty());
     }
+    /// What a terminal would show after `out`: lines, a cursor that goes up and
+    /// returns, and the erasing sequences emrac uses. Colours are not kept.
+    fn screen(out: &str) -> Vec<String> {
+        let plain = strip_ansi_keep_moves(out);
+        let mut lines: Vec<Vec<char>> = vec![Vec::new()];
+        let (mut row, mut col) = (0usize, 0usize);
+        let mut chars = plain.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                '\r' => col = 0,
+                '\n' => {
+                    row += 1;
+                    col = 0;
+                    if lines.len() <= row {
+                        lines.push(Vec::new());
+                    }
+                }
+                '\x1b' => {
+                    if chars.peek() == Some(&'[') {
+                        chars.next();
+                        let mut num = String::new();
+                        let mut fin = ' ';
+                        for n in chars.by_ref() {
+                            if n.is_ascii_alphabetic() {
+                                fin = n;
+                                break;
+                            }
+                            num.push(n);
+                        }
+                        let n: usize = num.parse().unwrap_or(1);
+                        match fin {
+                            'A' => row = row.saturating_sub(n),
+                            'J' => {
+                                lines.truncate(row + 1);
+                                lines[row].truncate(col);
+                            }
+                            'K' => lines[row].truncate(col),
+                            _ => {}
+                        }
+                    }
+                }
+                c => {
+                    while lines[row].len() < col {
+                        lines[row].push(' ');
+                    }
+                    if col < lines[row].len() {
+                        lines[row][col] = c;
+                    } else {
+                        lines[row].push(c);
+                    }
+                    col += 1;
+                }
+            }
+        }
+        lines
+            .into_iter()
+            .map(|l| l.into_iter().collect::<String>().trim_end().to_string())
+            .collect()
+    }
+
+    /// Colours out, cursor moves and erases kept (the `screen` reads them).
+    fn strip_ansi_keep_moves(text: &str) -> String {
+        let mut out = String::new();
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\x1b' && chars.peek() == Some(&'[') {
+                let mut seq = String::from("\x1b[");
+                chars.next();
+                for n in chars.by_ref() {
+                    seq.push(n);
+                    if n.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+                if !seq.ends_with('m') {
+                    out.push_str(&seq);
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        out
+    }
+
     fn bar_of(pct: u8) -> String {
         let full = usize::from(pct) * 32 / 100;
         format!("[{}{}] {pct:>3}%", "#".repeat(full), "-".repeat(32 - full))
@@ -1029,18 +1176,31 @@ mod tests {
     }
 
     #[test]
-    fn the_database_sync_is_one_block_not_a_line_per_update() {
+    fn the_database_sync_is_a_table_whose_rows_keep_their_places() {
         let mut r = Renderer::new(st(false));
         let mut all = String::new();
         let mut step = |r: &mut Renderer, text: String| {
             all.push_str(&String::from_utf8_lossy(&r.feed(text.as_bytes())));
+            screen(&all)
         };
-        step(
+        let s0 = step(
             &mut r,
             ":: Synchronizing package databases...\r\n core\r\n extra\r\n multilib\r\n g14\r\n"
                 .into(),
         );
-        step(
+        // every repository is there at once, in the order pacman lists them
+        let names: Vec<&str> = s0
+            .iter()
+            .skip(1)
+            .take(4)
+            .map(|l| l.split_whitespace().nth(1).unwrap())
+            .collect();
+        assert_eq!(names, ["core", "extra", "multilib", "g14"], "{s0:?}");
+        assert!(
+            s0[5].contains("Synchronizing repositories") && s0[5].contains("0/4 complete"),
+            "{s0:?}"
+        );
+        let s1 = step(
             &mut r,
             format!(
                 "{}\r\r\n{}\r\r\n{}\r\r\n",
@@ -1049,9 +1209,18 @@ mod tests {
                 file_rec("core", "0.00 B/s", 8)
             ),
         );
+        assert!(s1[1].contains("core") && s1[1].contains("8%"), "{s1:?}");
+        assert!(
+            s1[3].contains("multilib") && s1[3].contains("19%"),
+            "{s1:?}"
+        );
+        assert!(
+            s1[4].contains("g14") && s1[4].contains("waiting"),
+            "a repository not started yet waits in its row: {s1:?}"
+        );
         // the way it really arrives: lines joined only by cursor moves, and a
         // database that is up to date written over the end of another line
-        step(
+        let s2 = step(
             &mut r,
             format!(
                 "\x1b[3F{}\r\r\n\x1b[1E{}\r\r\n",
@@ -1059,50 +1228,54 @@ mod tests {
                 file_rec("core", "459 KiB/s", 100)
             ),
         );
-        step(
+        assert!(
+            s2.iter().any(|l| l.contains("core") && l.contains("100%")),
+            "{s2:?}"
+        );
+        let s3 = step(
             &mut r,
             format!(
                 "\x1b[2F g14 is up to date\x1b[1E {}\r\r\n",
                 file_rec("extra", "6.31 MiB/s", 53).trim_start()
             ),
         );
+        let extra = s3.iter().find(|l| l.contains("extra")).unwrap();
+        assert!(
+            extra.contains("53%") && extra.contains('\u{2193}'),
+            "{s3:?}"
+        );
+        let g14 = s3.iter().find(|l| l.contains("g14")).unwrap();
+        assert!(
+            g14.contains('\u{2714}') && g14.contains("up to date"),
+            "{s3:?}"
+        );
+        assert!(s3.iter().any(|l| l.contains("3/4 complete")), "{s3:?}");
         step(
             &mut r,
             format!("\x1b[1F{}\r\n", file_rec("extra", "8.90 MiB/s", 100)),
         );
-        let end = String::from_utf8_lossy(&r.finish()).into_owned();
-        all.push_str(&end);
-        let plain: String = strip_ansi(&all).replace("\r\x1b[2K", "");
-        for name in ["core", "extra", "multilib"] {
-            assert_eq!(
-                plain.matches(&format!("\u{2714} {name} ")).count(),
-                1,
-                "{name}: {plain}"
-            );
-        }
+        all.push_str(&String::from_utf8_lossy(
+            &r.feed(b":: Starting full system upgrade...\r\n"),
+        ));
+        let end = screen(&all);
+        let done: Vec<&String> = end.iter().filter(|l| l.contains('\u{2714}')).collect();
+        assert_eq!(done.len(), 4, "{end:?}");
         assert!(
-            plain.contains("\u{2714} g14") && plain.contains("up to date"),
-            "{plain}"
+            end[1..5]
+                .iter()
+                .all(|l| l.contains('\u{2714}') && l.contains("100%")),
+            "{end:?}"
         );
-        for raw in [
-            "\r\n core\r\n",
-            "\r\n extra\r\n",
-            "\r\n multilib\r\n",
-            "\r\n g14\r\n",
-        ] {
-            assert!(
-                !plain.contains(raw),
-                "a bare name was passed through: {raw:?} {plain}"
-            );
-        }
-        assert!(!plain.contains("[#") && !plain.contains("[--"), "{plain}");
+        assert!(end[5].contains("4/4 complete"), "{end:?}");
+        assert_eq!(end[6], ":: Starting full system upgrade...", "{end:?}");
         assert!(
-            !plain.contains("is up to date extra"),
-            "lines are not merged: {plain}"
+            !all.contains("[#") && !all.contains("\x1b[1F"),
+            "pacman's own bars and moves are gone"
         );
         assert!(
-            plain.ends_with("\r\n"),
-            "nothing is left on the screen unfinished: {plain:?}"
+            !end.iter()
+                .any(|l| l.trim() == "core" || l.trim() == "extra"),
+            "bare names are not left: {end:?}"
         );
     }
 
@@ -1222,7 +1395,7 @@ mod tests {
         let mut r = Renderer::new(st(false));
         let mut all = String::new();
         for chunk in [
-            ":: Synchronizing package databases...\r\n".to_string(),
+            ":: Retrieving packages...\r\n".to_string(),
             format!("{}\r\r\n", file_rec("extra", "1 MiB/s", 40)),
             format!("{}\r\r\n", file_rec("extra", "8 MiB/s", 100)),
             format!("{}\r\n", file_rec("extra", "9 MiB/s", 100)),
