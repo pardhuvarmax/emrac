@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 705
+     - 708
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **798**
+     - **801**
 
-emrac-core library (705)
+emrac-core library (708)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -632,6 +632,13 @@ emrac-core library (705)
 
 * ``classification``
 * ``only_modified_and_unknown_are_at_risk``
+
+``rebuild_ack::tests`` (3)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``an_acknowledgement_is_kept_replaced_and_removed``
+* ``it_applies_to_that_build_and_lapses_when_the_package_is_built_again``
+* ``it_covers_what_was_said_and_not_something_new``
 
 ``recommend::tests`` (23)
 ~~~~~~~~~~~~~~~~~~~~~~~~~

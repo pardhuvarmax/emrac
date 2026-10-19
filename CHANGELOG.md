@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u22 addendum 6 (after r3) — 2026-10-19 — acknowledging "may need building again"
+
+`emrac rebuild --ack <pkg>... [--reason "…"]` leaves the doctor's note "AUR packages built against older libraries" for packages whose only problem is that they **may** break (a bundled program that wants a library nothing provides, often optional): they are no longer listed by `doctor` or `emrac rebuild --check` (which says how many are acknowledged and which). The acknowledgement keeps what the note said at the time; it lapses by itself when the package is built again (another version or build time) and when the note says something new (a different missing library). A package that is **broken now** cannot be acknowledged (it would not mend it: `emrac rebuild <pkg>` does). `--unack` takes one back. Kept in `~/.local/share/emrac/rebuild-ack.json`. New: `rebuild_ack.rs` (3 tests), `Sources::{stale_builds_split, rebuild_ack}`.
+
 ## Slice u22 addendum 5 (after r3) — 2026-10-19 — the ledger is brought up to date after emrac upgrades itself
 
 After a transaction emrac brings the ledger up to date by itself (`sudo emrac ledger-append`, quietly, only if sudo allows it without a question). When the transaction upgraded emrac, the running program was the old file and Linux names it `/usr/bin/emrac (deleted)`, so the step failed with "can't look at /usr/bin/emrac (deleted): No such file or directory" and the ledger waited for `emrac history sync`. The path of the running emrac is now the file that is at that path now (the new version, checked as root-owned and not writable by others like any other). The same for the policy helper and the programs the ledger audit trusts. `ledger::running_exe` (1 test).

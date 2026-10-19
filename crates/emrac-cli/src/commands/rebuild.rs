@@ -7,6 +7,33 @@ use crate::commands::history;
 use crate::output;
 use crate::prompt::confirm;
 
+/// `emrac rebuild --ack <pkg>...` and `--unack`: leave a "may need building
+/// again" note, or take that back.
+pub fn acknowledge(
+    sources: &Sources,
+    pkgs: &[String],
+    ack: bool,
+    reason: Option<&str>,
+    json: bool,
+) -> Result<()> {
+    let done = sources.rebuild_ack(pkgs, ack, reason)?;
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({ if ack { "acknowledged" } else { "taken_back" }: done })
+        );
+    } else if ack {
+        say!(
+            Voice::Confirms,
+            "acknowledged: {}. They are not listed any more; one comes back if it is built again or its note says something new (another missing library).",
+            done.join(", ")
+        );
+    } else {
+        say!(Voice::Confirms, "taken back: {}.", done.join(", "));
+    }
+    Ok(())
+}
+
 /// `emrac rebuild <pkg>...`: build installed AUR packages again from source.
 #[allow(clippy::too_many_arguments)]
 pub fn run(
@@ -23,7 +50,20 @@ pub fn run(
     json: bool,
 ) -> Result<()> {
     if check {
-        output::print_stale(&sources.stale_builds(), json);
+        let (shown, hidden) = sources.stale_builds_split();
+        output::print_stale(&shown, json);
+        if !hidden.is_empty() && !json {
+            say!(
+                Voice::Notes,
+                "{} acknowledged, not listed: {} (`emrac rebuild --unack <pkg>` takes one back)",
+                hidden.len(),
+                hidden
+                    .iter()
+                    .map(|s| s.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
         return Ok(());
     }
     let names: Vec<String> = if stale {

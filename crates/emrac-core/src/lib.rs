@@ -42,6 +42,7 @@ pub mod policy_ops;
 pub mod policy_preview;
 pub mod preflight;
 mod purge;
+pub mod rebuild_ack;
 pub mod recommend;
 pub mod reconcile;
 mod reinstall;

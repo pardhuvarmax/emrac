@@ -3264,8 +3264,21 @@ impl Sources {
     }
 
     /// Foreign packages that need building again, or may (see `stale_builds`).
-    /// Packages with nothing to report are left out. Read-only, no network.
+    /// Packages with nothing to report are left out, and so are the ones that
+    /// may break only and that you acknowledged (`emrac rebuild --ack`).
+    /// Read-only, no network.
     pub fn stale_builds(&self) -> Vec<crate::stale_builds::StaleBuild> {
+        self.stale_builds_split().0
+    }
+
+    /// What `stale_builds` shows, and what it left out because you acknowledged
+    /// it (those would be listed otherwise).
+    pub fn stale_builds_split(
+        &self,
+    ) -> (
+        Vec<crate::stale_builds::StaleBuild>,
+        Vec<crate::stale_builds::StaleBuild>,
+    ) {
         let system = crate::stale_builds::system_libs();
         let interpreters: Vec<(&str, String)> = ["python", "perl"]
             .into_iter()
@@ -3277,14 +3290,71 @@ impl Sources {
         let upgrades = std::fs::read_to_string("/var/log/pacman.log")
             .map(|t| crate::stale_builds::parse_upgrades(&t))
             .unwrap_or_default();
-        self.alpm
-            .foreign_details()
-            .iter()
-            .map(|pkg| {
-                crate::stale_builds::judge(pkg, &system, &interpreters, &upgrades, Path::new("/"))
-            })
-            .filter(|s| !s.broken.is_empty() || !s.maybe.is_empty())
-            .collect()
+        let acks = crate::rebuild_ack::read();
+        let (mut shown, mut hidden) = (Vec::new(), Vec::new());
+        for pkg in self.alpm.foreign_details() {
+            let all =
+                crate::stale_builds::judge(&pkg, &system, &interpreters, &upgrades, Path::new("/"));
+            if all.broken.is_empty() && all.maybe.is_empty() {
+                continue;
+            }
+            let says: Vec<String> = all.maybe.clone();
+            if all.broken.is_empty() && crate::rebuild_ack::covers(&acks, &pkg, &says) {
+                hidden.push(all);
+            } else {
+                shown.push(all);
+            }
+        }
+        (shown, hidden)
+    }
+
+    /// Acknowledges (`ack`) or takes back (`!ack`) the note that these installed
+    /// AUR packages may need building again. A package that is broken now cannot
+    /// be acknowledged: that does not mend it.
+    pub fn rebuild_ack(
+        &self,
+        names: &[String],
+        ack: bool,
+        reason: Option<&str>,
+    ) -> Result<Vec<String>> {
+        let file = crate::rebuild_ack::path()?;
+        let foreign = self.alpm.foreign_details();
+        let (shown, _) = self.stale_builds_split();
+        let mut done = Vec::new();
+        for name in names {
+            if !ack {
+                if crate::rebuild_ack::remove_from(&file, name)? {
+                    done.push(name.clone());
+                    continue;
+                }
+                return Err(Error::Rebuild(format!("{name} is not acknowledged")));
+            }
+            let pkg = foreign
+                .iter()
+                .find(|f| &f.name == name)
+                .ok_or_else(|| Error::Rebuild(format!("{name} is not an installed AUR package")))?;
+            if shown
+                .iter()
+                .any(|s| &s.name == name && !s.broken.is_empty())
+            {
+                return Err(Error::Rebuild(format!(
+                    "{name} is broken now (`emrac rebuild --check` says how); acknowledging would not mend it: `emrac rebuild {name}` does"
+                )));
+            }
+            let says = shown
+                .iter()
+                .find(|s| &s.name == name)
+                .map(|s| s.maybe.clone())
+                .unwrap_or_default();
+            if says.is_empty() {
+                return Err(Error::Rebuild(format!(
+                    "nothing is said about {name} that could be acknowledged (`emrac rebuild --check` lists what is)"
+                )));
+            }
+            crate::rebuild_ack::add_to(&file, pkg, &says, reason, now())?;
+            done.push(name.clone());
+        }
+        Ok(done)
     }
 
     /// The facts the after-upgrade report needs (u20): the running kernel,

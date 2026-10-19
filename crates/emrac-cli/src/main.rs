@@ -581,6 +581,9 @@ fn run(cli: &Cli) -> Result<()> {
             pkgs,
             check,
             stale,
+            ack,
+            unack,
+            reason,
             skip_pkgbuild,
             skip_diff,
             accept_risks,
@@ -596,6 +599,15 @@ fn run(cli: &Cli) -> Result<()> {
                 force: true,
                 remove_tools: commands::aur_install::RemoveTools::from_config(&config.build),
             };
+            if *ack || *unack {
+                return commands::rebuild::acknowledge(
+                    &sources,
+                    pkgs,
+                    *ack,
+                    reason.as_deref(),
+                    cli.json,
+                );
+            }
             commands::rebuild::run(
                 &sources,
                 pkgs,

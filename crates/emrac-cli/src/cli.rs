@@ -753,7 +753,8 @@ pub enum Commands {
     /// or Qt update broke them): fetches and audits the sources like `upgrade`.
     /// For source packages only: rebuilding a -bin package fixes nothing
     Rebuild {
-        /// The packages to build again (not with --check or --stale)
+        /// The packages to build again (with --ack or --unack: the packages to
+        /// acknowledge or take back)
         pkgs: Vec<String>,
 
         /// List the installed AUR packages that need building again, or may,
@@ -765,6 +766,21 @@ pub enum Commands {
         /// old Python or Perl folder); `--check` lists them
         #[arg(long, conflicts_with = "pkgs")]
         stale: bool,
+
+        /// Acknowledge that these packages may need building again and you leave
+        /// them: `doctor` and `--check` stop listing them. It lapses when the
+        /// package is built again or its note says something new. Only what
+        /// may break (not what is broken now)
+        #[arg(long, conflicts_with_all = ["check", "stale", "unack"], requires = "pkgs")]
+        ack: bool,
+
+        /// Take an acknowledgement back
+        #[arg(long, conflicts_with_all = ["check", "stale", "ack"], requires = "pkgs")]
+        unack: bool,
+
+        /// Why, for your own memory (with --ack)
+        #[arg(long, requires = "ack", value_name = "TEXT")]
+        reason: Option<String>,
 
         /// Never show the PKGBUILD/diff for review (the audit still runs)
         #[arg(long)]
