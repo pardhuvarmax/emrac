@@ -330,7 +330,7 @@ table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb
     <li><b>Plan first.</b> Every change is previewed with sizes, time estimates, conflicts, and the reasons behind each decision.</li>
     <li><b>Reversible.</b> Builds run in a sandbox, transactions are logged, and rollback is built in.</li>
   </ul>
-  <p><b>Where it stands.</b> The core commands and everything under <a href="#built">Available now</a> work today, including the twenty updates that make up release r3. The source-or-binary scoring, build profiles, queue and terminal interface under <a href="#features">Planned features</a> are design goals, not shipped.</p>
+  <p><b>Where it stands.</b> The core commands and everything under <a href="#built">Available now</a> work today, including the updates that make up release r3 and the twenty-three that came after it (recommendation and explanation of source or binary, building official packages from Arch&rsquo;s packaging source, a source-build policy that upgrades honour, security data, the package score, mirror ranking, previews of hooks and config files, pacman&rsquo;s transaction in emrac&rsquo;s own style). Build profiles, the build queue, ETA prediction and the terminal interface under <a href="#features">Planned features</a> are design goals, not shipped.</p>
   <p><a class="btn" href="#built">What works today</a> &nbsp; <a class="btn alt" href="#changes">What changed</a></p>
 
   <h3>Try the planner</h3>
@@ -423,23 +423,51 @@ table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb
     </tbody>
   </table>
 
-
-  <h2 id="features">Planned features</h2>
-  <p>The design goals. Those not listed under <a href="#built">Available now</a> are not built yet.</p>
+  <h3>Source or binary <small>since r3</small></h3>
   <table class="box resp">
     <tbody>
+      <tr><td><code>recommend</code> &middot; <code>explain</code></td><td>Source or binary for a package, from stated rules, with the reasoning input by input and what would change it. Builds are timed, so the estimates improve.</td></tr>
+      <tr><td><code>install --source</code> / <code>--binary</code></td><td><code>--source</code> builds an official package from Arch&rsquo;s packaging source at the tag of the repository&rsquo;s version: audited, built in the sandbox, the result inspected, then installed with <code>pacman -U</code>. <code>--binary</code> compiles nothing and refuses a package that exists only as source, naming its <code>-bin</code> one. <code>install.prefer = recommend</code> lets <code>recommend</code> choose when you do not.</td></tr>
+      <tr><td><code>from-source</code></td><td>What you asked to build from source is a recorded policy, apart from pins. An upgrade marks those packages, installs the repository&rsquo;s binaries first, then rebuilds each from the new packaging source. A failed rebuild keeps the binary and the policy, marks it pending, and makes the upgrade exit non-zero; it never falls back silently. <code>list</code>, <code>add</code>, <code>drop</code>, <code>rebuild</code>.</td></tr>
+      <tr><td>Origin is checked</td><td>&ldquo;Built here&rdquo; is not claimed from the version alone: emrac compares the build date and packager pacman recorded. It says <i>source verified</i>, <i>repository file detected</i> (after <code>pacman -S</code> or <code>reinstall</code>), <i>origin unverified</i>, <i>rebuild pending</i> or <i>policy mismatch</i>; <code>doctor</code> and every plan list a policy that is not being honoured. A record that cannot be read stops upgrades instead of reading as &ldquo;no policy&rdquo;.</td></tr>
+      <tr><td><code>score</code> &middot; <code>advisor</code> &middot; <code>vulns</code></td><td>A report card for a package (reproducibility, provenance, compatibility, packaging quality, upstream health, an overall number and weights you can set); advice under a big plan; Arch security data with a gate before installs.</td></tr>
+    </tbody>
+  </table>
+  <h3>Previews, policy and mirrors <small>since r3</small></h3>
+  <table class="box resp">
+    <tbody>
+      <tr><td>Hook, config and policy previews</td><td>A plan lists the pacman hooks that will run (and which could stop it), the config files you edited that will get a <code>.pacnew</code> or <code>.pacsave</code>, and the files you overrode or diverted that it touches. <code>override</code> and <code>divert</code> keep those choices across upgrades, reinstalls and removals.</td></tr>
+      <tr><td>After a failure</td><td>What pacman leaves behind when a transaction fails is found and reported; the tools an AUR build installed only to build are offered for removal.</td></tr>
+      <tr><td><code>mirrors</code></td><td>Mirror Intelligence: measure, rank, write and apply.</td></tr>
+      <tr><td><code>export</code> &middot; <code>import</code> &middot; <code>bundle</code></td><td>A file of the machine and a report; only what is safe is applied. Offline bundles carry packages on a drive to a machine without a network, verified before they are used.</td></tr>
+    </tbody>
+  </table>
+  <h3>How it looks and what it shows <small>since r3</small></h3>
+  <table class="box resp">
+    <tbody>
+      <tr><td>pacman and builds in emrac&rsquo;s style</td><td>On a terminal, pacman&rsquo;s transaction is drawn by emrac (a table for the database sync, downloads that animate in place); pacman still runs, asks and prints its prompts. AUR builds and reviews show phases, a live line, errors and the log. Piped or <code>--json</code> output stays plain.</td></tr>
+      <tr><td>Themes and colour</td><td>Marks, boxes, tables, heat-coloured bars and sparklines, themes, animations, and a designed <code>--version</code>; every help page is in colour.</td></tr>
+      <tr><td><code>timeline</code> &middot; <code>stats</code> &middot; <code>benchmark</code> &middot; <code>graph</code></td><td>Transactions, snapshots and build times on one line; build statistics and a binary-versus-source benchmark; dependency graphs drawn in the terminal.</td></tr>
+      <tr><td><code>man</code> &middot; <code>docs</code> &middot; <code>license</code> &middot; <code>credits</code> &middot; <code>support</code> &middot; <code>feedback</code> &middot; <code>bug-report</code></td><td>Help and project pages inside the program, and <code>man emrac</code>. <code>emrac install</code> also takes package files, as <code>pacman -U</code> does.</td></tr>
+    </tbody>
+  </table>
+
+
+  <h2 id="features">Planned features</h2>
+  <p>The design goals. Those not listed under <a href="#built">Available now</a> are not built yet; the full list, in the order it is planned, is under <a href="#planned">Under development</a>.</p>
+  <table class="box resp">
+    <tbody>
+      <tr><td>Source builds, end to end</td><td>Build-only for official packages, provenance and an artifact store, clean-chroot builds at the target state, and <code>upgrade --build-first</code>: build everything, then one coordinated transaction. The default upgrade stays two-phase. These are different risk policies, and the docs say so.</td></tr>
+      <tr><td>Build profiles</td><td>Reusable profiles for compiler, linker, optimization level, LTO, PGO, and CPU tuning. Profiles can inherit from other profiles; recipes.</td></tr>
+      <tr><td>Build queue and ETA</td><td>Queue, pause, and resume builds, with live progress and an ETA that refines as the build runs.</td></tr>
       <tr><td>Search and inspect</td><td>Fast local index, fuzzy and regex search, file ownership lookup, and changelogs in <code>info</code>.</td></tr>
-      <tr><td>Build profiles</td><td>Reusable profiles for compiler, linker, optimization level, LTO, PGO, and CPU tuning. Profiles can inherit from other profiles.</td></tr>
-      <tr><td>Build queue</td><td>Queue, pause, and resume builds, with live progress and an ETA that refines as the build runs.</td></tr>
-      <tr><td>News and advisories</td><td>The Arch news gate is built (see Trust above). Still to come: ABI-transition notices and security advisories for the packages you actually have installed.</td></tr>
-      <tr><td>Health checks</td><td><code>emrac doctor</code> checks for broken and orphaned packages, partial upgrades, mirror health, and configuration problems.</td></tr>
-      <tr><td>History and rollback</td><td>A transaction ledger with snapshots, rollback to a point in time, and per-package restore.</td></tr>
+      <tr><td>Recovery</td><td>Filesystem snapshots, an automatic rollback when a post-upgrade check fails, and resuming a cut-off transaction.</td></tr>
       <tr><td>Terminal interface</td><td>A full TUI with a package browser, dependency explorer, build monitor, news reader, and a built-in modal editor for PKGBUILDs. The CLI exposes the same functions.</td></tr>
     </tbody>
   </table>
 
   <h2 id="source">Source or binary, decided per package</h2>
-  <p>Emrac scores each package for local compilation using build cost, expected performance gain, update frequency, and dependency weight. It then shows its reasoning, not just the verdict.</p>
+  <p>Emrac scores each package for local compilation using build cost, expected performance gain, update frequency, and dependency weight. It then shows its reasoning, not just the verdict. <code>recommend</code> and <code>explain</code> work today; the figures below are a sample. Choosing is yours: <code>install --source</code> builds from Arch&rsquo;s packaging source, <code>--binary</code> never compiles, and what you ask to build from source is kept as a policy that upgrades honour.</p>
   <div class="box">
     <table class="resp">
       <thead><tr><th>Criterion</th><th>firefox</th><th>ripgrep</th></tr></thead>
@@ -474,6 +502,16 @@ table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb
       <div><dt>Sandbox build<small>isolated</small></dt><dd>Sources are built in an isolated overlay. A failed build leaves no artifacts on the host.</dd></div>
       <div><dt>Snapshot<small>Btrfs or ZFS</small></dt><dd>Planned: where supported, a filesystem snapshot before commit as a fallback for power loss or a failed write. Today <code>emrac snapshot</code> saves the installed package set, not files.</dd></div>
       <div><dt>Commit<small>pacman</small></dt><dd>The verified package is installed by pacman itself, so pacman's own conflict and safety logic stays in charge.</dd></div>
+    </dl>
+  </div>
+
+  <h3>A source build is a policy, not an accident</h3>
+  <div class="box">
+    <dl class="layers">
+      <div><dt>Intent<small>recorded</small></dt><dd>What you asked to be built from source is kept in emrac&rsquo;s own state, apart from pins, across upgrades, reboots and emrac updates. A record that cannot be read stops upgrades; it is never read as &ldquo;none&rdquo;.</dd></div>
+      <div><dt>Upgrade<small>two phases</small></dt><dd>The binary system upgrade is one pacman transaction; each source-policy package is rebuilt after it against the updated system. Until a rebuild is done the system is not called fully consistent. A failure keeps the binary, keeps the policy and exits non-zero.</dd></div>
+      <div><dt>Origin<small>checked</small></dt><dd>Intent is not proof. The installed package&rsquo;s build date and packager are compared with what was recorded, so a repository file of the same version is detected rather than reported as built here.</dd></div>
+      <div><dt>Limits<small>stated</small></dt><dd>A failed pacman commit can still leave changes; emrac reports what it finds and does not claim an untouched system it has not verified. Running <code>pacman -Syu</code> by hand bypasses the policy; emrac detects and reports it. The register of guarantees and gaps is in <code>docs/design/safety-invariants.md</code>.</dd></div>
     </dl>
   </div>
 
@@ -521,10 +559,33 @@ use_agent = true</pre>
   <p>Backgrounds are separate from themes: <code>peaks</code>, <code>grid</code>, <code>schematic</code>, <code>scan</code>, or <code>none</code>. Choose one from the Theme menu. There are a few more that are not listed.</p>
 
   <h2 id="changes">Changes</h2>
-  <p>Emrac numbers its work in slices, not semver: <b>i</b> for incubation before a release, <b>r</b> for releases, <b>u</b> for updates within one. This is the short list, newest first. 448 tests run on every change, and each command that changes the system was also run against a real pacman in a container.</p>
+  <p>Emrac numbers its work in slices, not semver: <b>i</b> for incubation before a release, <b>r</b> for releases, <b>u</b> for updates within one. This is the short list, newest first. 812 tests run on every change, and each command that changes the system was also run against a real pacman in a container.</p>
   <table class="box resp">
     <thead><tr><th>Slice</th><th>Date</th><th>Change</th></tr></thead>
     <tbody>
+      <tr><td><b class="k-u">u23b</b> <small>since r3</small></td><td>2026-10-19</td><td>A source build is a recorded policy, kept apart from pins: an upgrade marks it, installs the repository&rsquo;s binaries first and rebuilds each such package from the new packaging source. A failed or skipped rebuild keeps the binary and the policy, marks it pending and makes <code>upgrade</code> exit non-zero. <code>emrac from-source</code> lists, adds, drops and rebuilds. After it: an unreadable record is an error and never written over, pending rebuilds appear in <code>doctor</code> and every plan, and origin is checked against pacman&rsquo;s database (source verified, repository file detected, origin unverified, pending, mismatch).</td></tr>
+      <tr><td><b class="k-u">u23</b> <small>since r3</small></td><td>2026-10-19</td><td><code>install --source</code> builds an official package from Arch&rsquo;s packaging source (audited, sandboxed, inspected, installed with <code>pacman -U</code>); <code>--binary</code> compiles nothing; <code>install.prefer</code> lets <code>recommend</code> choose.</td></tr>
+      <tr><td><b class="k-u">u22</b> <small>since r3</small></td><td>2026-10-19</td><td>AUR builds and reviews in emrac&rsquo;s style: phases, a live line, errors, the log; <code>install</code> takes package files; downloads animate in place; the database sync is a table; <code>rebuild --ack</code> acknowledges a may-need-rebuilding note.</td></tr>
+      <tr><td><b class="k-u">u21</b> <small>since r3</small></td><td>2026-10-19</td><td>pacman&rsquo;s transaction in emrac&rsquo;s style on a terminal: pacman still runs, asks and prints its prompts, emrac draws the rest.</td></tr>
+      <tr><td><b class="k-u">u20</b> <small>since r3</small></td><td>2026-10-19</td><td><code>score</code> learns reproducibility, provenance, compatibility, packaging quality and upstream health; a designed <code>--version</code>; every help page in colour; bars and sparklines in heat colours.</td></tr>
+      <tr><td><b class="k-u">u19</b> <small>since r3</small></td><td>2026-10-19</td><td>Arch security data: <code>emrac vulns</code>, standings, and a gate before installs and upgrades.</td></tr>
+      <tr><td><b class="k-u">u18</b> <small>since r3</small></td><td>2026-10-19</td><td><code>emrac score</code>: a report card for a package, an overall number and weights you can set.</td></tr>
+      <tr><td><b class="k-u">u17</b> <small>since r3</small></td><td>2026-10-19</td><td>How emrac looks: marks, boxes, tables, themes and animations, with plain output when piped.</td></tr>
+      <tr><td><b class="k-u">u16</b> <small>since r3</small></td><td>2026-10-18</td><td>Mirror Intelligence: measure, rank, write and apply mirrors.</td></tr>
+      <tr><td><b class="k-u">u15</b> <small>since r3</small></td><td>2026-10-18</td><td>The Package Advisor: advice under a big plan.</td></tr>
+      <tr><td><b class="k-u">u14</b> <small>since r3</small></td><td>2026-10-18</td><td><code>emrac bundle</code>: packages on a drive for a machine without a network.</td></tr>
+      <tr><td><b class="k-u">u13</b> <small>since r3</small></td><td>2026-10-18</td><td><code>man</code>, <code>docs</code>, <code>license</code>, <code>credits</code>, <code>support</code>, <code>feedback</code>, <code>bug-report</code>, and <code>man emrac</code>.</td></tr>
+      <tr><td><b class="k-u">u12</b> <small>since r3</small></td><td>2026-10-18</td><td><code>emrac export</code> and <code>import</code>: a file of the machine, a report, only what is safe applied.</td></tr>
+      <tr><td><b class="k-u">u11</b> <small>since r3</small></td><td>2026-10-18</td><td>Dependency graphs drawn in the terminal.</td></tr>
+      <tr><td><b class="k-u">u10</b> <small>since r3</small></td><td>2026-10-18</td><td><code>emrac timeline</code> over transactions, snapshots and build times.</td></tr>
+      <tr><td><b class="k-u">u9</b> <small>since r3</small></td><td>2026-10-18</td><td><code>emrac stats</code> and <code>emrac benchmark</code>.</td></tr>
+      <tr><td><b class="k-u">u8</b> <small>since r3</small></td><td>2026-10-19</td><td><code>override</code> and <code>divert</code>: what survives upgrades, reinstalls and removals.</td></tr>
+      <tr><td><b class="k-u">u7</b> <small>since r3</small></td><td>2026-10-18</td><td>Offers to remove the tools an AUR build installed only to build.</td></tr>
+      <tr><td><b class="k-u">u6</b> <small>since r3</small></td><td>2026-10-18</td><td>What pacman leaves behind when a transaction fails is found and reported.</td></tr>
+      <tr><td><b class="k-u">u5</b> <small>since r3</small></td><td>2026-10-18</td><td><code>.pacnew</code> and <code>.pacsave</code> preview.</td></tr>
+      <tr><td><b class="k-u">u4</b> <small>since r3</small></td><td>2026-10-18</td><td>Hook preview: the pacman hooks a plan will run, in order.</td></tr>
+      <tr><td><b class="k-u">u3</b> <small>since r3</small></td><td>2026-10-18</td><td><code>emrac explain</code>: the reasoning behind a recommendation, input by input.</td></tr>
+      <tr><td><b class="k-u">u2</b> <small>since r3</small></td><td>2026-10-16</td><td><code>emrac recommend</code>: source or binary from stated rules; builds are timed from now on.</td></tr>
       <tr><td><b class="k-u">u1</b> <small>since r3</small></td><td>2026-10-16</td><td><code>emrac self upgrade</code> and <code>self downgrade</code> also update a copy no package owns (installed with <code>cargo install</code> or put in <code>~/.local/bin</code>): in place, with the old file kept and put back if the new one fails. Releases are now published by a pipeline with a review and an approval step.</td></tr>
       <tr><td><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r3">r3</a></b></td><td>2026-10-15</td><td>Third release: r2 plus the updates u1&ndash;u20. A history you can check and a ledger only root can change, a journal for cut-off transactions, pre-flight checks and plan ids, AUR trust signals and the Arch news gate, <code>rebuild</code>, and emrac updating itself through pacman; checked with 440 tests and three container suites.</td></tr>
       <tr><td><b class="k-u">u20</b> <small>since r2</small></td><td>2026-10-15</td><td>Trust and the safety net: AUR trust signals, the Arch news gate (critical news stops an upgrade), a backup and check of pacman&rsquo;s database, repository trust, update risk and <code>emrac report</code>.</td></tr>
@@ -613,7 +674,8 @@ use_agent = true</pre>
       <li><div class="kv"><b class="k-u">u1&ndash;u30</b><span>updates</span></div><small>History and rollback, audit and sandbox, doctor, plans that match pacman, pacnew, cache</small></li>
       <li><div class="kv"><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r2">r2</a></b><span>second release</span></div><small>r1 plus u1&ndash;u30, made safe for a real machine</small></li>
       <li><div class="kv"><b class="k-u">u1&ndash;u20</b><span>updates</span></div><small>Checkable history and ledger, a journal for cut-off transactions, pre-flight checks, plan ids, AUR trust and the Arch news, rebuild, emrac updating itself</small></li>
-      <li><div class="kv"><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r3">r3</a></b><span>third release</span></div><small>r2 plus u1&ndash;u20; the next update is u1 against r3</small></li>
+      <li><div class="kv"><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r3">r3</a></b><span>third release</span></div><small>r2 plus u1&ndash;u20</small></li>
+      <li><div class="kv"><b class="k-u">u1&ndash;u23</b><span>updates since r3</span></div><small>Recommend and explain, hook and config-file previews, override and divert, timeline, export, import and bundle, the Package Advisor, mirror ranking, the package score, Arch security data, pacman and builds in emrac&rsquo;s style, source or binary on install, a source-build policy. u24&ndash;u30 close r3.</small></li>
     </ul>
   </div>
 
@@ -644,92 +706,105 @@ use_agent = true</pre>
 
   <div class="devzone" id="planned" role="group" aria-label="Under development">
     <div class="tape" aria-hidden="true"></div>
-    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 59 items from Project Emrac, Design Documentation</span></div>
-    <details open><summary>Interface and setup <em>9</em></summary>
+    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 60 items, in the order they are planned. Decided against: AI features, telemetry, scripting, committing through libalpm instead of pacman.</span></div>
+    <details open><summary>Next: finishing r3 (u24&ndash;u30) <em>7</em></summary>
       <ul>
-        <li>Terminal interface <small>(package browser, dependency explorer, build monitor, news reader, PKGBUILD editor, cache manager, command palette)</small></li>
-        <li>First-run <code>setup</code> wizard</li>
-        <li><code>self-test</code> and <code>sandbox shell</code></li>
-        <li>Man pages; clean uninstall</li>
-        <li>Structured per-transaction logs; documented exit codes</li>
-        <li>Themes, keybindings, aliases</li>
-        <li>Layered config <small>(system, user, per-project)</small>; <code>config export</code>, <code>import</code>, <code>migrate</code>, <code>diff</code></li>
-        <li>Shell <code>alias</code> and <code>integrate</code>; <code>env</code>, <code>paths</code>, <code>diagnostics</code></li>
-        <li>Help commands: <code>man</code>, <code>docs</code>, <code>license</code>, <code>credits</code>, <code>bug-report</code></li>
+        <li><b>u24</b> <code>emrac bisect</code>: find which package update broke something</li>
+        <li><b>u25</b> Stray-file scanner; link-check for software built outside the manager</li>
+        <li><b>u26</b> ETA prediction from recorded build times</li>
+        <li><b>u27</b> <code>emrac status</code> (a git status for the system); prompt and status-bar output; notifications</li>
+        <li><b>u28</b> Build profiles and recipes with inheritance; compiler, linker and optimization flags <small>(LTO, PGO, CPU tuning)</small></li>
+        <li><b>u29</b> Safety hardening: fail-closed verification chain, rescue binary <small>(<code>emrac-rescue</code>)</small>, privilege separation</li>
+        <li><b>u30</b> r3 closeout: docs, the full container suite, the release</li>
       </ul>
     </details>
-    <details open><summary>Build system <em>10</em></summary>
+    <details open><summary>Source builds: safety fixes first <em>5</em></summary>
       <ul>
-        <li>Build profiles with inheritance; build recipes</li>
-        <li>Compiler, linker and optimization flags <small>(LTO, PGO, CPU tuning)</small></li>
+        <li>PGP keys under <code>--yes</code>: an unknown key is never trusted silently</li>
+        <li>Audit of the build dependencies <code>makepkg -s</code> pulls in at build time</li>
+        <li>Pending rebuilds classed as harmless, compatibility risk or unknown</li>
+        <li>Detect changes made by <code>pacman</code> directly <small>(post-transaction hook and reconcile)</small></li>
+        <li>Policy record: schema version, a lock against two emrac processes, a <code>failed</code> state with the reason</li>
+      </ul>
+    </details>
+    <details open><summary>Source builds: the system plan <em>6</em></summary>
+      <ul>
+        <li><code>build --source</code> for official packages <small>(build and validate, no install)</small></li>
+        <li>Provenance and artifact store: recipe hash, source checksums, build dependencies, package hash; <code>source status</code>, <code>inspect</code>, <code>rebuild</code></li>
+        <li>Clean-chroot builds at the target state <small>(devtools)</small></li>
+        <li><code>upgrade --build-first</code>: build everything, then one coordinated transaction <small>(the default stays two-phase)</small></li>
+        <li>Build order and ABI-impact decisions among source-managed packages</li>
+        <li>Structured events shared by the CLI and the TUI</li>
+      </ul>
+    </details>
+    <details><summary>Build system <em>7</em></summary>
+      <ul>
         <li>Build queue <small>(background, pause, resume, cancel)</small></li>
-        <li>Build monitoring: stages, progress, ETA prediction</li>
-        <li>Persistent build cache keyed by PKGBUILD hash and flags</li>
-        <li>ccache, sccache, distcc; compile farm; shared artifact library</li>
+        <li>Persistent build cache keyed by PKGBUILD hash and flags; ccache, sccache, distcc</li>
         <li>Smoke test: start the built binary in the sandbox</li>
-        <li>Reproducible-build check <small>(build twice, compare)</small></li>
-        <li>Build diff and benchmark <small>(binary vs source)</small>; build statistics</li>
-        <li>Local repository of verified builds</li>
+        <li>Reproducible-build check completed <small>(build twice, compare)</small>; build diff and benchmark completed</li>
+        <li>Local repository of verified builds; shared artifact library; compile farm</li>
+        <li>Per-package build environment, user patches on every build, <code>emrac patch new</code></li>
+        <li>Keep-going, resume, jobs and load-average limits; build failure bundle</li>
       </ul>
     </details>
-    <details open><summary>Recommendations and policy <em>6</em></summary>
+    <details><summary>Safety and recovery <em>8</em></summary>
       <ul>
-        <li>Source-or-binary scoring and recommendation</li>
-        <li><code>explain</code> for decisions; package score; package advisor</li>
-        <li>Smart updates: rule-based skipping</li>
-        <li>Policy engine <small>(&ldquo;always build Rust from source&rdquo;)</small></li>
-        <li>Vulnerability-aware planning <small>(CVEs against pending upgrades)</small></li>
-        <li>Safe unattended updates</li>
-      </ul>
-    </details>
-    <details open><summary>Safety and recovery <em>12</em></summary>
-      <ul>
-        <li>Filesystem snapshots <small>(Btrfs, ZFS, snapper)</small> and bootable snapshots</li>
-        <li>Landlock layer</li>
-        <li>Privilege separation <small>(unprivileged front end, small privileged helper)</small></li>
+        <li>Filesystem snapshots <small>(Btrfs, ZFS, snapper)</small>, bootable snapshots, staged upgrades, rollback rehearsal</li>
         <li>Automatic rollback when a post-upgrade check fails <small>(the checks and the report are built)</small></li>
         <li>DKMS and kernel-module test; boot test in a throwaway VM</li>
         <li>Resume an interrupted transaction <small>(it is found and recorded, not resumed)</small></li>
-        <li>Timeline of transactions</li>
-        <li>A signed log (it is hash-chained with a root-owned copy, not signed); SBOM and provenance per build</li>
-        <li><code>/etc</code> change tracking per transaction</li>
-        <li>Saved plans <small>(<code>plan</code>, <code>apply</code>, plan diff)</small>; <code>emrac.lock</code></li>
-        <li>Time-travel installs <small>(resolve as of a date)</small></li>
-        <li>Cleanup simulation and bloat view</li>
+        <li>Saved plans <small>(<code>plan</code>, <code>apply</code>, plan diff)</small>; <code>emrac.lock</code>; time-travel installs</li>
+        <li><code>/etc</code> change tracking per transaction; a signed log; SBOM and provenance per build</li>
+        <li>Update cooldown <small>(soak time)</small>; transaction notes and known-good markers; safe unattended updates</li>
+        <li>Landlock layer; orphan lifecycle; install-reasons ledger; cleanup simulation</li>
       </ul>
     </details>
-    <details open><summary>Packages and repositories <em>11</em></summary>
+    <details><summary>Packages and repositories <em>8</em></summary>
       <ul>
-        <li>Security advisories and ABI-transition notices <small>(the Arch news gate is built)</small></li>
-        <li><code>locate</code>: which package owns a file or command</li>
-        <li>Fuzzy and regex search; categories; popular and recent</li>
-        <li>Changelogs and security advisories in <code>info</code></li>
-        <li><code>lock</code> / <code>unlock</code></li>
-        <li>Repository management: custom, local and git repos; mirror ranking and health</li>
-        <li>Package collections; workspace mode</li>
-        <li>Declarative system profile <small>(diff against the machine)</small></li>
-        <li>Flatpak and systemd-unit backends</li>
-        <li>Wandrover: cross-distro <code>search</code>, <code>resolve</code>, <code>alternatives</code>, <code>map</code>, <code>audit</code>; migration mode</li>
-        <li>Export, import and bundle</li>
+        <li><code>locate</code>: which package owns a file or command; fuzzy and regex search; changelogs in <code>info</code></li>
+        <li><code>lock</code> / <code>unlock</code>; provider preferences; lockstep groups</li>
+        <li>Repository management: custom, local and git repositories; package collections; workspace mode</li>
+        <li>Declarative system profile, machine manifest and bootstrap, machine diff, remote apply</li>
+        <li>Foreign-package inventory; driver and firmware doctor; <code>emrac try</code>; metered and flaky-network mode</li>
+        <li><code>pachooks</code>: a validating editor for pacman hooks</li>
+        <li>Git-style <code>log</code>, <code>show</code>, <code>diff</code>, <code>revert</code>, <code>blame</code>; <code>vercmp</code>; <code>query --format</code></li>
+        <li>Export to containers and images; Flatpak and systemd-unit backends</li>
       </ul>
     </details>
-    <details open><summary>For AUR maintainers <em>6</em></summary>
+    <details><summary>Interface and setup <em>5</em></summary>
+      <ul>
+        <li>Terminal interface <small>(package browser, dependency explorer, build monitor, news reader, PKGBUILD editor, cache manager, command palette)</small></li>
+        <li>First-run <code>setup</code> wizard; <code>self-test</code>; <code>sandbox shell</code></li>
+        <li>Layered config <small>(system, user, per-project)</small>; <code>config export</code>, <code>import</code>, <code>migrate</code>, <code>diff</code>; presets</li>
+        <li>Shell <code>alias</code> and <code>integrate</code>; <code>env</code>, <code>paths</code>, <code>diagnostics</code>; keybindings</li>
+        <li>Structured per-transaction logs; headless JSON API; clean uninstall</li>
+      </ul>
+    </details>
+    <details><summary>AUR defense and forensics (r4) <em>5</em></summary>
+      <ul>
+        <li>Soak time and diff review ledger; isolated build with behavior tracing</li>
+        <li>Install detonation; observe mode <small>(<code>try --observe</code>)</small>; post-install audit and incident response</li>
+        <li>Signed blocklist and advisory feed; VM isolation tier</li>
+        <li><code>forensics</code>: timeline, provenance, persistence, delta, baseline, capture, offline analysis</li>
+        <li>AUR history as evidence; VCS package pinning</li>
+      </ul>
+    </details>
+    <details><summary>For AUR maintainers <em>4</em></summary>
       <ul>
         <li><code>maintain check</code>: lint, <code>.SRCINFO</code>, clean-room build, install and upgrade tests, guideline checks</li>
         <li>Upstream watcher <small>(bump, checksums, test build)</small>; maintainer dashboard</li>
         <li>Safe push: your own SSH key by reference, agent, host-key pinning, confirmation</li>
-        <li>Capability-based workflow files; restricted scripting layer</li>
-        <li>CI template generation; local test repository</li>
-        <li>Orphan adoption and flag handling; verified-provenance marker</li>
+        <li>CI template generation; local test repository; orphan adoption and flag handling; verified-provenance marker</li>
       </ul>
     </details>
-    <details open><summary>Platform and analytics <em>5</em></summary>
+    <details><summary>Platform, later <em>5</em></summary>
       <ul>
-        <li>Backend plugin interface <small>(WASM)</small> and a public API</li>
+        <li>Plugin system <small>(WASM, capability-based, with security checks)</small> and a backend plugin interface</li>
+        <li>Wandrover: cross-distro <code>search</code>, <code>resolve</code>, <code>alternatives</code>, <code>map</code>, <code>audit</code>; migration mode</li>
         <li>Remote build workers; distributed compilation</li>
-        <li>Shareable, signed config presets</li>
-        <li>Analytics: build, install and download statistics, resource reports, usage history</li>
-        <li>Search index for sub-millisecond lookups</li>
+        <li>Analytics: build, install and download statistics, resource reports; a search index</li>
+        <li>Signed, shareable config presets</li>
       </ul>
     </details>
     <div class="tape" aria-hidden="true"></div>
