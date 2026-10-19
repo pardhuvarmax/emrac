@@ -68,3 +68,16 @@ Container checks exist for: failed rebuild keeping the binary (`sourceinstall.sh
 - **P2**: snapshot integration for rollback of a source step, ABI-impact analysis, provenance reports.
 
 Slice: these go into u29 (safety hardening). The unreadable-policy-file case is the one that most contradicts rule 32 today and is the first to fix.
+
+## Audit of the code against the register (2026-10-19)
+
+Read from the code, not assumed. Invariants 1, 2, 4, 8 and 9 hold; the others have these breaches.
+
+- **A-1 (breaks 3, 32).** `source_built::read_from` returns an empty list for a file it cannot parse. `apply_source_policy` then plans no rebuild, so the next upgrade installs the binary without a word; and `record_to` after that writes a file with only the new entry, losing every other policy. Corruption must read as "unknown intent" and stop writes.
+- **A-2 (breaks 12, 108, 79).** `upgrade::rebuild_policy` calls `history::begin` and, if it fails (another emrac running, a recovery that failed), builds and installs anyway: `if started.is_ok()` guards only the history record. It must stop for that package and mark it pending.
+- **A-3 (breaks 120, 117).** `rebuild_policy` returns `Ok` when a rebuild failed, so `emrac upgrade` exits 0 although part of what was asked did not happen. It should exit non-zero (a distinct code for "upgraded, rebuild pending").
+- **A-4 (rule 5, 116, 59).** `--yes` passes `--noconfirm`. pacman's default for "import this PGP key?" is yes, so a non-interactive run can import a key. Conflicts default to no and no `--force`, `--overwrite`, `--nodeps` or `SigLevel` override exists in the code (checked), but key import under `--yes` needs a decision: refuse, or require `--accept-keys`.
+- **A-5 (rule 119).** A package pending since an earlier failed rebuild is not in the next upgrade plan unless the repository moves again, and `doctor` does not list it.
+- **A-6 (rule 11).** The plan is checked again before commit only if more than 30 s passed since it was shown (`RECHECK_AFTER`). That is a deliberate cost trade-off; the strict reading is "always, immediately before".
+
+Everything else in the sections above stands as written. Fix order: A-1, A-2, A-3, A-4, A-5, then the P0 list.
