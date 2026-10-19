@@ -240,6 +240,45 @@ pub fn changed(a: &Point, b: &Point) -> Vec<(String, Option<String>, Option<Stri
         .collect()
 }
 
+/// The protected packages (`protected::protection`) that differ between two states.
+pub fn protected_changes(
+    a: &Point,
+    b: &Point,
+    extra: &[String],
+) -> Vec<crate::protected::Protection> {
+    let names: Vec<String> = changed(a, b).into_iter().map(|(n, _, _)| n).collect();
+    crate::protected::blocked(&names, extra)
+}
+
+/// Whether the system can be put into state `i` from the newest one without
+/// changing a protected package: they hold the same versions of all of them.
+/// (Not a suffix: a state can be reachable again after others are not.)
+pub fn reachable(points: &[Point], i: usize, extra: &[String]) -> bool {
+    match points.last() {
+        Some(last) => protected_changes(&points[i], last, extra).is_empty(),
+        None => true,
+    }
+}
+
+/// What differs between two installed sets, as lines for a person: nothing means
+/// they are the same.
+pub fn manifest_diff(expected: &[(String, String)], actual: &[(String, String)]) -> Vec<String> {
+    let mut out = Vec::new();
+    for (n, v) in expected {
+        match actual.iter().find(|(m, _)| m == n) {
+            None => out.push(format!("{n} {v} is missing")),
+            Some((_, w)) if w != v => out.push(format!("{n} is {w}, it was {v}")),
+            _ => {}
+        }
+    }
+    for (n, v) in actual {
+        if !expected.iter().any(|(m, _)| m == n) {
+            out.push(format!("{n} {v} was not installed before"));
+        }
+    }
+    out
+}
+
 /// The judgement of one state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
@@ -270,10 +309,15 @@ pub enum Outcome {
 
 impl Search {
     pub fn new(good: usize, bad: usize) -> Search {
+        Search::with_skipped(good, bad, Vec::new())
+    }
+
+    /// As `new`, with states that cannot be visited already left out.
+    pub fn with_skipped(good: usize, bad: usize, skipped: Vec<usize>) -> Search {
         Search {
             lo: good,
             hi: bad,
-            skipped: Vec::new(),
+            skipped,
         }
     }
 
@@ -547,5 +591,112 @@ mod tests {
         );
         assert_eq!(Reference::parse("soon", 0), None);
         assert_eq!(Reference::parse("2026-13-01", 0), None);
+    }
+
+    #[test]
+    fn a_state_is_reachable_when_it_holds_the_protected_packages_at_their_current_version() {
+        let installed = [pkg("fixb", "3"), pkg("glibc", "2"), pkg("fixc", "2")];
+        let records = [
+            rec("tx-1", 10, PlanAction::Upgrade, &[("fixb", "2", Some("1"))]),
+            rec(
+                "tx-2",
+                20,
+                PlanAction::Upgrade,
+                &[("glibc", "2", Some("1"))],
+            ),
+            rec(
+                "tx-3",
+                30,
+                PlanAction::Upgrade,
+                &[("fixb", "3", Some("2")), ("fixc", "2", Some("1"))],
+            ),
+        ];
+        let t = reconstruct(&installed, &records);
+        // glibc changed in tx-2: the states before it cannot be visited
+        assert!(!reachable(&t.points, 0, &[]));
+        assert!(!reachable(&t.points, 1, &[]));
+        assert!(reachable(&t.points, 2, &[]));
+        assert!(reachable(&t.points, 3, &[]));
+        let blocked = protected_changes(&t.points[1], &t.points[3], &[]);
+        assert_eq!(blocked.len(), 1);
+        assert_eq!(blocked[0].package, "glibc");
+        // the user's additions only make fewer states reachable
+        let extra = ["fixc".to_string()];
+        assert!(!reachable(&t.points, 2, &extra));
+        assert!(reachable(&t.points, 3, &extra));
+    }
+
+    #[test]
+    fn a_state_can_be_reachable_again_after_unreachable_ones() {
+        // fixc: 1 -> 2 -> 1 (a bisect went back) -> 2 again is the state now
+        let installed = [pkg("fixc", "2")];
+        let records = [
+            rec("tx-1", 10, PlanAction::Upgrade, &[("fixc", "2", Some("1"))]),
+            rec(
+                "tx-2",
+                20,
+                PlanAction::Downgrade,
+                &[("fixc", "1", Some("2"))],
+            ),
+            rec("tx-3", 30, PlanAction::Upgrade, &[("fixc", "2", Some("1"))]),
+        ];
+        let t = reconstruct(&installed, &records);
+        let extra = ["fixc".to_string()];
+        let ok: Vec<bool> = (0..t.points.len())
+            .map(|i| reachable(&t.points, i, &extra))
+            .collect();
+        assert_eq!(ok, [false, true, false, true]);
+    }
+
+    /// The search with states left out beforehand finds the first bad reachable
+    /// state, or the range the culprit hides in.
+    #[test]
+    fn states_that_cannot_be_visited_are_left_out_and_the_range_is_what_is_known() {
+        // 0 good .. 6 bad; 1, 2 and 5 cannot be visited; the culprit is state 4
+        let mut s = Search::with_skipped(0, 6, vec![1, 2, 5]);
+        let mut seen = Vec::new();
+        let out = loop {
+            match s.state() {
+                Outcome::Next(i) => {
+                    seen.push(i);
+                    s.mark(i, if i >= 4 { Verdict::Bad } else { Verdict::Good });
+                }
+                other => break other,
+            }
+        };
+        assert!(seen.iter().all(|i| ![1, 2, 5].contains(i)));
+        // 3 is good, 4 is bad and adjacent: found, though 1 and 2 were never looked at
+        assert_eq!(out, Outcome::Found(4));
+        // the culprit is state 2 (unvisitable): only the range remains
+        let mut s = Search::with_skipped(0, 6, vec![1, 2, 5]);
+        let out = loop {
+            match s.state() {
+                Outcome::Next(i) => s.mark(i, if i >= 2 { Verdict::Bad } else { Verdict::Good }),
+                other => break other,
+            }
+        };
+        assert_eq!(out, Outcome::Inconclusive { after: 0, up_to: 3 });
+    }
+
+    #[test]
+    fn the_restored_set_is_compared_with_the_original_one_package_at_a_time() {
+        let a = vec![
+            ("a".to_string(), "1".to_string()),
+            ("b".to_string(), "2".to_string()),
+        ];
+        assert!(manifest_diff(&a, &a).is_empty());
+        let b = vec![
+            ("a".to_string(), "9".to_string()),
+            ("c".to_string(), "1".to_string()),
+        ];
+        let d = manifest_diff(&a, &b);
+        assert_eq!(
+            d,
+            [
+                "a is 9, it was 1",
+                "b 2 is missing",
+                "c 1 was not installed before"
+            ]
+        );
     }
 }

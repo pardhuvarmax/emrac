@@ -36,6 +36,45 @@ pub struct Config {
     pub score: ScoreConfig,
     #[serde(default)]
     pub install: InstallConfig,
+    #[serde(default)]
+    pub bisect: BisectConfig,
+}
+
+/// `emrac bisect` (u24). There is no setting that lets it change a protected
+/// package on the live host; `protected_extra` only adds to the protected list.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BisectConfig {
+    /// `protected` (the default): bisect visits states by changing ordinary
+    /// packages only. `analysis`: it never changes anything, whatever the flags.
+    #[serde(default = "default_bisect_mode")]
+    pub mode: String,
+    /// Package names, separated by commas, that bisect also treats as protected.
+    #[serde(default)]
+    pub protected_extra: String,
+}
+
+fn default_bisect_mode() -> String {
+    "protected".to_string()
+}
+
+impl Default for BisectConfig {
+    fn default() -> Self {
+        Self {
+            mode: default_bisect_mode(),
+            protected_extra: String::new(),
+        }
+    }
+}
+
+impl BisectConfig {
+    /// The user's additions to the protected list.
+    pub fn extra(&self) -> Vec<String> {
+        self.protected_extra
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    }
 }
 
 /// What `install` does with the packages it is asked for (u23).
@@ -573,6 +612,8 @@ impl Config {
             "safety.vulnerabilities" => self.safety.vulnerabilities.clone(),
             "safety.signatures" => self.safety.signatures.clone(),
             "install.prefer" => self.install.prefer.clone(),
+            "bisect.mode" => self.bisect.mode.clone(),
+            "bisect.protected_extra" => self.bisect.protected_extra.clone(),
             "score.performance" => self.score.performance.to_string(),
             "score.build_time" => self.score.build_time.to_string(),
             "score.maintenance" => self.score.maintenance.to_string(),
@@ -730,6 +771,21 @@ impl Config {
                 }
                 self.safety.db_backup = value.to_string();
             }
+            "bisect.mode" => {
+                match value {
+                    "protected" | "analysis" => {}
+                    "isolated" => {
+                        return Err(Error::Help(
+                            "bisect.mode = isolated is planned (testing protected packages in a disposable VM or root) and is not built yet; use protected or analysis".into(),
+                        ))
+                    }
+                    _ => return Err(invalid()),
+                }
+                self.bisect.mode = value.to_string();
+            }
+            "bisect.protected_extra" => {
+                self.bisect.protected_extra = value.to_string();
+            }
             "install.prefer" => {
                 if crate::install_mode::Prefer::parse(value).is_none() {
                     return Err(invalid());
@@ -833,6 +889,8 @@ impl Config {
             "safety.vulnerabilities" => self.safety.vulnerabilities = default_vulnerabilities(),
             "safety.signatures" => self.safety.signatures = default_signatures(),
             "install.prefer" => self.install.prefer = default_prefer(),
+            "bisect.mode" => self.bisect.mode = default_bisect_mode(),
+            "bisect.protected_extra" => self.bisect.protected_extra = String::new(),
             "self.source" => self.self_service.source = default_self_source(),
             "self.channel" => self.self_service.channel = default_self_channel(),
             "self.require_signature" => self.self_service.require_signature = false,

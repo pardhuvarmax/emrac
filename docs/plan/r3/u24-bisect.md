@@ -27,6 +27,37 @@ version the history does not explain (changed by `pacman` directly, a failed tra
 **unexplained** and kept at its current version in every state, and the report says so. Failed transactions are not
 states.
 
+## The hard boundary (protected packages)
+
+Putting an older kernel package under a running kernel removes the modules the running one needs; replacing glibc
+or systemd leaves running programs with code the files no longer match; package states are not data or
+configuration states. So **bisect never changes a protected package on a live host**, and there is no flag that
+lifts it.
+
+- Protected groups (`emrac-core/src/protected.rs`, a versioned policy, `POLICY_VERSION` 1): kernel and firmware,
+  core runtime (glibc, gcc-libs), init (systemd), package manager (pacman, the keyring, `filesystem`, emrac itself),
+  boot and storage (mkinitcpio, dracut, bootloaders, lvm2, cryptsetup, mdadm, filesystem tools), essential
+  utilities (bash, coreutils, util-linux, shadow, pam, sudo). `bisect.protected_extra` only adds to the list.
+- A state is **reachable** only if it holds every protected package at the version installed now. States that are
+  not are left out of the search (they are marked in the window and counted). If the culprit hides among them the
+  answer is the range, with the protected packages that changed in it, and the sentence *not reproduced is not
+  ruled out*. If no state in the window is reachable nothing is touched at all.
+- Every step is checked again against what pacman would really do right now: the packages the plan changes, the
+  ones it removes, and what installing the files would remove by conflict or replacement (libalpm's own
+  simulation). Any protected package in that set stops the step before it changes anything.
+- The end is verified, not assumed: the installed set is compared with the exact list taken at the start,
+  package by package. A difference stops everything, is printed, keeps the snapshot, names the recovery
+  command, and makes the command fail.
+- `bisect.mode`: `protected` (default) or `analysis` (never changes anything; `--analyze` does the same for one
+  run). `isolated` is refused as not built.
+
+Not here yet, and said so wherever the boundary is hit: **`--isolate`** (the protected transitions tested in a
+disposable VM or root, where a kernel or libc may be replaced without touching the host) and a **remediation**
+workflow after a culprit is found (`report`, `recommend`, `remediate --dry-run`, `remediate`, `verify`: a fixed
+release, a workaround, a boot entry for the last good kernel, a recovery plan for libc/systemd, and the reproduction
+test run again). A VM is not a faithful reproduction of hardware; a result that does not reproduce there is reported
+as not reproduced, not as innocent.
+
 ## What a run does
 
 1. `--good` is a transaction id (the system was fine after it), a date or `7d` (the state at the end of that

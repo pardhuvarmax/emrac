@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 735
+     - 743
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **828**
+     - **836**
 
-emrac-core library (735)
+emrac-core library (743)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -175,15 +175,19 @@ emrac-core library (735)
 * ``the_median_of_odd_even_and_no_values``
 * ``the_store_appends_caps_and_reads_back_by_package``
 
-``bisect::tests`` (8)
-~~~~~~~~~~~~~~~~~~~~~
+``bisect::tests`` (12)
+~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_change_the_history_does_not_explain_is_named_and_held_still``
 * ``a_reference_is_a_transaction_or_a_moment``
 * ``a_removal_comes_back_and_a_conflict_removal_too``
+* ``a_state_can_be_reachable_again_after_unreachable_ones``
+* ``a_state_is_reachable_when_it_holds_the_protected_packages_at_their_current_version``
 * ``failed_transactions_are_not_states``
 * ``references_are_read_as_a_transaction_a_date_or_a_time_back``
 * ``skipped_states_are_stepped_around_and_a_fully_skipped_window_is_said``
+* ``states_that_cannot_be_visited_are_left_out_and_the_range_is_what_is_known``
+* ``the_restored_set_is_compared_with_the_original_one_package_at_a_time``
 * ``the_search_finds_every_culprit_in_every_window_within_the_step_bound``
 * ``the_states_are_rebuilt_by_undoing_the_history_from_the_newest``
 
@@ -657,6 +661,14 @@ emrac-core library (735)
 * ``space_on_root_and_for_downloads_is_judged_and_added_when_they_share_a_disk``
 * ``the_network_check_needs_a_download_and_distinguishes_some_from_none``
 * ``weak_signature_levels_stop_an_unattended_run_and_only_warn_an_interactive_one``
+
+``protected::tests`` (4)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_kernel_flavour_and_its_neighbours_follow_the_kernel``
+* ``the_blocked_list_is_sorted_unique_and_described``
+* ``the_minimum_set_is_protected_and_ordinary_packages_are_not``
+* ``the_users_additions_add_and_never_remove``
 
 ``purge::tests`` (2)
 ~~~~~~~~~~~~~~~~~~~~
@@ -1548,7 +1560,7 @@ End-to-end: bisect (dev/e2e/bisect.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 emrac bisect over real transactions with fixture packages: the culprit found, the system put back:
-``dev/e2e/run.sh bisect``. Last full run: after u24, 11 of 11 passed.
+``dev/e2e/run.sh bisect``. Last full run: after the hard boundary, 19 of 19 passed.
 
 * the fixtures are in place: fixb 3.0 installed and broken
 * --dry-run lists the window, says every version can be found, and changes nothing
@@ -1560,9 +1572,17 @@ emrac bisect over real transactions with fixture packages: the culprit found, th
 * a safety snapshot was saved and named
 * the steps are in the history, none of them failed
 * a test that cannot tell (125) in every state ends with the range, not a guess
+* --analyze marks the transaction that changed a protected package and the states that cannot be visited
+* states that cannot be visited are left out and the culprit is still found among the others
+* fixc was never changed while it searched
+* a regression that began in a protected package is narrowed to a range, said to need an isolated environment, and not called ruled out
+* the system is back exactly as it was after the boundary stop
+* a window where every state needs a protected change is refused before anything is touched
+* bisect.mode = analysis never changes anything, whatever the flags
+* there is no setting that lifts the protection: isolated is refused as not built
 * a missing package file is refused up front, before the system is touched
 
-(11 checks.)
+(19 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

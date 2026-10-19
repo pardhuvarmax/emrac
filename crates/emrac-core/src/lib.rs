@@ -45,6 +45,7 @@ pub mod policy;
 pub mod policy_ops;
 pub mod policy_preview;
 pub mod preflight;
+pub mod protected;
 mod purge;
 pub mod rebuild_ack;
 pub mod recommend;

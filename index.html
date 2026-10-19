@@ -426,7 +426,7 @@ table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb
   <h3>Source or binary <small>since r3</small></h3>
   <table class="box resp">
     <tbody>
-      <tr><td><code>bisect</code></td><td>Something worked last week and does not now: <code>emrac bisect --good tx-12 --test '&hellip;'</code> restores the states the machine really had, halves the range each time, and names the first transaction after which it is broken. It searches transactions, never packages, so no state is a partial upgrade; every package file is checked to exist first, a snapshot is saved, and the system is put back as it was.</td></tr>
+      <tr><td><code>bisect</code></td><td>Something worked last week and does not now: <code>emrac bisect --good tx-12 --test '&hellip;'</code> restores the states the machine really had, halves the range each time, and names the first transaction after which it is broken. It searches transactions, never packages, so no state is a partial upgrade. It never changes a protected package (the kernel, glibc, systemd, pacman, the shell and base tools, the boot and storage tools) on a live host, and says so when the culprit hides behind one; every package file is checked to exist first, a snapshot is saved, and the end state is checked against the exact list taken at the start.</td></tr>
       <tr><td>Recommend and explain</td><td>Source or binary for a package, from stated rules, with the reasoning input by input and what would change it. Builds are timed, so the estimates improve.</td></tr>
       <tr><td><code>install --source</code> / <code>--binary</code></td><td><code>--source</code> builds an official package from Arch&rsquo;s packaging source at the tag of the repository&rsquo;s version: audited, built in the sandbox, the result inspected, then installed with <code>pacman -U</code>. <code>--binary</code> compiles nothing and refuses a package that exists only as source, naming its <code>-bin</code> one. <code>install.prefer = recommend</code> lets <code>recommend</code> choose when you do not.</td></tr>
       <tr><td><code>from-source</code></td><td>What you asked to build from source is a recorded policy, apart from pins. An upgrade marks those packages, installs the repository&rsquo;s binaries first, then rebuilds each from the new packaging source. A failed rebuild keeps the binary and the policy, marks it pending, and makes the upgrade exit non-zero; it never falls back silently. <code>list</code>, <code>add</code>, <code>drop</code>, <code>rebuild</code>.</td></tr>
@@ -708,7 +708,7 @@ use_agent = true</pre>
 
   <div class="devzone" id="planned" role="group" aria-label="Under development">
     <div class="tape" aria-hidden="true"></div>
-    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 57 items, in the order they are planned. Decided against: AI features, telemetry, scripting, committing through libalpm instead of pacman.</span></div>
+    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 58 items, in the order they are planned. Decided against: AI features, telemetry, scripting, committing through libalpm instead of pacman.</span></div>
     <details open><summary>Next: finishing r3 (u25&ndash;u30) <em>6</em></summary>
       <ul>
         <li><b>u25</b> Stray-file scanner; link-check for software built outside the manager</li>
@@ -747,11 +747,12 @@ use_agent = true</pre>
         <li>Keep-going, resume, jobs and load-average limits; build failure bundle</li>
       </ul>
     </details>
-    <details><summary>Safety and recovery <em>8</em></summary>
+    <details><summary>Safety and recovery <em>9</em></summary>
       <ul>
         <li>Filesystem snapshots <small>(Btrfs, ZFS, snapper)</small>, bootable snapshots, staged upgrades, rollback rehearsal</li>
         <li>Automatic rollback when a post-upgrade check fails <small>(the checks and the report are built)</small></li>
         <li>DKMS and kernel-module test; boot test in a throwaway VM</li>
+        <li><code>bisect --isolate</code>: protected transitions tested in a disposable VM or root; a remediation workflow after a culprit is found <small>(report, recommend, remediate, verify)</small></li>
         <li>Resume an interrupted transaction <small>(it is found and recorded, not resumed)</small></li>
         <li>Saved plans <small>(<code>plan</code>, <code>apply</code>, plan diff)</small>; <code>emrac.lock</code>; time-travel installs</li>
         <li><code>/etc</code> change tracking per transaction; a signed log; SBOM and provenance per build</li>

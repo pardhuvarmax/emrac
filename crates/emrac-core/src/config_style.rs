@@ -179,6 +179,15 @@ const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        name: "bisect",
+        icon: "\u{2442}",
+        blurb: "what `emrac bisect` may change on this machine",
+        keys: &[
+            key("mode", Kind::Text, "protected: bisect visits earlier states by changing ordinary packages only; the kernel, glibc, systemd, pacman, the shell and base tools, the boot and storage tools are never changed on a live host, and a state that needs one is not visited. analysis: it never changes anything. (isolated, which would test those in a disposable VM, is planned and not built.) There is no setting that lifts the protection", "\"protected\" | \"analysis\""),
+            key("protected_extra", Kind::Text, "package names, separated by commas, that bisect also never changes; this only ever adds to the built-in protected list", "e.g. \"nvidia,nvidia-utils\""),
+        ],
+    },
+    Section {
         name: "safety",
         icon: "⛨",
         blurb: "the checks made before a transaction changes anything",
@@ -448,6 +457,8 @@ mod tests {
             ("clui.pacman", "native"),
             ("clui.builds", "native"),
             ("install.prefer", "recommend"),
+            ("bisect.mode", "analysis"),
+            ("bisect.protected_extra", "a,b"),
             ("advisor.enabled", "false"),
             ("advisor.large_download_mib", "5"),
             ("advisor.large_growth_mib", "6"),
@@ -467,7 +478,7 @@ mod tests {
         }
         assert_eq!(reparsed(&c), plain(&c));
         let text = render(&c);
-        assert_eq!(text.matches("◂ changed").count(), 51, "{text}");
+        assert_eq!(text.matches("◂ changed").count(), 53, "{text}");
     }
 
     #[test]

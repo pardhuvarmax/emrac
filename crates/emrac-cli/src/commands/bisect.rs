@@ -13,6 +13,7 @@ pub struct Args<'a> {
     pub bad: Option<&'a str>,
     pub test: Option<&'a str>,
     pub dry_run: bool,
+    pub analyze: bool,
     pub yes: bool,
     pub offline: bool,
 }
@@ -52,23 +53,36 @@ fn summary(timeline: &Timeline, i: usize) -> String {
 
 /// Puts the system into the state of `point`: the machinery of `restore --prune`.
 ///
-/// Every step reads the installed packages afresh: the handle a command starts
-/// with was opened before the steps before it changed them.
-fn go_to(point: &Point, offline: bool) -> Result<()> {
+/// Every step reads the installed packages afresh (the handle a command starts
+/// with was opened before the steps before it changed them) and works out what
+/// pacman would really do right now: the packages the plan changes, the ones it
+/// removes, and what installing the files would remove by conflict or replacement.
+/// If any of those is protected (`emrac_core::protected`), nothing is changed.
+fn go_to(point: &Point, offline: bool, extra: &[String]) -> Result<()> {
     let sources = Sources::init()?;
     let plan = sources.plan_restore_snapshot(&snapshot_of(point), true, offline)?;
     if plan.is_empty() {
         return Ok(());
     }
+    let mut touched: Vec<String> = plan.entries.iter().map(|e| e.item.name.clone()).collect();
+    touched.extend(plan.extras.iter().map(|(n, _)| n.clone()));
+    touched.extend(sources.restore_side_removals(&plan)?);
+    let blocked = emrac_core::protected::blocked(&touched, extra);
+    if !blocked.is_empty() {
+        return Err(Error::Help(format!(
+            "bisect stopped before changing anything: reaching '{}' would change {}. Protected packages are never changed on a live host.",
+            point.label,
+            emrac_core::protected::describe(&blocked)
+        )));
+    }
     crate::commands::restore::apply(&sources, &plan)
 }
 
-/// Whether the system is in the state of `point` (read afresh).
-fn is_at(point: &Point, offline: bool) -> bool {
+/// `(name, version)` of everything installed, read afresh.
+fn installed_now() -> Vec<(String, String)> {
     Sources::init()
-        .and_then(|s| s.plan_restore_snapshot(&snapshot_of(point), true, offline))
-        .map(|p| p.is_empty())
-        .unwrap_or(false)
+        .map(|s| s.installed_pairs())
+        .unwrap_or_default()
 }
 
 /// 0 good, 125 cannot tell, anything else bad.
@@ -106,6 +120,10 @@ fn ask() -> Option<Verdict> {
 }
 
 pub fn run(sources: &Sources, args: &Args) -> Result<()> {
+    let config = emrac_core::Config::load()?;
+    let extra = config.bisect.extra();
+    let analysis = args.analyze || args.dry_run || config.bisect.mode == "analysis";
+
     let timeline = sources.bisect_timeline()?;
     if timeline.points.len() < 2 {
         return Err(Error::Help(
@@ -138,26 +156,40 @@ pub fn run(sources: &Sources, args: &Args) -> Result<()> {
         ));
     }
 
+    // The boundary: a state that needs a protected package changed cannot be visited.
+    let unreachable: Vec<usize> = ((good + 1)..bad)
+        .filter(|&i| !bisect::reachable(&timeline.points, i, &extra))
+        .collect();
+    let behind =
+        |i: usize| bisect::protected_changes(&timeline.points[i - 1], &timeline.points[i], &extra);
     say!(
         Voice::Plans,
-        "bisect: {} transaction{} between good ({}) and bad ({}), at most {} state{} to look at.",
+        "bisect: {} transaction{} between good ({}) and bad ({}).",
         bad - good,
         if bad - good == 1 { "" } else { "s" },
         timeline.points[good].label,
         timeline.points[bad].label,
-        Search::steps(good, bad),
-        if Search::steps(good, bad) == 1 {
-            ""
-        } else {
-            "s"
-        }
     );
     for i in (good + 1)..=bad {
+        let protected = behind(i);
         println!(
-            "  {:<8} {}  {}",
+            "  {:<8} {}  {}{}{}",
             timeline.points[i].tx.as_deref().unwrap_or("?"),
             emrac_core::format_utc(timeline.points[i].timestamp),
-            summary(&timeline, i)
+            summary(&timeline, i),
+            if protected.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "   [protected: {}]",
+                    emrac_core::protected::describe(&protected)
+                )
+            },
+            if unreachable.contains(&i) {
+                "   [not visitable on this host]"
+            } else {
+                ""
+            }
         );
     }
     if !timeline.unexplained.is_empty() {
@@ -167,6 +199,40 @@ pub fn run(sources: &Sources, args: &Args) -> Result<()> {
             timeline.unexplained.join(", ")
         );
     }
+    let candidates = (bad - good - 1).saturating_sub(unreachable.len());
+    if !unreachable.is_empty() {
+        say!(
+            Voice::Warns,
+            "{} of the {} states in between need protected packages changed ({}) and are never visited on a live host.",
+            unreachable.len(),
+            bad - good - 1,
+            emrac_core::protected::describe(&bisect::protected_changes(
+                &timeline.points[good],
+                &timeline.points[last],
+                &extra
+            ))
+        );
+    }
+    if bad - good > 1 && candidates == 0 {
+        return Err(Error::Help(format!(
+            "bisection stopped: every state between {} and {} needs protected packages changed ({}), which is never done on a live host. No package changes were made. The regression is in one of these transactions: test them in an isolated environment (a disposable VM) — that mode is planned, not built.",
+            timeline.points[good].label,
+            timeline.points[bad].label,
+            emrac_core::protected::describe(&bisect::protected_changes(
+                &timeline.points[good],
+                &timeline.points[last],
+                &extra
+            ))
+        )));
+    }
+    let steps = Search::steps(good, bad);
+    say!(
+        Voice::Plans,
+        "at most {steps} state{} to look at (protection policy {}).",
+        if steps == 1 { "" } else { "s" },
+        emrac_core::protected::POLICY_VERSION
+    );
+
     let missing = sources.bisect_missing(&timeline, good, args.offline)?;
     if !missing.is_empty() {
         return Err(Error::RestoreFilesMissing(missing.join(", ")));
@@ -175,8 +241,16 @@ pub fn run(sources: &Sources, args: &Args) -> Result<()> {
         Voice::Confirms,
         "every package version the states need can be found."
     );
-    if args.dry_run {
-        say!(Voice::Notes, "this is a dry run: nothing was changed.");
+    if analysis {
+        say!(
+            Voice::Notes,
+            "{}: nothing was changed.",
+            if config.bisect.mode == "analysis" {
+                "bisect.mode is analysis"
+            } else {
+                "this is an analysis (no --test is run, no package touched)"
+            }
+        );
         return Ok(());
     }
     if args.test.is_none() && !std::io::stdin().is_terminal() {
@@ -186,13 +260,15 @@ pub fn run(sources: &Sources, args: &Args) -> Result<()> {
     }
     if !args.yes
         && !confirm(
-            "This puts the system back into earlier states, one after another, and back to now at the end. Continue?",
+            "This puts the system back into earlier states, one after another (ordinary packages only), and back to now at the end. Continue?",
         )
     {
         say!(Voice::Notes, "okay, nothing was changed.");
         return Ok(());
     }
 
+    // The starting point, exactly: what has to be true again at the end.
+    let original = installed_now();
     let stamp = emrac_core::journal::unix_now();
     let safety = sources.create_snapshot(
         Some(&format!("bisect-{stamp}")),
@@ -204,77 +280,100 @@ pub fn run(sources: &Sources, args: &Args) -> Result<()> {
         safety.name
     );
 
-    let mut search = Search::new(good, bad);
     let mut looked = 0u32;
     let mut stopped: Option<String> = None;
-    let outcome = loop {
-        match search.state() {
-            Outcome::Next(i) => {
-                looked += 1;
-                say!(
-                    Voice::Plans,
-                    "state {looked}: {} ({})",
-                    timeline.points[i].label,
-                    emrac_core::format_utc(timeline.points[i].timestamp)
-                );
-                if let Err(err) = go_to(&timeline.points[i], args.offline) {
-                    stopped = Some(format!("couldn't put the system into that state — {err}"));
-                    break None;
+    // one state: reach it, then judge it
+    let mut judge = |i: usize, stopped: &mut Option<String>| -> Option<Verdict> {
+        looked += 1;
+        say!(
+            Voice::Plans,
+            "state {looked}: {} ({})",
+            timeline.points[i].label,
+            emrac_core::format_utc(timeline.points[i].timestamp)
+        );
+        if let Err(err) = go_to(&timeline.points[i], args.offline, &extra) {
+            *stopped = Some(format!("couldn't put the system into that state — {err}"));
+            return None;
+        }
+        let verdict = match args.test {
+            Some(cmd) => match run_test(cmd) {
+                Ok(v) => v,
+                Err(err) => {
+                    *stopped = Some(err.to_string());
+                    return None;
                 }
-                let verdict = match args.test {
-                    Some(cmd) => match run_test(cmd) {
-                        Ok(v) => v,
-                        Err(err) => {
-                            stopped = Some(err.to_string());
-                            break None;
-                        }
-                    },
-                    None => match ask() {
-                        Some(v) => v,
-                        None => {
-                            stopped = Some("you stopped the search".into());
-                            break None;
-                        }
-                    },
-                };
-                say!(
-                    Voice::Notes,
-                    "{}: {}",
-                    timeline.points[i].label,
-                    match verdict {
-                        Verdict::Good => "works",
-                        Verdict::Bad => "broken",
-                        Verdict::Skip => "cannot tell",
-                    }
-                );
-                search.mark(i, verdict);
+            },
+            None => match ask() {
+                Some(v) => v,
+                None => {
+                    *stopped = Some("you stopped the search".into());
+                    return None;
+                }
+            },
+        };
+        say!(
+            Voice::Notes,
+            "{}: {}",
+            timeline.points[i].label,
+            match verdict {
+                Verdict::Good => "works",
+                Verdict::Bad => "broken",
+                Verdict::Skip => "cannot tell",
             }
-            other => break Some(other),
+        );
+        Some(verdict)
+    };
+
+    let outcome = {
+        let mut search = Search::with_skipped(good, bad, unreachable.clone());
+        loop {
+            match search.state() {
+                Outcome::Next(i) => match judge(i, &mut stopped) {
+                    Some(v) => search.mark(i, v),
+                    None => break None,
+                },
+                other => break Some(other),
+            }
         }
     };
 
-    // Whatever happened, the last thing done is to go back to where it started.
+    // Whatever happened, the last thing done is to go back to where it started —
+    // and to check it against the exact list taken at the start.
     say!(Voice::Plans, "putting the system back to where it was.");
-    let back = go_to(&timeline.points[last], args.offline);
-    match &back {
-        Ok(()) => {
-            if is_at(&timeline.points[last], args.offline) {
-                say!(Voice::Confirms, "the system is back as it was.");
-            } else {
-                say!(
-                    Voice::Warns,
-                    "the system is not exactly as it was; `emrac restore {}` returns to the saved state.",
-                    safety.name
-                );
-            }
-        }
-        Err(err) => say!(
+    let back = go_to(&timeline.points[last], args.offline, &extra);
+    let left = bisect::manifest_diff(&original, &installed_now());
+    let mut incomplete = false;
+    if left.is_empty() {
+        say!(
+            Voice::Confirms,
+            "the system is back as it was: every package is at the version it had."
+        );
+    } else {
+        incomplete = true;
+        say!(
             Voice::Warns,
-            "couldn't put the system back — {err}. `emrac restore {}` returns to the state before the search.",
+            "the system is NOT back as it was ({} difference{}):",
+            left.len(),
+            if left.len() == 1 { "" } else { "s" }
+        );
+        for line in left.iter().take(12) {
+            println!("  {line}");
+        }
+        if let Err(err) = &back {
+            say!(Voice::Warns, "putting it back failed — {err}");
+        }
+        say!(
+            Voice::Suggests,
+            "no more steps will be taken. `emrac restore {} --prune` returns to the saved state (the package files it needs are in the cache); `emrac doctor` and `emrac verify` check the result.",
             safety.name
-        ),
+        );
     }
 
+    if incomplete {
+        return Err(Error::Help(
+            "bisection ended with the system not back where it started (see above)".into(),
+        ));
+    }
     if let Some(why) = stopped {
         return Err(Error::Help(format!("the search stopped: {why}")));
     }
@@ -296,12 +395,25 @@ pub fn run(sources: &Sources, args: &Args) -> Result<()> {
                 "`emrac history` shows {tx}. To go back with one package: `emrac downgrade <package>`; `emrac pin <package>` keeps it there (and holds it back from upgrades)."
             );
         }
-        Some(Outcome::Inconclusive { after, up_to }) => say!(
-            Voice::Warns,
-            "the states in between could not be judged: it broke somewhere in {} \u{2026} {}.",
-            timeline.points[after + 1].label,
-            timeline.points[up_to].label
-        ),
+        Some(Outcome::Inconclusive { after, up_to }) => {
+            let blocked =
+                bisect::protected_changes(&timeline.points[after], &timeline.points[up_to], &extra);
+            if blocked.is_empty() {
+                say!(
+                    Voice::Warns,
+                    "the states in between could not be judged: it broke somewhere in {} \u{2026} {}.",
+                    timeline.points[after + 1].label,
+                    timeline.points[up_to].label
+                );
+            } else {
+                return Err(Error::Help(format!(
+                    "bisection stopped: it broke somewhere in {} \u{2026} {}, and finding which transaction there requires changing protected package(s): {}. No further package changes were made. Continue in an isolated environment (a disposable VM) to test those candidates — that mode is planned, not built. Not reproduced is not ruled out.",
+                    timeline.points[after + 1].label,
+                    timeline.points[up_to].label,
+                    emrac_core::protected::describe(&blocked)
+                )));
+            }
+        }
         _ => {}
     }
     back

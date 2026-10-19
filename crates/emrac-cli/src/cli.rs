@@ -766,6 +766,12 @@ pub enum Commands {
         /// is broken. Without it you are asked in each state
         #[arg(long, value_name = "COMMAND")]
         test: Option<String>,
+
+        /// Only look: the window, which transactions changed protected
+        /// packages (never changed on a live host), what can be tested. No test
+        /// is run and nothing is installed or removed
+        #[arg(long)]
+        analyze: bool,
     },
 
     /// Make the installed packages match a snapshot

@@ -4089,6 +4089,17 @@ impl Sources {
         Ok(missing)
     }
 
+    /// What installing the package files of a restore would also remove, as libalpm
+    /// works it out (conflicts, replacements): the part of the effect a list of
+    /// versions does not show. `Err` when it cannot be worked out.
+    pub fn restore_side_removals(&self, plan: &RestorePlan) -> Result<Vec<String>> {
+        if plan.files.is_empty() || !plan.downloads.is_empty() {
+            return Ok(Vec::new());
+        }
+        let sim = AlpmBackend::simulate(None, SimOp::Files(&plan.files))?;
+        Ok(sim.removals.into_iter().map(|r| r.name).collect())
+    }
+
     /// As `plan_restore`, for a snapshot that is not in the store.
     pub fn plan_restore_snapshot(
         &self,

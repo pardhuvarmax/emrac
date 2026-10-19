@@ -4,7 +4,7 @@
 # (fixb 3.0 ships /usr/share/fixb/broken); `emrac bisect` has to find it by putting
 # the system back into the states it had, and then put it back as it was.
 #
-# last full run: after u24, 11 of 11 passed
+# last full run: after the hard boundary, 19 of 19 passed
 set -u
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; tail -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -63,6 +63,27 @@ ck "the system is back exactly as it was" "grep -q 'back as it was' /tmp/b3.out 
 ck "a safety snapshot was saved and named" "grep -q \"saved snapshot 'bisect-\" /tmp/b3.out && as_tester $e snapshot list 2>&1 | grep -q bisect-"
 ck "the steps are in the history, none of them failed" "as_tester $e history 2>&1 | grep -c restore >/dev/null; ! as_tester $e history 2>&1 | grep -qi 'failed'"
 ck "a test that cannot tell (125) in every state ends with the range, not a guess" "as_tester $e bisect --good $good --bad tx-6 --test 'exit 125' --yes >/tmp/b4.out 2>&1; grep -q 'could not be judged' /tmp/b4.out && [ \"\$(pacman -Q | sha256sum)\" = \"$before\" ]"
+
+# the hard boundary: protected packages are never changed on the live host
+as_tester $e config set bisect.protected_extra fixc >/dev/null
+ck "--analyze marks the transaction that changed a protected package and the states that cannot be visited" "as_tester $e bisect --good $good --bad tx-6 --analyze >/tmp/p1.out 2>&1; grep -q 'tx-4 .*\[protected: fixc (yours)\]' /tmp/p1.out && grep -q 'tx-3 .*\[not visitable on this host\]' /tmp/p1.out && grep -q 'never visited on a live host' /tmp/p1.out && [ \"\$(pacman -Q | sha256sum)\" = \"$before\" ]"
+as_tester $e bisect --good $good --bad tx-6 --test 'test ! -e /usr/share/fixb/broken' --yes >/tmp/p2.out 2>&1; rc=$?
+ck "states that cannot be visited are left out and the culprit is still found among the others" "[ $rc -eq 0 ] && grep -q 'after tx-4: works' /tmp/p2.out && grep -q 'fixb 2.0-1 → 3.0-1' /tmp/p2.out && grep -q 'back as it was' /tmp/p2.out && [ \"\$(pacman -Q | sha256sum)\" = \"$before\" ]"
+ck "fixc was never changed while it searched" "! grep -q 'fixc 2.0-1 → 1.0-1\|downgrading fixc' /tmp/p2.out"
+
+as_tester $e config set bisect.protected_extra fixb >/dev/null
+as_tester $e bisect --good $good --bad tx-6 --test 'test ! -e /usr/share/fixb/broken' --yes >/tmp/p3.out 2>&1; rc=$?
+ck "a regression that began in a protected package is narrowed to a range, said to need an isolated environment, and not called ruled out" "[ $rc -ne 0 ] && grep -q 'it broke somewhere in' /tmp/p3.out && grep -q 'fixb (yours)' /tmp/p3.out && grep -q 'Not reproduced is not ruled out' /tmp/p3.out && grep -q 'isolated environment' /tmp/p3.out"
+ck "the system is back exactly as it was after the boundary stop" "grep -q 'back as it was' /tmp/p3.out && [ \"\$(pacman -Q | sha256sum)\" = \"$before\" ]"
+
+as_tester $e config set bisect.protected_extra fixb,fixc,fixd >/dev/null
+ck "a window where every state needs a protected change is refused before anything is touched" "! as_tester $e bisect --good tx-1 --bad tx-3 --test true --yes >/tmp/p4.out 2>&1; grep -q 'every state between' /tmp/p4.out && [ \"\$(pacman -Q | sha256sum)\" = \"$before\" ]"
+as_tester $e config unset bisect.protected_extra >/dev/null
+
+as_tester $e config set bisect.mode analysis >/dev/null
+ck "bisect.mode = analysis never changes anything, whatever the flags" "as_tester $e bisect --good $good --bad tx-6 --test true --yes >/tmp/p5.out 2>&1; grep -q 'bisect.mode is analysis' /tmp/p5.out && [ \"\$(pacman -Q | sha256sum)\" = \"$before\" ]"
+as_tester $e config unset bisect.mode >/dev/null
+ck "there is no setting that lifts the protection: isolated is refused as not built" "! as_tester $e config set bisect.mode isolated >/tmp/p6.out 2>&1; grep -q 'planned' /tmp/p6.out"
 
 # a version no cache, repository or archive has: refused before anything changes
 rm -f /var/cache/pacman/pkg/fixb-1.0-1-any.pkg.tar.zst /srv/fixrepo/fixb-1.0-1-any.pkg.tar.zst /home/tester/.cache/emrac/archive/fixb/* 2>/dev/null
