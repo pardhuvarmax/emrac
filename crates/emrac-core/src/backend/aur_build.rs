@@ -394,11 +394,11 @@ impl AurBuildBackend {
                 crate::pacman_run::run_screen("makepkg", args, Some(dir), &mut logged)
             };
             match shown {
-                Ok(Some(status)) => {
-                    if !status.success() {
+                Ok(Some(shown)) => {
+                    if !shown.status.success() {
                         look.report_failure(&screen);
                     }
-                    return Ok(status);
+                    return Ok(shown.status);
                 }
                 Ok(None) => {}
                 Err(err) => return Err(Error::CommandSpawn("makepkg".to_string(), err)),

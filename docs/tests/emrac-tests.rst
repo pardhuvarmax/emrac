@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 701
+     - 705
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 60
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **793**
+     - **797**
 
-emrac-core library (701)
+emrac-core library (705)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -515,18 +515,20 @@ emrac-core library (701)
 * ``the_lock_is_absent_held_or_stale``
 * ``the_report_of_dk_is_read``
 
-``pacman_run::tests`` (3)
+``pacman_run::tests`` (4)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+* ``a_command_that_stops_at_a_question_with_a_failure_status_was_answered_no``
 * ``a_command_with_a_terminal_for_output_is_shown_through_the_renderer``
 * ``only_a_pacman_command_on_a_terminal_is_wanted``
 * ``the_size_is_never_zero``
 
-``pacman_ui::tests`` (15)
+``pacman_ui::tests`` (18)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_check_that_starts_on_a_line_of_its_own_is_not_finished_at_0_percent``
 * ``a_cursor_pacman_hid_is_shown_again_if_it_was_stopped``
+* ``a_file_pacman_writes_a_last_time_is_not_shown_twice``
 * ``a_live_update_is_one_line_redrawn_and_a_finished_one_stays``
 * ``a_programs_own_cursor_movement_is_kept_and_only_pacmans_bars_lose_theirs``
 * ``a_progress_line_is_understood_and_nothing_else_is``
@@ -536,8 +538,10 @@ emrac-core library (701)
 * ``colour_only_decorates``
 * ``hooks_with_counters_are_restyled``
 * ``one_file_with_no_total_is_shown_as_itself``
-* ``parallel_downloads_show_one_total_and_hide_the_files``
+* ``parallel_downloads_are_a_block_that_moves_and_each_file_finishes_once``
+* ``the_database_sync_is_one_block_not_a_line_per_update``
 * ``the_end_finishes_a_line_that_never_got_its_newline``
+* ``the_screen_knows_when_the_program_was_left_at_a_question``
 * ``the_steps_of_a_transaction_become_emrac_lines_and_pacmans_bars_are_gone``
 * ``warnings_errors_and_hook_output_pass_through_byte_for_byte``
 
@@ -1448,7 +1452,7 @@ End-to-end: how emrac looks (dev/e2e/clui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 emrac under a real pseudo-terminal and piped: marks, boxes, colour, themes, ASCII,
-width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: after the pacman style, 63 of 63 passed.
+width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: after the cancel, 65 of 65 passed.
 
 * the defaults: regular animations, auto colour and unicode, the default theme
 * a value that is not one of the words is refused
@@ -1513,8 +1517,10 @@ width, the gallery and the animations: ``dev/e2e/run.sh clui``. Last full run: a
 * piped, pacman is not touched: no marks, no restyled lines
 * the setting is checked
 * a failed transaction still fails the command
+* answering no to pacman's own question is a cancel, said as one, not an error
+* a cancel at pacman's question is not recorded as a failed transaction
 
-(63 checks.)
+(65 checks.)
 
 End-to-end: Mirror Intelligence (dev/e2e/mirrors.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

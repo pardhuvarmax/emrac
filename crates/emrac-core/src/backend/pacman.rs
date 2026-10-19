@@ -368,7 +368,13 @@ impl PacmanBackend {
             None
         };
         let status = match shown {
-            Some(status) => status,
+            Some(shown) => {
+                // pacman asked, the answer was no, and it stopped: that is not a failure
+                if shown.declined {
+                    return Err(Error::PacmanDeclined);
+                }
+                shown.status
+            }
             None => Command::new(program)
                 .args(args)
                 .status()

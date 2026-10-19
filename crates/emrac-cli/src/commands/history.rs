@@ -486,6 +486,11 @@ fn verify_database() {
 }
 
 fn log_step(plan: &Plan, outcome: &Result<()>, rollback_of: Option<&str>) {
+    // pacman asked and the answer was no: nothing ran, so nothing is recorded
+    // (the same as a declined confirmation of emrac's own)
+    if matches!(outcome, Err(Error::PacmanDeclined)) {
+        return;
+    }
     match History::record(plan, outcome, rollback_of) {
         Ok(_) => super::ledger::sync_after(),
         Err(err) => say!(Voice::Warns, "couldn't record this in your history — {err}"),

@@ -41,6 +41,8 @@ enum Class {
     },
     /// A line that only names a file about to be downloaded.
     Swallow,
+    /// ` core is up to date`: a database that needed no download.
+    UpToDate(String),
     Raw,
 }
 
@@ -126,8 +128,15 @@ fn classify(plain: &str, retrieving: bool) -> Class {
     }
     if t.starts_with(":: ") && t.ends_with("...") && !t.contains('?') {
         return Class::Section {
-            retrieving: t.contains("Retrieving"),
+            retrieving: t.contains("Retrieving") || t.contains("Synchronizing"),
         };
+    }
+    if retrieving && plain.starts_with(' ') {
+        if let Some(name) = t.trim().strip_suffix(" is up to date") {
+            if !name.is_empty() && !name.contains(' ') {
+                return Class::UpToDate(name.to_string());
+            }
+        }
     }
     if retrieving
         && plain.starts_with(' ')
@@ -142,6 +151,18 @@ fn classify(plain: &str, retrieving: bool) -> Class {
 
 /// A question waiting for an answer: no end of line yet, and it ends the way a
 /// prompt does.
+/// Where a cursor move to another line (`ESC [ n A/B/E/F`) that ends `seg` begins.
+fn trailing_vertical_move(seg: &[u8]) -> Option<usize> {
+    let last = *seg.last()?;
+    if !matches!(last, b'A' | b'B' | b'E' | b'F') {
+        return None;
+    }
+    let body = &seg[..seg.len() - 1];
+    let digits = body.iter().rev().take_while(|b| b.is_ascii_digit()).count();
+    let at = body.len().checked_sub(digits + 2)?;
+    (body[at] == 0x1b && body[at + 1] == b'[').then_some(at)
+}
+
 fn looks_like_prompt(plain: &str) -> bool {
     plain.ends_with(' ')
         && ((plain.contains('[') && plain.contains(']'))
@@ -171,6 +192,11 @@ pub trait Screen {
     fn resize(&mut self, width: usize) -> Vec<u8>;
     /// The program ended: whatever is held is written.
     fn finish(&mut self) -> Vec<u8>;
+    /// The last thing the program did was ask a question, and it said nothing
+    /// after it: with a failure status, that is an answer of no.
+    fn left_at_a_question(&self) -> bool {
+        false
+    }
 }
 
 impl Screen for Renderer {
@@ -186,6 +212,16 @@ impl Screen for Renderer {
     fn finish(&mut self) -> Vec<u8> {
         Renderer::finish(self)
     }
+    fn left_at_a_question(&self) -> bool {
+        self.at_question
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Row {
+    name: String,
+    rest: String,
+    pct: u8,
 }
 
 pub struct Renderer {
@@ -198,11 +234,21 @@ pub struct Renderer {
     drawn: bool,
     dirty: bool,
     retrieving: bool,
-    dl_total_seen: bool,
+    /// The files of a download that are in progress, in the order they started,
+    /// and the total of it: drawn together as one block that is redrawn in place.
+    rows: Vec<Row>,
+    total: Option<Rec>,
+    /// Files of this download that finished: pacman writes a last line for
+    /// some of them again, and it is not shown twice.
+    finished: Vec<String>,
+    /// The rows of the screen the block takes now, and the width of each of its lines.
+    block_widths: Vec<usize>,
     /// Columns of the live line on the screen, for erasing it after a resize.
     drawn_len: usize,
     /// pacman asked the terminal to hide the cursor and has not shown it again.
     cursor_hidden: bool,
+    /// The last output was a question, and nothing has been printed since.
+    at_question: bool,
     out: Vec<u8>,
 }
 
@@ -216,9 +262,13 @@ impl Renderer {
             drawn: false,
             dirty: false,
             retrieving: false,
-            dl_total_seen: false,
+            rows: Vec::new(),
+            total: None,
+            finished: Vec::new(),
+            block_widths: Vec::new(),
             drawn_len: 0,
             cursor_hidden: false,
+            at_question: false,
             out: Vec::new(),
         }
     }
@@ -227,15 +277,24 @@ impl Renderer {
     pub fn feed(&mut self, data: &[u8]) -> Vec<u8> {
         for &b in data {
             if b == b'\r' || b == b'\n' {
-                self.terminator(b);
+                self.terminator(b, true);
             } else {
                 self.seg.push(b);
+                // pacman rewrites its download block by moving the cursor between
+                // lines, with no end of line: those moves end a line, and are ours
+                if self.retrieving && matches!(b, b'A' | b'B' | b'E' | b'F') {
+                    if let Some(start) = trailing_vertical_move(&self.seg) {
+                        self.seg.truncate(start);
+                        self.terminator(b'\r', false);
+                    }
+                }
             }
         }
         if !self.seg.is_empty() {
             let plain = strip_ansi(&String::from_utf8_lossy(&self.seg));
             if looks_like_prompt(&plain) {
                 self.raw_partial();
+                self.at_question = true;
             }
         }
         self.redraw();
@@ -256,6 +315,7 @@ impl Renderer {
         if !self.seg.is_empty() {
             self.raw_partial();
         }
+        self.commit_block();
         self.commit_live();
         if self.cursor_hidden {
             // pacman hid the cursor for its bars and was stopped before it showed it
@@ -273,6 +333,125 @@ impl Renderer {
         }
     }
 
+    /// Takes the download block off the screen (its rows are kept to be drawn again).
+    fn erase_block(&mut self) {
+        if self.block_widths.is_empty() {
+            return;
+        }
+        let width = self.st.width.max(1);
+        let rows: usize = self
+            .block_widths
+            .iter()
+            .map(|w| w.div_ceil(width).max(1))
+            .sum();
+        self.out.push(b'\r');
+        if rows > 1 {
+            self.out
+                .extend_from_slice(format!("\x1b[{}A", rows - 1).as_bytes());
+        }
+        self.out.extend_from_slice(b"\x1b[J");
+        self.block_widths.clear();
+    }
+
+    /// The block's lines now: every file that is in progress, then the total.
+    fn block_lines(&self) -> Vec<Line> {
+        let mut lines: Vec<Line> = self
+            .rows
+            .iter()
+            .map(|r| {
+                self.rec_line(
+                    &Rec::DlFile {
+                        name: r.name.clone(),
+                        rest: r.rest.clone(),
+                        pct: r.pct,
+                    },
+                    None,
+                )
+            })
+            .collect();
+        if let Some(t) = &self.total {
+            lines.push(self.rec_line(t, None));
+        }
+        lines
+    }
+
+    fn draw_block(&mut self) {
+        self.erase_block();
+        if self.rows.is_empty() && self.total.is_none() {
+            return;
+        }
+        let lines = self.block_lines();
+        let mut widths = Vec::new();
+        for (i, line) in lines.iter().enumerate() {
+            let text = self.render(line);
+            widths.push(crate::style::display_width(&text));
+            if i > 0 {
+                self.out.extend_from_slice(b"\r\n");
+            }
+            self.out.extend(text.into_bytes());
+        }
+        self.block_widths = widths;
+    }
+
+    /// A file that finished leaves the block for good as a line of its own, so
+    /// a long download is a list of what is done above the few that are going.
+    fn flush_done_rows(&mut self) {
+        let finished: Vec<Row> = self.rows.iter().filter(|r| r.pct >= 100).cloned().collect();
+        let total_done = matches!(&self.total, Some(Rec::DlTotal { pct, .. }) if *pct >= 100)
+            && self.rows.iter().all(|r| r.pct >= 100);
+        if finished.is_empty() && !total_done {
+            return;
+        }
+        self.erase_block();
+        self.rows.retain(|r| r.pct < 100);
+        self.finished
+            .extend(finished.iter().map(|r| r.name.clone()));
+        for r in finished {
+            let line = self.rec_line(
+                &Rec::DlFile {
+                    name: r.name,
+                    rest: r.rest,
+                    pct: r.pct,
+                },
+                Some(true),
+            );
+            self.print(&line);
+        }
+        if total_done {
+            if let Some(t) = self.total.take() {
+                let line = self.rec_line(&t, Some(true));
+                self.print(&line);
+            }
+        }
+    }
+
+    /// The download ends: whatever is still in the block stays as lines.
+    fn commit_block(&mut self) {
+        self.finished.clear();
+        if self.rows.is_empty() && self.total.is_none() {
+            return;
+        }
+        self.erase_block();
+        let rows = std::mem::take(&mut self.rows);
+        for r in rows {
+            let done = r.pct >= 100;
+            let line = self.rec_line(
+                &Rec::DlFile {
+                    name: r.name,
+                    rest: r.rest,
+                    pct: r.pct,
+                },
+                Some(done),
+            );
+            self.print(&line);
+        }
+        if let Some(t) = self.total.take() {
+            let done = matches!(&t, Rec::DlTotal { pct, .. } if *pct >= 100);
+            let line = self.rec_line(&t, Some(done));
+            self.print(&line);
+        }
+    }
+
     fn track_cursor(&mut self, raw: &[u8]) {
         let text = String::from_utf8_lossy(raw);
         if let Some(hide) = text.rfind("\x1b[?25l") {
@@ -284,13 +463,17 @@ impl Renderer {
 
     fn raw_partial(&mut self) {
         self.erase_live();
+        self.erase_block();
+        self.dirty = true;
         let seg = std::mem::take(&mut self.seg);
         self.track_cursor(&seg);
         self.out.extend(seg);
         self.swallowing = false;
     }
 
-    fn terminator(&mut self, c: u8) {
+    /// `real`: the byte came from pacman. A cursor move that ends a line is
+    /// treated as an end of line that is not written.
+    fn terminator(&mut self, c: u8, real: bool) {
         let seg = std::mem::take(&mut self.seg);
         if seg.is_empty() {
             if self.swallowing {
@@ -299,11 +482,18 @@ impl Renderer {
                 }
                 return;
             }
-            self.erase_live();
-            self.out.push(c);
+            if real {
+                self.erase_live();
+                self.erase_block();
+                self.dirty = true;
+                self.out.push(c);
+            }
             return;
         }
         let plain = strip_ansi(&String::from_utf8_lossy(&seg));
+        if !plain.trim().is_empty() {
+            self.at_question = false;
+        }
         match classify(&plain, self.retrieving) {
             Class::Record(rec) => {
                 self.apply(rec);
@@ -311,7 +501,7 @@ impl Renderer {
                 // a step ends with its line; a download is redrawn in place by
                 // pacman (it moves the cursor and rewrites), so only a finished
                 // one ends
-                let ends = c == b'\n' && self.live_is_complete();
+                let ends = real && c == b'\n' && self.live_is_complete();
                 if ends {
                     self.commit_live();
                 } else {
@@ -319,25 +509,36 @@ impl Renderer {
                 }
             }
             Class::Swallow => self.swallowing = true,
+            Class::UpToDate(name) => {
+                self.upsert_row(&name, "up to date".to_string(), 100);
+                self.swallowing = true;
+                self.dirty = true;
+            }
             Class::Hook(k, n, text) => {
+                self.commit_block();
                 self.commit_live();
                 let line = self.hook_line(k, n, &text);
                 self.print(&line);
                 self.swallowing = true;
             }
             Class::Section { retrieving } => {
+                self.commit_block();
+                self.finished.clear();
                 self.commit_live();
                 self.retrieving = retrieving;
-                self.dl_total_seen = false;
                 let line = vec![Seg::new(plain.trim_end().to_string(), Role::Brand)];
                 self.print(&line);
                 self.swallowing = true;
             }
             Class::Raw => {
                 self.erase_live();
+                self.erase_block();
+                self.dirty = true;
                 self.track_cursor(&seg);
                 self.out.extend(seg);
-                self.out.push(c);
+                if real {
+                    self.out.push(c);
+                }
                 self.swallowing = false;
             }
         }
@@ -349,37 +550,48 @@ impl Renderer {
     fn live_is_complete(&self) -> bool {
         matches!(
             &self.live,
-            Some(Rec::Step { pct, .. } | Rec::DlTotal { pct, .. } | Rec::DlFile { pct, .. })
-                if *pct >= 100
+            Some(Rec::Step { pct, .. }) if *pct >= 100
         )
     }
 
-    fn apply(&mut self, rec: Rec) {
-        match (&self.live, &rec) {
-            (Some(Rec::Step { label: a, .. }), Rec::Step { label: b, .. }) if a != b => {
-                self.commit_live();
-            }
-            (Some(Rec::DlFile { name: a, .. }), Rec::DlFile { name: b, .. }) if a != b => {
-                self.commit_live();
-            }
-            _ => {}
+    fn upsert_row(&mut self, name: &str, rest: String, pct: u8) {
+        if self.finished.iter().any(|f| f == name) {
+            return;
         }
+        match self.rows.iter_mut().find(|r| r.name == name) {
+            Some(r) => {
+                r.rest = rest;
+                r.pct = pct;
+            }
+            None => self.rows.push(Row {
+                name: name.to_string(),
+                rest,
+                pct,
+            }),
+        }
+    }
+
+    fn apply(&mut self, rec: Rec) {
         match rec {
             Rec::DlTotal { .. } => {
-                if matches!(self.live, Some(Rec::DlFile { .. })) {
-                    self.live = None;
-                    self.erase_live();
+                self.commit_live();
+                self.total = Some(rec);
+            }
+            Rec::DlFile { name, rest, pct } => {
+                self.commit_live();
+                self.upsert_row(&name, rest, pct);
+            }
+            Rec::Step { .. } => {
+                self.commit_block();
+                if let (Some(Rec::Step { label: a, .. }), Rec::Step { label: b, .. }) =
+                    (&self.live, &rec)
+                {
+                    if a != b {
+                        self.commit_live();
+                    }
                 }
-                self.dl_total_seen = true;
                 self.live = Some(rec);
             }
-            Rec::DlFile { .. } => {
-                // with a total on show, the files are only its parts
-                if !self.dl_total_seen {
-                    self.live = Some(rec);
-                }
-            }
-            Rec::Step { .. } => self.live = Some(rec),
         }
     }
 
@@ -391,9 +603,6 @@ impl Renderer {
         let line = self.rec_line(&rec, if done { Some(true) } else { Some(false) });
         self.erase_live();
         self.print(&line);
-        if matches!(rec, Rec::DlTotal { .. }) {
-            self.dl_total_seen = false;
-        }
         self.dirty = false;
     }
 
@@ -402,6 +611,11 @@ impl Renderer {
             return;
         }
         self.dirty = false;
+        if self.live.is_none() {
+            self.flush_done_rows();
+            self.draw_block();
+            return;
+        }
         let Some(rec) = self.live.clone() else {
             return;
         };
@@ -428,6 +642,10 @@ impl Renderer {
             }
             self.out.extend_from_slice(b"\x1b[J");
             self.drawn = false;
+            self.dirty = true;
+        }
+        if !self.block_widths.is_empty() {
+            self.erase_block();
             self.dirty = true;
         }
         self.st.width = width;
@@ -702,24 +920,190 @@ mod tests {
         let mut idle = Renderer::new(st(false));
         assert!(idle.resize(60).is_empty());
     }
+    fn bar_of(pct: u8) -> String {
+        let full = usize::from(pct) * 32 / 100;
+        format!("[{}{}] {pct:>3}%", "#".repeat(full), "-".repeat(32 - full))
+    }
+
+    fn file_rec(name: &str, rate: &str, pct: u8) -> String {
+        format!(" {name}   16.0 KiB  {rate} 00:01 {}", bar_of(pct))
+    }
+
     #[test]
-    fn parallel_downloads_show_one_total_and_hide_the_files() {
-        let input = format!(
-            ":: Retrieving packages...\r\n vim-runtime-9.2-1-x86_64\r\n vim-9.2-1-x86_64\r\n Total (0/2)   0.0 B  0.00 B/s 00:00 {BAR0}\r\r\n\x1b[1F vim-9.2-1-x86_64   16.0 KiB  1.0 MiB/s 00:01 {BAR33}\r\n\x1b[2E Total (1/2)   16.0 KiB  1.0 MiB/s 00:01 {BAR33}\r\r\n Total (2/2)   10.3 MiB  5.0 MiB/s 00:02 {BAR100}\r\n"
+    fn parallel_downloads_are_a_block_that_moves_and_each_file_finishes_once() {
+        let mut r = Renderer::new(st(false));
+        let mut all = String::new();
+        let mut step = |r: &mut Renderer, text: String| {
+            let out = String::from_utf8_lossy(&r.feed(text.as_bytes())).into_owned();
+            all.push_str(&out);
+            out
+        };
+        step(
+            &mut r,
+            ":: Retrieving packages...\r\n vim-runtime-9.2-1-x86_64\r\n vim-9.2-1-x86_64\r\n"
+                .into(),
         );
-        let out = run(&[&input], false);
+        let first = step(
+            &mut r,
+            format!(
+                "{}\r\r\n{}\r\r\n Total (0/2)   0.0 B  0.00 B/s 00:00 {}\r\r\n",
+                file_rec("vim-runtime-9.2-1-x86_64", "1 MiB/s", 5),
+                file_rec("vim-9.2-1-x86_64", "1 MiB/s", 2),
+                bar_of(0)
+            ),
+        );
+        // the block is drawn: two files and the total, three lines
         assert!(
-            !out.contains("vim-runtime-9.2-1-x86_64"),
-            "names are swallowed: {out}"
+            first.contains("vim-runtime-9.2-1-x86_64") && first.contains("downloading 0/2"),
+            "{first:?}"
         );
-        assert!(out.contains(":: Retrieving packages..."), "{out}");
-        assert!(out.contains("\u{2714} downloading 2/2"), "{out}");
-        assert!(out.contains("10.3 MiB 5.0 MiB/s 00:02"), "{out}");
+        assert_eq!(first.matches("\r\n").count(), 2, "{first:?}");
+        // an update redraws it in place: up two rows, clear, draw again
+        let second = step(
+            &mut r,
+            format!(
+                "\x1b[2F{}\r\r\n{}\r\r\n Total (0/2)   4 MiB  2 MiB/s 00:01 {}\r\r\n",
+                file_rec("vim-runtime-9.2-1-x86_64", "2 MiB/s", 50),
+                file_rec("vim-9.2-1-x86_64", "2 MiB/s", 60),
+                bar_of(50)
+            ),
+        );
         assert!(
-            !out.contains("vim-9.2-1-x86_64"),
-            "no file rows beside a total: {out}"
+            second.contains("\x1b[2A\x1b[J") && second.contains("50%") && second.contains("60%"),
+            "{second:?}"
         );
-        assert!(!out.contains('\u{1b}'), "{out:?}");
+        // one file finishes: it leaves the block as a line, the other keeps going
+        let third = step(
+            &mut r,
+            format!(
+                "\x1b[2F{}\r\r\n{}\r\r\n Total (1/2)  8 MiB  3 MiB/s 00:01 {}\r\r\n",
+                file_rec("vim-runtime-9.2-1-x86_64", "3 MiB/s", 100),
+                file_rec("vim-9.2-1-x86_64", "3 MiB/s", 80),
+                bar_of(90)
+            ),
+        );
+        assert!(
+            third.contains("\u{2714} vim-runtime-9.2-1-x86_64"),
+            "{third:?}"
+        );
+        assert!(
+            third.contains("vim-9.2-1-x86_64") && third.contains("80%"),
+            "{third:?}"
+        );
+        step(
+            &mut r,
+            format!(
+                "\x1b[1F{}\r\r\n Total (2/2)  10.3 MiB  5 MiB/s 00:02 {}\r\n",
+                file_rec("vim-9.2-1-x86_64", "3 MiB/s", 100),
+                bar_of(100)
+            ),
+        );
+        step(&mut r, "checking keyring...\r\n".into());
+        let rest = String::from_utf8_lossy(&r.finish()).into_owned();
+        all.push_str(&rest);
+        let plain: String = strip_ansi(&all).replace("\r\x1b[2K", "");
+        assert_eq!(
+            plain.matches("\u{2714} vim-runtime-9.2-1-x86_64").count(),
+            1,
+            "{plain}"
+        );
+        assert_eq!(
+            plain.matches("\u{2714} vim-9.2-1-x86_64").count(),
+            1,
+            "{plain}"
+        );
+        assert_eq!(
+            plain.matches("\u{2714} downloading 2/2").count(),
+            1,
+            "{plain}"
+        );
+        assert!(
+            !plain.contains("\r\n vim-runtime-9.2-1-x86_64\r\n"),
+            "names are not repeated: {plain}"
+        );
+        assert!(
+            !all.contains("\x1b[1F") && !all.contains("\x1b[2F"),
+            "pacman's own moves are gone"
+        );
+        assert!(plain.contains("checking keyring..."), "{plain}");
+    }
+
+    #[test]
+    fn the_database_sync_is_one_block_not_a_line_per_update() {
+        let mut r = Renderer::new(st(false));
+        let mut all = String::new();
+        let mut step = |r: &mut Renderer, text: String| {
+            all.push_str(&String::from_utf8_lossy(&r.feed(text.as_bytes())));
+        };
+        step(
+            &mut r,
+            ":: Synchronizing package databases...\r\n core\r\n extra\r\n multilib\r\n g14\r\n"
+                .into(),
+        );
+        step(
+            &mut r,
+            format!(
+                "{}\r\r\n{}\r\r\n{}\r\r\n",
+                file_rec("multilib", "0.00 B/s", 19),
+                file_rec("extra", "0.00 B/s", 0),
+                file_rec("core", "0.00 B/s", 8)
+            ),
+        );
+        // the way it really arrives: lines joined only by cursor moves, and a
+        // database that is up to date written over the end of another line
+        step(
+            &mut r,
+            format!(
+                "\x1b[3F{}\r\r\n\x1b[1E{}\r\r\n",
+                file_rec("multilib", "311 KiB/s", 100),
+                file_rec("core", "459 KiB/s", 100)
+            ),
+        );
+        step(
+            &mut r,
+            format!(
+                "\x1b[2F g14 is up to date\x1b[1E {}\r\r\n",
+                file_rec("extra", "6.31 MiB/s", 53).trim_start()
+            ),
+        );
+        step(
+            &mut r,
+            format!("\x1b[1F{}\r\n", file_rec("extra", "8.90 MiB/s", 100)),
+        );
+        let end = String::from_utf8_lossy(&r.finish()).into_owned();
+        all.push_str(&end);
+        let plain: String = strip_ansi(&all).replace("\r\x1b[2K", "");
+        for name in ["core", "extra", "multilib"] {
+            assert_eq!(
+                plain.matches(&format!("\u{2714} {name} ")).count(),
+                1,
+                "{name}: {plain}"
+            );
+        }
+        assert!(
+            plain.contains("\u{2714} g14") && plain.contains("up to date"),
+            "{plain}"
+        );
+        for raw in [
+            "\r\n core\r\n",
+            "\r\n extra\r\n",
+            "\r\n multilib\r\n",
+            "\r\n g14\r\n",
+        ] {
+            assert!(
+                !plain.contains(raw),
+                "a bare name was passed through: {raw:?} {plain}"
+            );
+        }
+        assert!(!plain.contains("[#") && !plain.contains("[--"), "{plain}");
+        assert!(
+            !plain.contains("is up to date extra"),
+            "lines are not merged: {plain}"
+        );
+        assert!(
+            plain.ends_with("\r\n"),
+            "nothing is left on the screen unfinished: {plain:?}"
+        );
     }
 
     #[test]
@@ -757,12 +1141,17 @@ mod tests {
             b.contains("\u{2714} installing a") && b.ends_with("\r\n"),
             "{b:?}"
         );
-        // a warning in the middle of a bar clears the live line first
+        // a warning in the middle of a bar clears the live line, is shown whole,
+        // and the bar is drawn again under it
         let mut r = Renderer::new(st(false));
         r.feed(format!("(1/1) installing a   {BAR33}\r").as_bytes());
         let w = String::from_utf8_lossy(&r.feed(b"warning: x\r\n")).into_owned();
         assert!(
-            w.starts_with("\r\x1b[2K") && w.ends_with("warning: x\r\n"),
+            w.starts_with("\r\x1b[2K") && w.contains("warning: x\r\n"),
+            "{w:?}"
+        );
+        assert!(
+            w.trim_end().ends_with("1/1") && w.contains("installing a"),
             "{w:?}"
         );
     }
@@ -804,5 +1193,47 @@ mod tests {
         );
         assert_eq!(out.matches("checking keys in keyring").count(), 1, "{out}");
         assert!(out.contains("\u{2714} checking keys in keyring"), "{out}");
+    }
+
+    #[test]
+    fn the_screen_knows_when_the_program_was_left_at_a_question() {
+        let mut r = Renderer::new(st(false));
+        r.feed(b"Total Installed Size:  1 MiB\r\n\r\n:: Proceed with installation? [Y/n] ");
+        assert!(r.left_at_a_question());
+        // a blank line (the terminal's own echo of the answer) does not change that
+        r.feed(b"\r\n");
+        assert!(r.left_at_a_question());
+        // anything printed after it does
+        let mut r = Renderer::new(st(false));
+        r.feed(b":: Proceed with installation? [Y/n] ");
+        r.feed(b"error: failed to commit transaction\r\n");
+        assert!(!r.left_at_a_question());
+        let mut r = Renderer::new(st(false));
+        r.feed(b":: Proceed with installation? [Y/n] ");
+        r.feed(
+            format!(":: Retrieving packages...\r\n (1/1) installing a  {BAR100}\r\n").as_bytes(),
+        );
+        assert!(!r.left_at_a_question());
+        assert!(!Renderer::new(st(false)).left_at_a_question());
+    }
+
+    #[test]
+    fn a_file_pacman_writes_a_last_time_is_not_shown_twice() {
+        let mut r = Renderer::new(st(false));
+        let mut all = String::new();
+        for chunk in [
+            ":: Synchronizing package databases...\r\n".to_string(),
+            format!("{}\r\r\n", file_rec("extra", "1 MiB/s", 40)),
+            format!("{}\r\r\n", file_rec("extra", "8 MiB/s", 100)),
+            format!("{}\r\n", file_rec("extra", "9 MiB/s", 100)),
+        ] {
+            all.push_str(&String::from_utf8_lossy(&r.feed(chunk.as_bytes())));
+        }
+        all.push_str(&String::from_utf8_lossy(&r.finish()));
+        assert_eq!(
+            strip_ansi(&all).matches("\u{2714} extra").count(),
+            1,
+            "{all:?}"
+        );
     }
 }

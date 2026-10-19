@@ -51,9 +51,19 @@ fn main() {
 
     init_style(&cli);
 
-    if let Err(err) = run(&cli) {
-        emrac_core::say_err!(err.voice(), "{err}");
-        std::process::exit(1);
+    match run(&cli) {
+        Ok(()) => {}
+        // the person said no at pacman's own question: a choice, not a failure
+        Err(emrac_core::Error::PacmanDeclined) => {
+            emrac_core::say!(
+                emrac_core::Voice::Notes,
+                "okay, nothing was changed: you answered no to pacman's question."
+            );
+        }
+        Err(err) => {
+            emrac_core::say_err!(err.voice(), "{err}");
+            std::process::exit(1);
+        }
     }
     // Build tools the run's AUR builds left behind: offered once everything the
     // run changed is finished and journaled.

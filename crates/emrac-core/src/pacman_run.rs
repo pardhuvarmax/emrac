@@ -42,10 +42,18 @@ fn winsize() -> libc::winsize {
 
 extern "C" fn ignore(_: libc::c_int) {}
 
+/// How a command that was shown ended.
+#[derive(Debug, Clone, Copy)]
+pub struct Shown {
+    pub status: ExitStatus,
+    /// It stopped at a question and printed nothing after it: the answer was no.
+    pub declined: bool,
+}
+
 /// Runs the command and shows what it says in pacman's style. `Ok(None)`: a
 /// pseudo-terminal could not be made, nothing ran, the caller should run it as
 /// it always did.
-pub fn run(program: &str, args: &[String], st: Style) -> std::io::Result<Option<ExitStatus>> {
+pub fn run(program: &str, args: &[String], st: Style) -> std::io::Result<Option<Shown>> {
     run_screen(program, args, None, &mut Renderer::new(st))
 }
 
@@ -55,7 +63,7 @@ pub fn run_screen(
     args: &[String],
     cwd: Option<&std::path::Path>,
     screen: &mut dyn Screen,
-) -> std::io::Result<Option<ExitStatus>> {
+) -> std::io::Result<Option<Shown>> {
     let ws = winsize();
     let (mut m, mut s) = (-1, -1);
     if unsafe { libc::openpty(&mut m, &mut s, std::ptr::null_mut(), std::ptr::null(), &ws) } != 0 {
@@ -136,9 +144,15 @@ pub fn run_screen(
         show(screen.tick());
     }
     show(screen.finish());
+    let at_question = screen.left_at_a_question();
     let status = child.wait();
     unsafe { libc::signal(libc::SIGINT, old) };
-    status.map(Some)
+    status.map(|status| {
+        Some(Shown {
+            status,
+            declined: at_question && status.code() == Some(1),
+        })
+    })
 }
 
 /// For a test: the pseudo-terminal opens and the size is read.
@@ -187,6 +201,30 @@ mod tests {
         )
         .unwrap()
         .unwrap();
-        assert_eq!(status.code(), Some(3));
+        assert_eq!(status.status.code(), Some(3));
+        assert!(!status.declined);
+    }
+
+    #[test]
+    fn a_command_that_stops_at_a_question_with_a_failure_status_was_answered_no() {
+        let st = Style {
+            fancy: true,
+            ..Style::PLAIN
+        };
+        let ask = |script: &str| {
+            run("sh", &["-c".to_string(), script.to_string()], st)
+                .unwrap()
+                .unwrap()
+        };
+        let no = ask("printf ':: Proceed with installation? [Y/n] '; exit 1");
+        assert!(no.declined && no.status.code() == Some(1));
+        // an error after the question is a failure, not an answer
+        let failed =
+            ask("printf ':: Proceed with installation? [Y/n] '; printf 'error: failed\\n'; exit 1");
+        assert!(!failed.declined);
+        // success after a question is not a decline either
+        assert!(!ask("printf ':: Proceed? [Y/n] '; exit 0").declined);
+        // no question at all
+        assert!(!ask("exit 1").declined);
     }
 }

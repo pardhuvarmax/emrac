@@ -279,6 +279,9 @@ pub enum Error {
         file: String,
     },
 
+    #[error("you answered no to pacman's question, so nothing was changed")]
+    PacmanDeclined,
+
     #[error("didn't install '{package}': you declined after the package manifest. The built file is kept at {file} (`sudo pacman -U` installs it)")]
     InstallDeclined { package: String, file: String },
 
@@ -388,6 +391,8 @@ impl Error {
 
     pub fn voice(&self) -> crate::voice::Voice {
         match self {
+            // A choice the person made, not something that went wrong.
+            Error::PacmanDeclined => crate::voice::Voice::Notes,
             // The explanation carries a verdict ("the swap looks safe"): a judgment.
             Error::DependencyConflict(_) => crate::voice::Voice::Thinks,
             Error::PackageNotFound(_)

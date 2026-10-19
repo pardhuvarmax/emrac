@@ -6,7 +6,7 @@
 # animations only when `clui.animations active`, never in CI or piped, and the
 # cursor always shown again, also after Ctrl-C.
 #
-# last full run: after the pacman style, 63 of 63 passed
+# last full run: after the cancel, 65 of 65 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -118,6 +118,10 @@ sudo pacman -R --noconfirm sl >/dev/null 2>&1
 ck "piped, pacman is not touched: no marks, no restyled lines" "$e install sl --yes > $W/pu4.out 2>&1; ! grep -q '✔ installing' $W/pu4.out && grep -q 'installing sl' $W/pu4.out && pacman -Q sl"
 ck "the setting is checked" "! $e config set clui.pacman fancy 2>&1 && [ \"\$($e config get clui.pacman)\" = emrac ]"
 ck "a failed transaction still fails the command" "! $e install --yes no-such-package-xyz >/dev/null 2>&1"
+
+sudo pacman -R --noconfirm sl >/dev/null 2>&1
+ck "answering no to pacman's own question is a cancel, said as one, not an error" "(sleep 5; echo y; sleep 8; echo n; sleep 5) | script -qec \"$T $e install sl\" /dev/null | tr -d '\\r' | sed -E 's/\\x1b\\[[0-9;?]*[A-Za-z]//g' > $W/no1.out; grep -q 'okay, nothing was changed: you answered no' $W/no1.out && ! grep -q 'something went wrong' $W/no1.out && ! pacman -Q sl"
+ck "a cancel at pacman's question is not recorded as a failed transaction" "! $e history 2>&1 | head -4 | grep -qi 'failed'"
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]
