@@ -157,7 +157,7 @@ pub enum ColorWhen {
 /// Shared by `install` and `upgrade` — anything that builds an AUR package
 /// goes through the same PKGBUILD/diff review, so the opt-out flags are
 /// identical for both.
-#[derive(Args)]
+#[derive(Args, Default)]
 pub struct AurReviewFlags {
     /// Never show an AUR package's PKGBUILD/diff, or ask the extra review
     /// confirmation — just go straight to the overall confirm
@@ -305,6 +305,11 @@ pub enum Commands {
         /// `emrac news`)
         #[arg(long)]
         ack_news: bool,
+
+        /// Install the repository's binary of the packages you build from
+        /// source and leave their rebuild pending (`emrac from-source rebuild`)
+        #[arg(long)]
+        skip_source_builds: bool,
     },
 
     /// View or change persisted defaults (~/.config/emrac/config.toml)
@@ -758,6 +763,16 @@ pub enum Commands {
     Verify {
         #[arg(required = true)]
         pkgs: Vec<String>,
+    },
+
+    /// The packages you build from source (`install --source`): which they are,
+    /// whether the installed one was built here, and what waits to be rebuilt.
+    /// An upgrade rebuilds them from Arch's packaging source instead of
+    /// installing the repository's binary
+    #[command(name = "from-source", visible_alias = "fs")]
+    FromSource {
+        #[command(subcommand)]
+        command: Option<FromSourceCommand>,
     },
 
     /// Build installed AUR packages again from source (after a library, Python
@@ -1477,5 +1492,31 @@ pub enum PolicyHelperVerb {
     },
     Diff {
         path: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum FromSourceCommand {
+    /// List the packages with a source-build policy and what is known about each
+    List,
+    /// Build these installed official packages from source from now on (the
+    /// build waits for `rebuild` or the next upgrade)
+    Add {
+        #[arg(required = true)]
+        pkgs: Vec<String>,
+    },
+    /// End the policy: these packages follow the repository's binary again
+    /// (the installed one is left as it is)
+    Drop {
+        #[arg(required = true)]
+        pkgs: Vec<String>,
+    },
+    /// Build the pending ones (or the named ones) from source now
+    Rebuild {
+        pkgs: Vec<String>,
+
+        /// Never show the PKGBUILD/diff for review (the audit still runs)
+        #[arg(long)]
+        accept_risks: bool,
     },
 }

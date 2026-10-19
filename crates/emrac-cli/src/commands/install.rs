@@ -127,5 +127,15 @@ pub fn run(
         Ok(())
     })();
     history::record(&plan, &result);
+    if result.is_ok() && mode == emrac_core::SourceMode::Binary {
+        // the binary was asked for explicitly: the source policy ends
+        let names: Vec<String> = plan.packages.iter().map(|p| p.name.clone()).collect();
+        if sources.end_source_policy(&names).unwrap_or(false) {
+            say!(
+                Voice::Notes,
+                "the source-build policy of those packages ended: they follow the repository's binary."
+            );
+        }
+    }
     result
 }

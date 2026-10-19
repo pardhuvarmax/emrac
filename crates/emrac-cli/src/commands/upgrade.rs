@@ -24,6 +24,7 @@ pub fn run(
     allow_partial: bool,
     expect_plan: Option<&str>,
     ack_news: bool,
+    skip_source_builds: bool,
 ) -> Result<()> {
     let upgrade = sources.plan_upgrade(pkgs, offline)?;
 
@@ -73,12 +74,6 @@ pub fn run(
             snapshot_first,
         );
     }
-    if !upgrade.plan.is_empty() && !json {
-        let replaced = sources.source_builds_replaced_by(&upgrade.plan);
-        if !replaced.is_empty() {
-            crate::commands::report::print_source_builds_replaced(&replaced);
-        }
-    }
     if !upgrade.plan.is_empty() {
         crate::commands::preflight::run(
             sources,
@@ -97,6 +92,16 @@ pub fn run(
     if upgrade.plan.is_empty() || dry_run {
         return Ok(());
     }
+
+    // The packages whose policy is to build from source, with the version the
+    // upgrade brings.
+    let source_names: Vec<(String, String, String)> = upgrade
+        .plan
+        .packages
+        .iter()
+        .filter(|p| emrac_core::install_mode::is_source_repo(&p.repo))
+        .map(|p| (p.name.clone(), p.version.clone(), p.repo.clone()))
+        .collect();
 
     // Exactly the AUR packages the plan says need upgrading.
     let aur_names: Vec<String> = upgrade
@@ -179,14 +184,8 @@ pub fn run(
         Ok(())
     })();
     history::record(&upgrade.plan, &result);
-    if result.is_ok() {
-        // what was built here and has been replaced is no longer ours
-        let replaced: Vec<String> = sources
-            .source_builds_replaced_by(&upgrade.plan)
-            .into_iter()
-            .map(|c| c.name)
-            .collect();
-        sources.forget_source_built(&replaced);
+    if result.is_ok() && !source_names.is_empty() {
+        rebuild_policy(sources, &source_names, skip_source_builds, choice)?;
     }
     if let (Ok(()), Some(gate)) = (&result, &news_gate) {
         gate.done();
@@ -199,4 +198,66 @@ pub fn run(
         );
     }
     result
+}
+
+/// Carries out the source-build policy after the repository's binaries are in:
+/// each package is rebuilt from Arch's packaging source at the new version. A
+/// rebuild that fails, or is skipped, leaves the binary installed, the policy
+/// kept and the rebuild marked pending; it is never papered over.
+fn rebuild_policy(
+    sources: &Sources,
+    packages: &[(String, String, String)],
+    skip: bool,
+    choice: BuildChoice,
+) -> Result<()> {
+    let names: Vec<String> = packages.iter().map(|(n, _, _)| n.clone()).collect();
+    if skip {
+        sources.mark_source_pending(&names);
+        say!(
+            Voice::Warns,
+            "the repository's binary of {} is installed; the source builds you asked for were skipped (--skip-source-builds) and are pending: `emrac from-source rebuild`.",
+            names.join(", ")
+        );
+        return Ok(());
+    }
+    let mut failed = Vec::new();
+    for (name, version, repo) in packages {
+        say!(
+            Voice::Notes,
+            "source-build policy: rebuilding '{name}' {version} from Arch's packaging source."
+        );
+        let plan = sources.source_rebuild_plan(name, version, repo);
+        let started = history::begin(&plan);
+        let result = crate::commands::source_install::build_and_install_at(
+            sources,
+            name,
+            Some(version),
+            choice,
+        );
+        if started.is_ok() {
+            history::record(&plan, &result);
+        }
+        if let Err(err) = result {
+            say!(
+                Voice::Warns,
+                "couldn't rebuild '{name}' from source — {err}"
+            );
+            failed.push(name.clone());
+        }
+    }
+    if failed.is_empty() {
+        return Ok(());
+    }
+    sources.mark_source_pending(&failed);
+    say!(
+        Voice::Warns,
+        "the repository's binary of {} stays installed (the system is consistent), your source-build policy is kept and the rebuild is pending.",
+        failed.join(", ")
+    );
+    say!(
+        Voice::Suggests,
+        "retry: emrac from-source rebuild  ·  switch to the binary for good: emrac from-source drop {}",
+        failed.join(" ")
+    );
+    Ok(())
 }

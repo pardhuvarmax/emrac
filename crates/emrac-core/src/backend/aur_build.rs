@@ -223,6 +223,12 @@ impl AurBuildBackend {
         Err(last.unwrap_or_else(|| Error::Help("no tag to fetch".into())))
     }
 
+    /// The revision a checkout is at (the packaging source a build came from).
+    pub fn head(&self, pkg: &str) -> Option<String> {
+        let dir = self.build_dir(pkg).ok()?;
+        self.git_output(Some(&dir), &["rev-parse", "HEAD"]).ok()
+    }
+
     /// Fast-forwards the local checkout to what `sync` last fetched. Only
     /// call this after the caller has confirmed the `Changed` diff.
     pub fn advance(&self, pkg: &str) -> Result<()> {

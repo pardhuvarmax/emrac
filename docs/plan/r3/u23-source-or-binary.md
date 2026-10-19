@@ -9,13 +9,19 @@ Until now the choice was made by the name: an official package was the repositor
 - **`emrac install --source <pkg>`**: an official package is built from **Arch's packaging source** here. The packaging repository (`gitlab.archlinux.org/archlinux/packaging/packages/<base>`) is fetched at the tag of the repository's version, which is what the binary was built from; the same audit as for an AUR PKGBUILD reads it first (critical is refused, high asks), it is built in the sandbox with the limits and the build screen of u22, the built package is inspected (setuid files, hooks, scriptlets, ...) and only then installed with `pacman -U`. Only the package asked for is installed when the base builds several. A version mismatch between the build and the repository is said, not hidden.
 - **`emrac install --binary <pkg>`**: nothing is compiled. A package that exists only as source (the AUR's) is refused, with its prebuilt `-bin` counterpart named when the AUR has one.
 - **`install.prefer`** (`[install]`): `repository` (the default, as before) or `recommend`, which builds an official package from source where `emrac recommend` says source with medium or high confidence. `--source` and `--binary` win over it.
-- The plan says which are built here (`extra+source/sl`, and a warning that explains it: the sandbox, the build tools `makepkg` installs, and that the next upgrade replaces the result with the repository's binary unless pinned). The choice is part of the plan id, so `--expect-plan` binds it.
+- The plan says which are built here (`extra+source/sl`, and a warning that explains it: the sandbox, the build tools `makepkg` installs, and that an upgrade rebuilds it from source (the policy) instead of installing the binary). The choice is part of the plan id, so `--expect-plan` binds it.
 
 ## Decisions
 
 - Arch's packaging repositories are fetched over https only, one tag, shallow, a clean checkout every time; the name that goes into the address is checked.
 - The default does not change: a build is never started because of a score unless you set `install.prefer = recommend`.
-- A source build has the repository's version, so nothing replaces it until the repository gets a **newer** one; then `upgrade` replaces it with the binary. It says so first: emrac remembers what it built here (`~/.local/share/emrac/source-built.json`), and the plan of an upgrade that would replace one prints which, with the command to build the new version from source again. A pin keeps the build but holds the package back from every upgrade, which is a partial upgrade for what depends on it: use it only for a package that is safe to hold.
+- A source build has the repository's version, so nothing replaces it until the repository gets a **newer** one. What you asked for is a **policy**, not an accident: emrac records it (`~/.local/share/emrac/source-built.json`: package, version built, the revision of the packaging repository, when, whether a rebuild is pending), apart from pins. The invariant: *a package the user asked to have built from source is never silently replaced by the repository's binary; the replacement follows a recorded policy or an explicit decision of the user.*
+  - **Plan.** An upgrade that contains such a package marks it `extra+source/sl` (part of the plan id) and warns what happens. Policy and pin are different things: a pin holds the package back, which is a partial upgrade (Arch does not support it); a policy follows the repository's version and builds it here.
+  - **Order.** `pacman -Syu` installs the repository's binaries first, so the system is never partly upgraded; each policy package is then rebuilt from the new tag (audit, sandbox, inspection) and recorded as its own history entry. This is not one atomic transaction, and the plan warning says so.
+  - **Failure.** A rebuild that fails, or `upgrade --skip-source-builds`, never falls back silently: the binary stays installed, the policy is kept, the rebuild is marked pending and emrac prints `emrac from-source rebuild` and `emrac from-source drop`.
+  - **Switching.** `install --binary` of such a package is an explicit decision and ends the policy; `emrac from-source drop` does the same without installing.
+  - **Unknown.** If another version is installed than the one built here (installed by another tool, say), `emrac from-source` reports "unknown build intent" and does not claim the build was kept.
+  - `emrac from-source [list | add | drop | rebuild]` (alias `fs`) manages it.
 
 ## Not covered
 
@@ -23,4 +29,4 @@ Until now the choice was made by the name: an official package was the repositor
 
 ## Verification
 
-Unit tests of the choice (flag, setting, verdict, confidence), of the plan entry, of the built file's package name (split packages), of the tag for an epoch and of the name allowed in an address; `dev/e2e/sourceinstall.sh` (13 checks, in the container, with a real build of `sl` from the packaging source in the sandbox, the installed package shown to be built here and not the repository's file).
+Unit tests of the choice (flag, setting, verdict, confidence), of the plan entry, of the built file's package name (split packages), of the tag for an epoch and of the name allowed in an address; `dev/e2e/sourceinstall.sh` (23 checks, ten of them for the policy with a real downgrade of `sl` from the archive; in the container, with a real build of `sl` from the packaging source in the sandbox, the installed package shown to be built here and not the repository's file).

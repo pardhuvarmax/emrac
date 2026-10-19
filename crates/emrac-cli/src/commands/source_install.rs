@@ -12,7 +12,21 @@ use crate::output;
 use crate::prompt::confirm_default_no;
 
 pub fn build_and_install(sources: &Sources, name: &str, choice: BuildChoice) -> Result<()> {
-    let src = sources.arch_source(name)?;
+    build_and_install_at(sources, name, None, choice)
+}
+
+/// As `build_and_install`, at a given version: after an upgrade has installed
+/// the repository's newer one, whose tag the libalpm handle may not know yet.
+pub fn build_and_install_at(
+    sources: &Sources,
+    name: &str,
+    version: Option<&str>,
+    choice: BuildChoice,
+) -> Result<()> {
+    let src = match version {
+        Some(v) => sources.arch_source_at(name, v)?,
+        None => sources.arch_source(name)?,
+    };
     say!(
         Voice::Plans,
         "building '{name}' {} from Arch's packaging source ({}, tag {})",
@@ -106,7 +120,7 @@ pub fn build_and_install(sources: &Sources, name: &str, choice: BuildChoice) -> 
     }
 
     sources.install_built(&files)?;
-    let _ = sources.record_source_built(name, &src.version);
+    let _ = sources.record_source_built(name, &src.version, &key);
     note_build(name, before, choice);
     Ok(())
 }

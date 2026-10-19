@@ -421,6 +421,7 @@ fn run(cli: &Cli) -> Result<()> {
             allow_partial,
             expect_plan,
             ack_news,
+            skip_source_builds,
         } => commands::upgrade::run(
             &sources,
             pkgs,
@@ -437,6 +438,7 @@ fn run(cli: &Cli) -> Result<()> {
             *allow_partial,
             expect_plan.as_deref(),
             *ack_news,
+            *skip_source_builds,
         ),
         Commands::Cache { command } => {
             commands::cache::run(&sources, command.as_ref(), cache_settings())
@@ -584,6 +586,12 @@ fn run(cli: &Cli) -> Result<()> {
             commands::restore::run(&sources, name, *prune, dry_run, yes, offline, json)
         }
         Commands::Verify { pkgs } => commands::verify::run(&sources, pkgs, json),
+        Commands::FromSource { command } => commands::from_source::run(
+            &sources,
+            command.as_ref(),
+            BuildChoice::from_flags(&cli::AurReviewFlags::default(), &config.build, !yes),
+            json,
+        ),
         Commands::Rebuild {
             pkgs,
             check,

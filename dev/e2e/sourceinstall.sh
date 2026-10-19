@@ -5,7 +5,10 @@
 # pacman -U), `--binary` compiles nothing, and `install.prefer` decides when you
 # do not. Needs the network (the packaging source and the package's own source).
 #
-# last full run: after u23, 13 of 13 passed
+# The source-build policy: what was asked to be built from source stays so; an
+# upgrade rebuilds it from the new packaging source instead of installing the binary.
+#
+# last full run: after the source-build policy, 23 of 23 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -28,6 +31,31 @@ sudo pacman -R --noconfirm sl >/dev/null 2>&1
 ck "a binary install of the same package is the repository's file" "$e install --binary sl --yes >/tmp/s3.out 2>&1; pacman -Q sl && ! pacman -Qi sl | grep -q 'Unknown Packager'"
 sudo pacman -R --noconfirm sl >/dev/null 2>&1
 ck "install.prefer recommend uses the verdict of recommend, --binary still wins" "$e config set install.prefer recommend >/dev/null && $e install --binary sl --dry-run 2>&1 | grep -q 'extra/sl'; $e config unset install.prefer >/dev/null"
+
+# --- the policy: an upgrade rebuilds from source, it does not install the binary
+sudo pacman -R --noconfirm sl >/dev/null 2>&1
+rm -f ~/.local/share/emrac/source-built.json
+ck "from-source is empty to begin with and says how to start" "$e from-source 2>&1 | grep -q 'install --source'"
+sudo pacman -S --noconfirm sl >/dev/null 2>&1
+ck "from-source add declares the policy for an installed binary: the rebuild is pending" "$e from-source add sl >/dev/null 2>&1 && $e from-source 2>&1 | grep -q 'rebuild pending'"
+ck "from-source drop ends it and leaves the package" "$e from-source drop sl >/dev/null 2>&1 && pacman -Q sl && $e from-source 2>&1 | grep -q 'no package is set'"
+ck "from-source rebuild builds the declared package here, then it is built here" "$e from-source rebuild sl --accept-risks --yes >/tmp/s4.out 2>&1; tail -6 /tmp/s4.out; pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'built here'"
+
+# an older sl from the archive, installed by hand: the repository is then ahead
+cur=$(pacman -Q sl | cut -d' ' -f2)
+old=$(curl -fsS https://archive.archlinux.org/packages/s/sl/ | grep -o 'sl-[0-9][^"]*-x86_64.pkg.tar.zst"' | tr -d '"' | grep -v "^sl-$cur-" | head -1)
+if [ -n "$old" ]; then
+  sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
+  ck "an older version is installed, so the unknown-build state is reported as such" "$e from-source 2>&1 | grep -q 'unknown build intent'"
+  ck "the upgrade plan names the rebuild from source, not the binary" "$e upgrade sl --dry-run > /tmp/s5.out 2>&1; grep -q 'extra+source/sl' /tmp/s5.out && grep -q 'source-build policy: sl' /tmp/s5.out"
+  ck "upgrade --skip-source-builds installs the binary and leaves the rebuild pending" "$e upgrade sl --yes --skip-source-builds >/tmp/s6.out 2>&1; ! pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'rebuild pending'"
+  sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
+  ck "the upgrade rebuilds the package from source and clears the pending state" "$e upgrade sl --yes --skip-pkgbuild --accept-risks >/tmp/s7.out 2>&1; pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'built here'"
+  sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
+  ck "a rebuild that fails leaves the binary, keeps the policy and says so" "EMRAC_ARCH_PACKAGING_URL=file:///nonexistent/{base}.git $e upgrade sl --yes >/tmp/s8.out 2>&1; grep -q 'binary of sl stays installed' /tmp/s8.out && $e from-source 2>&1 | grep -q 'rebuild pending'"
+fi
+ck "install --binary of a policy package ends the policy" "$e install --binary sl --yes >/dev/null 2>&1; $e from-source 2>&1 | grep -q 'no package is set'"
+sudo pacman -R --noconfirm sl >/dev/null 2>&1
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]

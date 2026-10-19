@@ -374,31 +374,106 @@ impl Sources {
         Ok((plan, by_source))
     }
 
-    /// Notes that `name` was built here at `version` (`install --source`).
-    pub fn record_source_built(&self, name: &str, version: &str) -> Result<()> {
-        crate::source_built::record_to(&crate::source_built::path()?, name, version, now())
+    /// Notes that `name` was built here at `version` (`install --source`): its
+    /// build policy is source from now on, until you end it.
+    pub fn record_source_built(&self, name: &str, version: &str, key: &str) -> Result<()> {
+        let recipe = self.aur_build.head(key);
+        crate::source_built::record_to(
+            &crate::source_built::path()?,
+            name,
+            version,
+            recipe.as_deref(),
+            now(),
+        )
     }
 
-    /// The packages you built from source here that this upgrade would replace
-    /// with the repository's binary.
-    pub fn source_builds_replaced_by(&self, plan: &Plan) -> Vec<crate::source_built::Change> {
-        let changes: Vec<crate::source_built::Change> = plan
-            .packages
-            .iter()
-            .map(|p| crate::source_built::Change {
-                name: p.name.clone(),
-                from: p.previous_version.clone(),
-                to: p.version.clone(),
-            })
-            .collect();
-        crate::source_built::replaced_by(&crate::source_built::read(), &changes)
+    /// The packages with a source-build policy.
+    pub fn source_policy(&self) -> Vec<crate::source_built::Entry> {
+        crate::source_built::read()
     }
 
-    /// Forgets source builds that were replaced.
-    pub fn forget_source_built(&self, names: &[String]) {
-        if let Ok(path) = crate::source_built::path() {
-            let _ = crate::source_built::forget_from(&path, names);
+    /// Ends the source-build policy of these packages; which were ended.
+    pub fn end_source_policy(&self, names: &[String]) -> Result<bool> {
+        crate::source_built::forget_from(&crate::source_built::path()?, names)
+    }
+
+    /// Declares the policy for installed official packages that were not built
+    /// here: the build waits (pending) for a rebuild or the next upgrade.
+    pub fn declare_source_policy(&self, names: &[String]) -> Result<()> {
+        let path = crate::source_built::path()?;
+        for name in names {
+            if crate::source_built::read_from(&path)
+                .iter()
+                .any(|e| &e.name == name)
+            {
+                continue;
+            }
+            crate::source_built::record_to(&path, name, "", None, now())?;
         }
+        crate::source_built::mark_pending(&path, names)
+    }
+
+    /// A rebuild is waiting for these packages.
+    pub fn mark_source_pending(&self, names: &[String]) {
+        if let Ok(path) = crate::source_built::path() {
+            let _ = crate::source_built::mark_pending(&path, names);
+        }
+    }
+
+    /// Marks, in the plan of an upgrade, the packages whose policy is to build
+    /// from source: their entries get `+source` and the plan says what will happen.
+    /// The upgrade itself installs the repository's binaries first, so that the
+    /// system is never partly upgraded; the rebuild follows it.
+    fn apply_source_policy(&self, plan: &mut Plan) {
+        let policy = crate::source_built::read();
+        if policy.is_empty() {
+            return;
+        }
+        let mut followed = Vec::new();
+        for p in plan
+            .packages
+            .iter_mut()
+            .filter(|p| p.repo != "aur" && !crate::install_mode::is_source_repo(&p.repo))
+        {
+            if policy.iter().any(|e| e.name == p.name) {
+                p.repo = format!("{}{}", p.repo, crate::install_mode::SOURCE_SUFFIX);
+                followed.push(p.name.clone());
+            }
+        }
+        if !followed.is_empty() {
+            plan.warnings.push(format!(
+                "source-build policy: {} will be rebuilt from Arch's packaging source after the upgrade. The upgrade installs the repository's binaries first, so the system is never partly upgraded; if a rebuild fails, the binary stays installed, the policy is kept and emrac says so (`emrac from-source drop <package>` ends it)",
+                followed.join(", ")
+            ));
+        }
+    }
+
+    /// The plan recorded for rebuilding a package under the policy: `repo` is
+    /// the plan entry's, already marked `+source`.
+    pub fn source_rebuild_plan(&self, name: &str, version: &str, repo: &str) -> Plan {
+        Plan {
+            action: PlanAction::Install,
+            packages: vec![PlannedPackage {
+                name: name.to_string(),
+                version: version.to_string(),
+                repo: repo.to_string(),
+                explicit: true,
+                previous_version: Some(version.to_string()),
+            }],
+            total_download_size: 0,
+            total_installed_size_delta: 0,
+            removals: Vec::new(),
+            provider_choices: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+
+    /// Where an official package's source is at a version (the repository's, or
+    /// one that an upgrade has just installed).
+    pub fn arch_source_at(&self, name: &str, version: &str) -> Result<ArchSource> {
+        let mut src = self.arch_source(name)?;
+        src.version = version.to_string();
+        Ok(src)
     }
 
     /// Where an official package's source is: its package base and the
@@ -1213,11 +1288,13 @@ impl Sources {
     /// the named targets. No root, and (same as `plan_install`) no
     /// filesystem/build side effects for AUR entries.
     pub fn plan_upgrade(&self, pkgs: &[String], offline: bool) -> Result<UpgradePlan> {
-        if pkgs.is_empty() {
-            self.plan_full_upgrade(offline)
+        let mut up = if pkgs.is_empty() {
+            self.plan_full_upgrade(offline)?
         } else {
-            self.plan_targeted_upgrade(pkgs)
-        }
+            self.plan_targeted_upgrade(pkgs)?
+        };
+        self.apply_source_policy(&mut up.plan);
+        Ok(up)
     }
 
     /// `(active, expired)` pins.

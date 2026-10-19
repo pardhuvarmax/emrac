@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 715
+     - 717
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **808**
+     - **810**
 
-emrac-core library (715)
+emrac-core library (717)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -905,11 +905,13 @@ emrac-core library (715)
 * ``names_are_validated``
 * ``prune_keeps_the_newest_with_the_prefix_and_spares_the_rest``
 
-``source_built::tests`` (2)
+``source_built::tests`` (4)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* ``an_upgrade_replaces_a_source_build_only_when_it_is_what_is_installed``
-* ``what_was_built_here_is_kept_replaced_and_forgotten``
+* ``an_old_record_without_the_new_fields_still_reads``
+* ``an_upgrade_follows_the_policy_of_the_packages_it_contains``
+* ``it_says_what_is_known_about_the_installed_package``
+* ``the_policy_is_kept_marked_pending_and_ended``
 
 ``sources::freshness_tests`` (2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1451,7 +1453,7 @@ End-to-end: source or binary on install (dev/e2e/sourceinstall.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 An official package built from Arch packaging source here, --binary refusing to compile,
-the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after u23, 13 of 13 passed.
+the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the source-build policy, 23 of 23 passed.
 
 * the plan says an official package is built here and what that means
 * --binary on an AUR package refuses and names the prebuilt one
@@ -1466,8 +1468,13 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * the transaction is in the history
 * a binary install of the same package is the repository's file
 * install.prefer recommend uses the verdict of recommend, --binary still wins
+* from-source is empty to begin with and says how to start
+* from-source add declares the policy for an installed binary: the rebuild is pending
+* from-source drop ends it and leaves the package
+* from-source rebuild builds the declared package here, then it is built here
+* install --binary of a policy package ends the policy
 
-(13 checks.)
+(18 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

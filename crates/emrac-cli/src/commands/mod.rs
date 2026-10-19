@@ -12,6 +12,7 @@ pub mod doctor;
 pub mod downgrade;
 pub mod exchange;
 pub mod explain;
+pub mod from_source;
 pub mod helppages;
 pub mod history;
 pub mod info;
