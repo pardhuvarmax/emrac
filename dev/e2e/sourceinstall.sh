@@ -8,7 +8,7 @@
 # The source-build policy: what was asked to be built from source stays so; an
 # upgrade rebuilds it from the new packaging source instead of installing the binary.
 #
-# last full run: after the origin check, 32 of 32 passed
+# last full run: after the deleted-record fix, 40 of 40 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -68,6 +68,27 @@ printf '[{"name": "sl", ' > ~/.local/share/emrac/source-built.json
 ck "a damaged record stops an upgrade and says why" "! $e upgrade --dry-run >/tmp/s9.out 2>&1 && grep -q \"can't be read\" /tmp/s9.out"
 ck "a damaged record is never written over" "! $e from-source add figlet >/dev/null 2>&1; [ \"\$(cat ~/.local/share/emrac/source-built.json)\" = '[{\"name\": \"sl\", ' ]"
 ck "the doctor calls a damaged record a problem" "$e doctor 2>&1 | grep -q 'record of your source-build policies'"
+cp /tmp/sb.good ~/.local/share/emrac/source-built.json
+# a record that is gone while its seal lists policies is unknown intent, not "none"
+rm -f ~/.local/share/emrac/source-built.json
+ck "a deleted record stops an upgrade and names what it held" "! $e upgrade --dry-run >/tmp/s10.out 2>&1 && grep -q 'is missing, but it held policies for sl' /tmp/s10.out"
+ck "a deleted record is not written over either" "! $e from-source add figlet >/dev/null 2>&1; [ ! -e ~/.local/share/emrac/source-built.json ]"
+ck "the doctor calls a deleted record a problem" "$e doctor 2>&1 | grep -q 'record of your source-build policies'"
+cp /tmp/sb.good ~/.local/share/emrac/source-built.json
+
+# pacman used directly: the policy is reconciled with what is installed
+if [ -n "$old" ]; then
+  sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
+  ck "a plan with the policy has an id; ending the policy changes it" "$e upgrade sl --dry-run 2>&1 | grep -o 'Plan id *: [0-9a-f]*' | head -1 | awk '{print \$NF}' > /tmp/id1; $e from-source drop sl >/dev/null 2>&1; $e upgrade sl --dry-run 2>&1 | grep -o 'Plan id *: [0-9a-f]*' | head -1 | awk '{print \$NF}' > /tmp/id2; [ -s /tmp/id1 ] && [ -s /tmp/id2 ] && ! cmp -s /tmp/id1 /tmp/id2"
+  cp /tmp/sb.good ~/.local/share/emrac/source-built.json
+  ck "a plan made before the policy changed is refused by --expect-plan" "$e upgrade sl --dry-run 2>&1 | grep -o 'Plan id *: [0-9a-f]*' | head -1 | awk '{print \$NF}' > /tmp/id3; $e from-source drop sl >/dev/null 2>&1; ! $e upgrade sl --yes --expect-plan \$(cat /tmp/id3 | cut -c1-12) >/tmp/s11.out 2>&1; grep -q 'not the plan you expected' /tmp/s11.out; pacman -Qi sl | grep -q Version"
+  cp /tmp/sb.good ~/.local/share/emrac/source-built.json
+  ck "pacman -Syu by hand: emrac sees the policy was not honoured" "sudo pacman -Syu --noconfirm >/dev/null 2>&1; $e from-source 2>&1 | grep -qE 'repository file detected|policy mismatch|rebuild pending' && $e doctor 2>&1 | grep -q 'not built from source as you asked'"
+fi
+sudo pacman -R --noconfirm sl >/dev/null 2>&1
+ck "pacman -R by hand: the record does not claim an installed source build" "$e from-source 2>&1 | grep -q 'not installed' && ! $e from-source 2>&1 | grep -q 'source verified' && ! $e doctor 2>&1 | grep -q 'not built from source as you asked'"
+sudo pacman -S --noconfirm sl >/dev/null 2>&1
+ck "install.prefer = recommend never overrides --source or --binary" "$e config set install.prefer recommend >/dev/null; $e install --source sl --dry-run 2>&1 | grep -q 'extra+source/sl' && $e install --binary sl --dry-run 2>&1 | grep -q 'extra/sl'; $e config unset install.prefer >/dev/null"
 cp /tmp/sb.good ~/.local/share/emrac/source-built.json
 ck "install --binary of a policy package ends the policy" "$e install --binary sl --yes >/dev/null 2>&1; $e from-source 2>&1 | grep -q 'no package is set'"
 sudo pacman -R --noconfirm sl >/dev/null 2>&1

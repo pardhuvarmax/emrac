@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## A deleted policy record is unknown intent (after u23b) — 2026-10-20
+
+Deleting `source-built.json` used to look like never having had a policy, so the next upgrade installed binaries over source builds. The record now has a seal beside it (`source-built.seal`, the names it holds): a missing record with a seal that lists policies is an error naming them, upgrades and writes refuse, and `doctor` reports a problem. Container checks (40 in `sourceinstall.sh`) now also cover: plan id changes with the policy and `--expect-plan` refuses the old one, a direct `pacman -Syu`, a direct `pacman -R`, and `install.prefer = recommend` against `--source`/`--binary`. 1 unit test.
+
 ## Signature policy in pre-flight (after u23b) — 2026-10-20
 
 `--yes` makes pacman take its default answers, including importing a key it fetched. That does not make the key trusted while `SigLevel` requires trust, so the thing to check is the configuration: pre-flight now reads `SigLevel` for the whole configuration and every repository (`pacman-conf`) and reports it (`Signatures`). Arch's defaults pass. A weakened level (`Never`, `TrustAll`, `Optional` for packages) is a warning on an interactive run and a **problem that stops an unattended run** (`--yes`), with the fix named. The setting `safety.signatures` (`block` by default, `warn`, `off`) is for repositories you keep unsigned on purpose, such as a local one. Not done: logging the fingerprints of imported keys, and blocking an import outright (that needs pacman's output read through the pty runner). 2 tests; the container suites set `warn` for their unsigned test repository and `preflight.sh` checks both outcomes (26 checks).

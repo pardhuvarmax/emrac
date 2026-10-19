@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 721
+     - 722
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **814**
+     - **815**
 
-emrac-core library (721)
+emrac-core library (722)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -907,10 +907,11 @@ emrac-core library (721)
 * ``names_are_validated``
 * ``prune_keeps_the_newest_with_the_prefix_and_spares_the_rest``
 
-``source_built::tests`` (6)
+``source_built::tests`` (7)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_damaged_record_is_an_error_and_is_never_written_over``
+* ``a_deleted_record_is_unknown_intent_not_no_policy``
 * ``an_old_record_without_the_new_fields_still_reads``
 * ``an_upgrade_follows_the_policy_of_the_packages_it_contains``
 * ``it_says_what_is_known_about_the_installed_package``
@@ -1459,7 +1460,7 @@ End-to-end: source or binary on install (dev/e2e/sourceinstall.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 An official package built from Arch packaging source here, --binary refusing to compile,
-the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the origin check, 32 of 32 passed.
+the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the deleted-record fix, 40 of 40 passed.
 
 * the plan says an official package is built here and what that means
 * --binary on an AUR package refuses and names the prebuilt one
@@ -1485,9 +1486,14 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * a damaged record stops an upgrade and says why
 * a damaged record is never written over
 * the doctor calls a damaged record a problem
+* a deleted record stops an upgrade and names what it held
+* a deleted record is not written over either
+* the doctor calls a deleted record a problem
+* pacman -R by hand: the record does not claim an installed source build
+* install.prefer = recommend never overrides --source or --binary
 * install --binary of a policy package ends the policy
 
-(25 checks.)
+(30 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

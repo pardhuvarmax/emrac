@@ -94,7 +94,19 @@ pub fn path() -> Result<PathBuf> {
 pub fn read_from(path: &Path) -> Result<Vec<Entry>> {
     let bytes = match fs::read(path) {
         Ok(b) => b,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            let sealed = sealed_names(path);
+            if sealed.is_empty() {
+                return Ok(Vec::new());
+            }
+            return Err(Error::SourcePolicy(format!(
+                "the record of what you build from source ({}) is missing, but it held policies for {} (kept in {}). Intent is unknown, so emrac will not upgrade or write over it. Put the file back from a backup, or delete {} to start again (`emrac from-source add <pkg>` declares them again)",
+                path.display(),
+                sealed.join(", "),
+                seal_path(path).display(),
+                seal_path(path).display()
+            )));
+        }
         Err(e) => return Err(damaged(path, &e.to_string())),
     };
     serde_json::from_slice(&bytes).map_err(|e| damaged(path, &e.to_string()))
@@ -122,7 +134,37 @@ fn write(path: &Path, list: &[Entry]) -> Result<()> {
     f.write_all(&serde_json::to_vec_pretty(list).unwrap_or_default())
         .and_then(|()| f.sync_all())
         .map_err(|e| io(format!("couldn't write {}", tmp.display()), e))?;
-    fs::rename(&tmp, path).map_err(|e| io(format!("couldn't replace {}", path.display()), e))
+    fs::rename(&tmp, path).map_err(|e| io(format!("couldn't replace {}", path.display()), e))?;
+    write_seal(path, list)
+}
+
+/// Beside the record, the names it holds. A record that vanishes while its seal
+/// still lists policies was deleted or lost: that is unknown intent, not "none".
+fn seal_path(path: &Path) -> PathBuf {
+    path.with_extension("seal")
+}
+
+fn write_seal(path: &Path, list: &[Entry]) -> Result<()> {
+    let seal = seal_path(path);
+    if list.is_empty() {
+        let _ = fs::remove_file(&seal);
+        return Ok(());
+    }
+    let names: Vec<&str> = list.iter().map(|e| e.name.as_str()).collect();
+    let tmp = seal.with_extension("seal.tmp");
+    fs::write(&tmp, serde_json::to_vec(&names).unwrap_or_default())
+        .and_then(|()| fs::rename(&tmp, &seal))
+        .map_err(|source| Error::Io {
+            context: format!("couldn't write {}", seal.display()),
+            source,
+        })
+}
+
+fn sealed_names(path: &Path) -> Vec<String> {
+    fs::read(seal_path(path))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
 }
 
 /// Notes that `name` was built here at `version` (from packaging revision `recipe`).
@@ -302,6 +344,26 @@ mod tests {
         assert!(mark_pending(&file, &["sl".to_string()]).is_err());
         assert!(forget_from(&file, &["sl".to_string()]).is_err());
         assert_eq!(fs::read(&file).unwrap(), b"[{\"name\": \"sl\", ");
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_deleted_record_is_unknown_intent_not_no_policy() {
+        let dir = std::env::temp_dir().join(format!("emrac-sbs-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("sb.json");
+        record_to(&file, "sl", "5.05-6", None, None, 1).unwrap();
+        fs::remove_file(&file).unwrap();
+        let err = read_from(&file).unwrap_err().to_string();
+        assert!(err.contains("missing") && err.contains("sl"), "{err}");
+        assert!(record_to(&file, "figlet", "1-1", None, None, 2).is_err());
+        // ending the last policy removes the seal: an empty record is fine
+        fs::write(&file, b"[]").unwrap();
+        assert!(read_from(&file).unwrap().is_empty());
+        record_to(&file, "sl", "5.05-6", None, None, 3).unwrap();
+        assert!(forget_from(&file, &["sl".to_string()]).unwrap());
+        fs::remove_file(&file).unwrap();
+        assert!(read_from(&file).unwrap().is_empty());
         fs::remove_dir_all(&dir).unwrap();
     }
 
