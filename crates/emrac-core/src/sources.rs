@@ -383,6 +383,9 @@ impl Sources {
             name,
             version,
             recipe.as_deref(),
+            crate::source_built::installed(name)
+                .filter(|i| i.version == version)
+                .as_ref(),
             now(),
         )
     }
@@ -408,7 +411,7 @@ impl Sources {
             {
                 continue;
             }
-            crate::source_built::record_to(&path, name, "", None, now())?;
+            crate::source_built::record_to(&path, name, "", None, None, now())?;
         }
         crate::source_built::mark_pending(&path, names)
     }
@@ -450,12 +453,19 @@ impl Sources {
         // until it is done or dropped.
         let waiting: Vec<&str> = policy
             .iter()
-            .filter(|e| e.pending && !followed.contains(&e.name))
+            .filter(|e| {
+                !followed.contains(&e.name)
+                    && crate::source_built::state_of(
+                        e,
+                        crate::source_built::installed(&e.name).as_ref(),
+                    )
+                    .needs_attention()
+            })
             .map(|e| e.name.as_str())
             .collect();
         if !waiting.is_empty() {
             plan.warnings.push(format!(
-                "a source rebuild is still pending for {}: the repository's binary is installed. Build it with `emrac from-source rebuild`, or end the policy with `emrac from-source drop`",
+                "the source-build policy is not being honoured for {} (a rebuild is pending, or the repository's file is installed). Build it with `emrac from-source rebuild`, or end the policy with `emrac from-source drop`",
                 waiting.join(", ")
             ));
         }
@@ -468,7 +478,13 @@ impl Sources {
         crate::source_built::read()
             .map(|l| {
                 l.into_iter()
-                    .filter(|e| e.pending)
+                    .filter(|e| {
+                        crate::source_built::state_of(
+                            e,
+                            crate::source_built::installed(&e.name).as_ref(),
+                        )
+                        .needs_attention()
+                    })
                     .map(|e| e.name)
                     .collect()
             })

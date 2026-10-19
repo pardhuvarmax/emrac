@@ -1,7 +1,7 @@
 //! `emrac from-source`: the packages you build from source (`install --source`),
 //! as a policy that an upgrade carries out, kept apart from pins.
 
-use emrac_core::source_built::{state_of, BuiltState};
+use emrac_core::source_built::{installed, state_of, BuiltState};
 use emrac_core::{say, Error, Result, Sources, Voice};
 
 use crate::cli::FromSourceCommand;
@@ -51,8 +51,10 @@ pub fn run(
                     .iter()
                     .filter(|e| {
                         matches!(
-                            state_of(e, sources.installed_version(&e.name).as_deref()),
-                            BuiltState::Pending | BuiltState::Unknown { .. }
+                            state_of(e, installed(&e.name).as_ref()),
+                            BuiltState::Pending
+                                | BuiltState::Mismatch { .. }
+                                | BuiltState::RepositoryDetected
                         )
                     })
                     .map(|e| e.name.clone())
@@ -77,33 +79,56 @@ pub fn run(
 
 fn list(sources: &Sources, json: bool) -> Result<()> {
     let policy = sources.source_policy()?;
-    let rows: Vec<(String, String, String)> =
-        policy
-            .iter()
-            .map(|e| {
-                let installed = sources.installed_version(&e.name);
-                let state =
-                    match state_of(e, installed.as_deref()) {
-                        BuiltState::BuiltHere => format!("built here ({})", e.version),
-                        BuiltState::Pending => {
-                            "rebuild pending (the repository's binary is installed)".into()
-                        }
-                        BuiltState::Unknown { installed } => format!(
-                    "unknown build intent: {installed} is installed, the one built here was {}",
-                    if e.version.is_empty() { "never" } else { &e.version }
+    let rows: Vec<(String, String, &'static str, String)> = policy
+        .iter()
+        .map(|e| {
+            let now = installed(&e.name);
+            let (key, text) = match state_of(e, now.as_ref()) {
+                BuiltState::SourceVerified => (
+                    "source-verified",
+                    format!("source verified: built here, {} (the package database agrees)", e.version),
                 ),
-                        BuiltState::NotInstalled => "not installed".into(),
-                    };
-                (e.name.clone(), installed.unwrap_or_default(), state)
-            })
-            .collect();
+                BuiltState::RepositoryDetected => (
+                    "repository-detected",
+                    format!(
+                        "repository file detected: {} is installed but its build is not the one made here; `emrac from-source rebuild {}`",
+                        e.version, e.name
+                    ),
+                ),
+                BuiltState::OriginUnverified => (
+                    "origin-unverified",
+                    "origin unverified: the record has no build evidence (rebuild to establish it)"
+                        .to_string(),
+                ),
+                BuiltState::Pending => (
+                    "rebuild-pending",
+                    "rebuild pending: the repository's binary is installed".to_string(),
+                ),
+                BuiltState::Mismatch { installed } => (
+                    "policy-mismatch",
+                    format!(
+                        "policy mismatch: {installed} is installed, the one built here was {}",
+                        if e.version.is_empty() { "never" } else { &e.version }
+                    ),
+                ),
+                BuiltState::NotInstalled => ("not-installed", "not installed".to_string()),
+            };
+            (
+                e.name.clone(),
+                now.map(|i| i.version).unwrap_or_default(),
+                key,
+                text,
+            )
+        })
+        .collect();
     if json {
         let v: Vec<_> = rows
             .iter()
             .zip(&policy)
-            .map(|((n, i, s), e)| {
-                serde_json::json!({"name": n, "installed": i, "state": s,
-                    "built_version": e.version, "recipe": e.recipe, "pending": e.pending, "at": e.at})
+            .map(|((n, i, k, t), e)| {
+                serde_json::json!({"name": n, "installed": i, "status": k, "state": t,
+                    "built_version": e.version, "recipe": e.recipe, "pending": e.pending,
+                    "build_date": e.build_date, "packager": e.packager, "at": e.at})
             })
             .collect();
         println!("{}", serde_json::Value::Array(v));
@@ -116,8 +141,8 @@ fn list(sources: &Sources, json: bool) -> Result<()> {
         );
         return Ok(());
     }
-    for (name, installed, state) in rows {
-        println!("{name:<24} {installed:<16} {state}");
+    for (name, installed, _, text) in rows {
+        println!("{name:<24} {installed:<16} {text}");
     }
     Ok(())
 }

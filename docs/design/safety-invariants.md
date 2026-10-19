@@ -91,3 +91,4 @@ Everything else in the sections above stands as written. Fix order: A-1, A-2, A-
 - **A-3 fixed.** `emrac upgrade` exits non-zero (`SourceRebuildPending`) after reporting the upgrade, when a rebuild failed. `--skip-source-builds` is a request and exits 0. Container check.
 - **A-5 fixed.** Every upgrade plan (also an empty one) and `doctor` list pending rebuilds. Container checks.
 - **A-4 open:** `--yes` and PGP key import needs a decision (see the conversation); **A-6** stays a deliberate trade-off.
+- **S-8 / invariant 6 fixed.** Origin is checked against the package database (build date, packager) and reported as source verified, repository file detected, origin unverified, pending or mismatch; the version alone claims nothing. Build date and packager are evidence, not proof; the artifact checksum comes with the provenance record (S2).

@@ -8,7 +8,7 @@
 # The source-build policy: what was asked to be built from source stays so; an
 # upgrade rebuilds it from the new packaging source instead of installing the binary.
 #
-# last full run: after the safety audit, 28 of 28 passed
+# last full run: after the origin check, 32 of 32 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -41,20 +41,26 @@ ck "from-source add declares the policy for an installed binary: the rebuild is 
 ck "from-source drop ends it and leaves the package" "$e from-source drop sl >/dev/null 2>&1 && pacman -Q sl && $e from-source 2>&1 | grep -q 'no package is set'"
 ck "from-source rebuild builds the declared package here, then it is built here" "$e from-source rebuild sl --accept-risks --yes >/tmp/s4.out 2>&1; tail -6 /tmp/s4.out; pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'built here'"
 
+ck "the build is verified against the package database" "$e from-source 2>&1 | grep -q 'source verified'"
+sudo pacman -S --noconfirm sl >/dev/null 2>&1
+ck "the same version put back from the repository is detected, not claimed as built here" "pacman -Qi sl | grep -q 'Packager' && ! pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'repository file detected' && ! $e from-source 2>&1 | grep -q 'source verified'"
+ck "doctor says the policy is not honoured" "$e doctor >/tmp/d.out 2>&1; grep -q 'not built from source as you asked' /tmp/d.out || { head -15 /tmp/d.out; false; }"
+ck "from-source rebuild builds it again and it is verified" "$e from-source rebuild sl --accept-risks --yes >/tmp/s4b.out 2>&1; $e from-source 2>&1 | grep -q 'source verified'"
+
 # an older sl from the archive, installed by hand: the repository is then ahead
 cur=$(pacman -Q sl | cut -d' ' -f2)
 old=$(curl -fsS https://archive.archlinux.org/packages/s/sl/ | grep -o 'sl-[0-9][^"]*-x86_64.pkg.tar.zst"' | tr -d '"' | grep -v "^sl-$cur-" | head -1)
 if [ -n "$old" ]; then
   sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
-  ck "an older version is installed, so the unknown-build state is reported as such" "$e from-source 2>&1 | grep -q 'unknown build intent'"
+  ck "an older version is installed, so the policy mismatch is reported as such" "$e from-source 2>&1 | grep -q 'policy mismatch'"
   ck "the upgrade plan names the rebuild from source, not the binary" "$e upgrade sl --dry-run > /tmp/s5.out 2>&1; grep -q 'extra+source/sl' /tmp/s5.out && grep -q 'source-build policy: sl' /tmp/s5.out"
   ck "upgrade --skip-source-builds installs the binary and leaves the rebuild pending" "$e upgrade sl --yes --skip-source-builds >/tmp/s6.out 2>&1; ! pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'rebuild pending'"
   sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
   ck "the upgrade rebuilds the package from source and clears the pending state" "$e upgrade sl --yes --skip-pkgbuild --accept-risks >/tmp/s7.out 2>&1; pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'built here'"
   sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
   ck "a rebuild that fails leaves the binary, keeps the policy, says so and exits non-zero" "EMRAC_ARCH_PACKAGING_URL=file:///nonexistent/{base}.git $e upgrade sl --yes >/tmp/s8.out 2>&1; rc=\$?; [ \$rc -ne 0 ] && grep -q 'binary of sl stays installed' /tmp/s8.out && grep -q 'upgrade is done, but sl could not be rebuilt' /tmp/s8.out && pacman -Q sl && $e from-source 2>&1 | grep -q 'rebuild pending'"
-  ck "a pending rebuild is in the doctor" "$e doctor 2>&1 | grep -q 'waiting to be built from source'"
-  ck "a pending rebuild is in the plan of the next upgrade" "$e upgrade --dry-run 2>&1 | grep -q 'source rebuild is still pending for sl'"
+  ck "a pending rebuild is in the doctor" "$e doctor 2>&1 | grep -q 'not built from source as you asked'"
+  ck "a pending rebuild is in the plan of the next upgrade" "$e upgrade --dry-run 2>&1 | grep -q 'source-build policy is not being honoured for sl'"
 fi
 # a record that cannot be read is unknown intent, never "no policy"
 cp ~/.local/share/emrac/source-built.json /tmp/sb.good

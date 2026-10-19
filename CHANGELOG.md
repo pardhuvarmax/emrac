@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Origin is verified, not assumed (after u23b) — 2026-10-19
+
+A package with the recorded version is no longer called "built here" on the version alone. After a source build emrac records what pacman's database says about the installed package (build date, packager); `emrac from-source` now reports one of **source verified** (they agree), **repository file detected** (same version, another file: `pacman -S`, `emrac reinstall`), **origin unverified** (a record without evidence), **rebuild pending**, **policy mismatch** (another version is installed) or not installed. Build date and packager are supporting evidence, not proof. `doctor` and every upgrade plan list a policy that is not being honoured, and `from-source rebuild` takes the repository-file and mismatch cases. Fixed on the way: the lookup of an installed package skipped on a directory without a `desc`. `source_built.rs` has 6 tests; `sourceinstall.sh` 32 checks.
+
 ## Safety audit fixes (after u23b) — 2026-10-19
 
 Found by reading the code against `docs/design/safety-invariants.md`: (A-1) an unreadable `source-built.json` was treated as "no policy", so an upgrade installed binaries over source builds and a later write dropped the other entries; now it is an error everywhere, the file is never written over, and `doctor` reports a problem. (A-2) the source rebuild after an upgrade no longer builds or installs when the transaction lock cannot be taken. (A-3) `emrac upgrade` exits non-zero when a rebuild it was to carry out failed (after reporting the upgrade). (A-5) a pending rebuild is listed by `doctor` and in the plan of every upgrade, an empty one too. e2e: 28 checks in `sourceinstall.sh`.

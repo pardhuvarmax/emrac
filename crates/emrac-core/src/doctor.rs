@@ -709,7 +709,7 @@ pub fn evaluate(i: &DoctorInputs) -> DoctorReport {
                 "Packages you build from source",
                 Status::Warning,
                 format!(
-                    "{} waiting to be built from source (the repository's binary is installed)",
+                    "{} not built from source as you asked (a rebuild is pending, or the repository's file is installed)",
                     plural(waiting.len(), "package is", "packages are")
                 ),
             )

@@ -30,6 +30,56 @@ pub struct Entry {
     /// upgrade, or because a rebuild failed) and the policy has not been carried out.
     #[serde(default)]
     pub pending: bool,
+    /// What the package database said about the package right after it was
+    /// installed: the build date and the packager. Supporting evidence of origin,
+    /// not proof (both can be reproduced); a repository file of the same version
+    /// has other values.
+    #[serde(default)]
+    pub build_date: Option<u64>,
+    #[serde(default)]
+    pub packager: Option<String>,
+}
+
+/// An installed package as pacman's database records it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Installed {
+    pub version: String,
+    pub build_date: u64,
+    pub packager: String,
+}
+
+/// Reads `name` from a pacman `local` database directory (`desc` files), which
+/// is current whatever process installed the package.
+pub fn installed_in(local: &Path, name: &str) -> Option<Installed> {
+    for dir in fs::read_dir(local).ok()?.flatten() {
+        let file = dir.file_name().to_string_lossy().into_owned();
+        if !file.starts_with(&format!("{name}-")) {
+            continue;
+        }
+        let Ok(desc) = fs::read_to_string(dir.path().join("desc")) else {
+            continue;
+        };
+        let field = |key: &str| -> Option<String> {
+            let mut lines = desc.lines();
+            lines.find(|l| *l == key)?;
+            lines.next().map(str::to_string)
+        };
+        if field("%NAME%").as_deref() != Some(name) {
+            continue;
+        }
+        return Some(Installed {
+            version: field("%VERSION%")?,
+            build_date: field("%BUILDDATE%")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0),
+            packager: field("%PACKAGER%").unwrap_or_default(),
+        });
+    }
+    None
+}
+
+pub fn installed(name: &str) -> Option<Installed> {
+    installed_in(Path::new("/var/lib/pacman/local"), name)
 }
 
 pub fn path() -> Result<PathBuf> {
@@ -81,6 +131,7 @@ pub fn record_to(
     name: &str,
     version: &str,
     recipe: Option<&str>,
+    evidence: Option<&Installed>,
     now: u64,
 ) -> Result<()> {
     let mut list = read_from(path)?;
@@ -91,6 +142,8 @@ pub fn record_to(
         at: now,
         recipe: recipe.map(str::to_string),
         pending: false,
+        build_date: evidence.map(|i| i.build_date),
+        packager: evidence.map(|i| i.packager.clone()),
     });
     list.sort_by(|a, b| a.name.cmp(&b.name));
     write(path, &list)
@@ -125,28 +178,54 @@ pub fn forget_from(path: &Path, names: &[String]) -> Result<bool> {
     Ok(changed)
 }
 
-/// What is known about whether the package that is installed is the one built here.
+/// What is known about the installed package against the recorded policy. The
+/// record is intent; the package database says what is installed; only evidence
+/// that agrees is called verified.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuiltState {
-    /// The installed version is the one that was built here.
-    BuiltHere,
+    /// The version, build date and packager are those recorded after the build.
+    SourceVerified,
+    /// The version is the recorded one but the build date or packager differ: a
+    /// repository file (or another build) replaced it.
+    RepositoryDetected,
+    /// The version matches but the record has no build evidence (it predates it):
+    /// nothing establishes the origin.
+    OriginUnverified,
     /// A rebuild is waiting (the binary is installed).
     Pending,
-    /// Another version is installed than the one recorded: nothing says it was
-    /// built here, so the policy is kept but the build is not claimed.
-    Unknown { installed: String },
+    /// Another version is installed than the one recorded: the policy conflicts
+    /// with the installed state, and the build is not claimed.
+    Mismatch { installed: String },
     /// The package is not installed.
     NotInstalled,
 }
 
-pub fn state_of(entry: &Entry, installed: Option<&str>) -> BuiltState {
-    match installed {
-        None => BuiltState::NotInstalled,
-        Some(_) if entry.pending => BuiltState::Pending,
-        Some(v) if v == entry.version => BuiltState::BuiltHere,
-        Some(v) => BuiltState::Unknown {
-            installed: v.to_string(),
-        },
+impl BuiltState {
+    /// The policy is not being honoured, or cannot be shown to be.
+    pub fn needs_attention(&self) -> bool {
+        matches!(
+            self,
+            BuiltState::RepositoryDetected | BuiltState::Pending | BuiltState::Mismatch { .. }
+        )
+    }
+}
+
+pub fn state_of(entry: &Entry, installed: Option<&Installed>) -> BuiltState {
+    let Some(i) = installed else {
+        return BuiltState::NotInstalled;
+    };
+    if entry.pending {
+        return BuiltState::Pending;
+    }
+    if i.version != entry.version {
+        return BuiltState::Mismatch {
+            installed: i.version.clone(),
+        };
+    }
+    match (entry.build_date, entry.packager.as_deref()) {
+        (Some(d), Some(p)) if d == i.build_date && p == i.packager => BuiltState::SourceVerified,
+        (Some(_), _) => BuiltState::RepositoryDetected,
+        _ => BuiltState::OriginUnverified,
     }
 }
 
@@ -170,6 +249,8 @@ mod tests {
             at: 1,
             recipe: None,
             pending,
+            build_date: None,
+            packager: None,
         }
     }
 
@@ -179,8 +260,8 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("sb.json");
         assert!(read_from(&file).unwrap().is_empty());
-        record_to(&file, "sl", "5.05-6", Some("abc123"), 100).unwrap();
-        record_to(&file, "figlet", "2.2.5-6", None, 101).unwrap();
+        record_to(&file, "sl", "5.05-6", Some("abc123"), None, 100).unwrap();
+        record_to(&file, "figlet", "2.2.5-6", None, None, 101).unwrap();
         let list = read_from(&file).unwrap();
         assert_eq!(
             list.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(),
@@ -197,7 +278,7 @@ mod tests {
                 .pending
         );
         // a rebuild clears it
-        record_to(&file, "sl", "5.05-7", Some("def456"), 200).unwrap();
+        record_to(&file, "sl", "5.05-7", Some("def456"), None, 200).unwrap();
         let sl = read_from(&file)
             .unwrap()
             .into_iter()
@@ -217,7 +298,7 @@ mod tests {
         let file = dir.join("sb.json");
         fs::write(&file, b"[{\"name\": \"sl\", ").unwrap();
         assert!(matches!(read_from(&file), Err(Error::SourcePolicy(_))));
-        assert!(record_to(&file, "figlet", "1-1", None, 1).is_err());
+        assert!(record_to(&file, "figlet", "1-1", None, None, 1).is_err());
         assert!(mark_pending(&file, &["sl".to_string()]).is_err());
         assert!(forget_from(&file, &["sl".to_string()]).is_err());
         assert_eq!(fs::read(&file).unwrap(), b"[{\"name\": \"sl\", ");
@@ -232,22 +313,59 @@ mod tests {
         assert!(!list[0].pending);
     }
 
+    fn installed(version: &str, date: u64, packager: &str) -> Installed {
+        Installed {
+            version: version.into(),
+            build_date: date,
+            packager: packager.into(),
+        }
+    }
+
     #[test]
     fn it_says_what_is_known_about_the_installed_package() {
-        let e = entry("sl", "5.05-6", false);
-        assert_eq!(state_of(&e, Some("5.05-6")), BuiltState::BuiltHere);
+        let mut e = entry("sl", "5.05-6", false);
+        e.build_date = Some(1000);
+        e.packager = Some("Unknown Packager".into());
+        let mine = installed("5.05-6", 1000, "Unknown Packager");
+        assert_eq!(state_of(&e, Some(&mine)), BuiltState::SourceVerified);
+        // `pacman -S sl` / `emrac reinstall sl`: the same version, another file
+        let repo = installed("5.05-6", 999, "Arch Maintainer <m@archlinux.org>");
+        assert_eq!(state_of(&e, Some(&repo)), BuiltState::RepositoryDetected);
         assert_eq!(
-            state_of(&e, Some("5.05-7")),
-            BuiltState::Unknown {
+            state_of(&e, Some(&installed("5.05-7", 1000, "Unknown Packager"))),
+            BuiltState::Mismatch {
                 installed: "5.05-7".into()
             },
-            "another version is installed: the build is not claimed"
         );
+        // a record without evidence claims nothing
         assert_eq!(
-            state_of(&entry("sl", "5.05-6", true), Some("5.05-7")),
-            BuiltState::Pending
+            state_of(&entry("sl", "5.05-6", false), Some(&mine)),
+            BuiltState::OriginUnverified
         );
+        let mut pending = e.clone();
+        pending.pending = true;
+        assert_eq!(state_of(&pending, Some(&repo)), BuiltState::Pending);
         assert_eq!(state_of(&e, None), BuiltState::NotInstalled);
+        assert!(BuiltState::RepositoryDetected.needs_attention());
+        assert!(!BuiltState::SourceVerified.needs_attention());
+        assert!(!BuiltState::OriginUnverified.needs_attention());
+    }
+
+    #[test]
+    fn the_package_database_is_read_for_the_build_date_and_packager() {
+        let dir = std::env::temp_dir().join(format!("emrac-sbl-{}", std::process::id()));
+        let pkg = dir.join("sl-5.05-6");
+        fs::create_dir_all(&pkg).unwrap();
+        fs::create_dir_all(dir.join("sl-extras-1-1")).unwrap();
+        fs::write(
+            pkg.join("desc"),
+            "%NAME%\nsl\n\n%VERSION%\n5.05-6\n\n%BUILDDATE%\n1700000000\n\n%PACKAGER%\nUnknown Packager\n\n",
+        )
+        .unwrap();
+        let got = installed_in(&dir, "sl").unwrap();
+        assert_eq!(got, installed("5.05-6", 1700000000, "Unknown Packager"));
+        assert!(installed_in(&dir, "absent").is_none());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

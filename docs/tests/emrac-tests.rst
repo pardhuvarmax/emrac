@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 718
+     - 719
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **811**
+     - **812**
 
-emrac-core library (718)
+emrac-core library (719)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -905,13 +905,14 @@ emrac-core library (718)
 * ``names_are_validated``
 * ``prune_keeps_the_newest_with_the_prefix_and_spares_the_rest``
 
-``source_built::tests`` (5)
+``source_built::tests`` (6)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_damaged_record_is_an_error_and_is_never_written_over``
 * ``an_old_record_without_the_new_fields_still_reads``
 * ``an_upgrade_follows_the_policy_of_the_packages_it_contains``
 * ``it_says_what_is_known_about_the_installed_package``
+* ``the_package_database_is_read_for_the_build_date_and_packager``
 * ``the_policy_is_kept_marked_pending_and_ended``
 
 ``sources::freshness_tests`` (2)
@@ -1454,7 +1455,7 @@ End-to-end: source or binary on install (dev/e2e/sourceinstall.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 An official package built from Arch packaging source here, --binary refusing to compile,
-the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the safety audit, 28 of 28 passed.
+the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the origin check, 32 of 32 passed.
 
 * the plan says an official package is built here and what that means
 * --binary on an AUR package refuses and names the prebuilt one
@@ -1473,12 +1474,16 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * from-source add declares the policy for an installed binary: the rebuild is pending
 * from-source drop ends it and leaves the package
 * from-source rebuild builds the declared package here, then it is built here
+* the build is verified against the package database
+* the same version put back from the repository is detected, not claimed as built here
+* doctor says the policy is not honoured
+* from-source rebuild builds it again and it is verified
 * a damaged record stops an upgrade and says why
 * a damaged record is never written over
 * the doctor calls a damaged record a problem
 * install --binary of a policy package ends the policy
 
-(21 checks.)
+(25 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
