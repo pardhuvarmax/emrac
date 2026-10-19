@@ -17,8 +17,8 @@ use crate::prompt::confirm_default_no;
 /// output going straight to the terminal. A refusal ends the process with the
 /// helper's own exit status: the helper has already said why.
 fn as_root(args: &[String]) -> Result<()> {
-    let exe =
-        std::env::current_exe().map_err(|e| Error::Policy(format!("couldn't find emrac: {e}")))?;
+    let exe = crate::commands::ledger::running_exe()
+        .map_err(|e| Error::Policy(format!("couldn't find emrac: {e}")))?;
     let mut command = if running_as_root() {
         Command::new(&exe)
     } else {

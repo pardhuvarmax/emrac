@@ -12,6 +12,10 @@ The cycle repeats every release: `i1 → r1 → u1 → u2 → ... → i2 → r2 
 
 (See `SPEC.md` Part X for the milestone philosophy this follows.)
 
+## Slice u22 addendum 5 (after r3) — 2026-10-19 — the ledger is brought up to date after emrac upgrades itself
+
+After a transaction emrac brings the ledger up to date by itself (`sudo emrac ledger-append`, quietly, only if sudo allows it without a question). When the transaction upgraded emrac, the running program was the old file and Linux names it `/usr/bin/emrac (deleted)`, so the step failed with "can't look at /usr/bin/emrac (deleted): No such file or directory" and the ledger waited for `emrac history sync`. The path of the running emrac is now the file that is at that path now (the new version, checked as root-owned and not writable by others like any other). The same for the policy helper and the programs the ledger audit trusts. `ledger::running_exe` (1 test).
+
 ## Slice u22 addendum 4 (after r3) — 2026-10-19 — the database sync is a table
 
 The sync of the package databases is drawn as a table whose rows keep their places: every repository pacman lists is a row from the start, in its order (`waiting` until it starts), a finished one stays in its row as `✔` with its size and rate, one that needed no download says `up to date`, and a count under the table says `Synchronizing repositories… 3/4 complete`. It is redrawn in place as the downloads go and stays on the screen at the end. The download of packages keeps the other layout (the files that are going animate in a block, each finished one leaves it as a `✔` line above), because a table of a hundred rows would not fit. `sync_mode` in `pacman_ui.rs`; the tests read the screen a terminal would show (a small terminal model in the tests); seen by hand in the container with a real `emrac upgrade` (no container check: with nothing to upgrade emrac does not run pacman at all).

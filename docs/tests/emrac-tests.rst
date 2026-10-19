@@ -25,13 +25,13 @@ Totals
      - 705
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
-     - 60
+     - 61
    * - emrac command line, integration tests
      - ``crates/emrac-cli/tests``
      - 32
    * - **Automated total**
      -
-     - **797**
+     - **798**
 
 emrac-core library (705)
 ------------------------
@@ -1021,7 +1021,7 @@ emrac-core library (705)
 * ``only_the_verb_is_coloured_and_only_when_asked``
 * ``problems_and_doubts_go_to_stderr_and_results_to_stdout``
 
-emrac command line, unit tests (60)
+emrac command line, unit tests (61)
 -----------------------------------
 
 ``commands::completion::tests`` (1)
@@ -1049,6 +1049,11 @@ emrac command line, unit tests (60)
 * ``the_licence_is_the_gpl_3``
 * ``the_main_page_has_the_sections_a_man_page_has``
 * ``the_plain_pages_get_colour_only_where_there_is_some``
+
+``commands::ledger::exe_tests`` (1)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_binary_replaced_while_it_runs_is_the_one_now_at_its_path``
 
 ``commands::plan_check::tests`` (2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

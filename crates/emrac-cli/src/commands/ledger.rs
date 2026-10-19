@@ -84,9 +84,26 @@ fn override_path() -> Option<std::path::PathBuf> {
         .map(Into::into)
 }
 
+/// The path of the running emrac. When a package upgrade replaced the file while
+/// it ran (emrac upgrading itself, or any upgrade of the package), Linux reports
+/// the old file as `/usr/bin/emrac (deleted)`: the program to run is then the one
+/// now at that path, which is the new version, checked like any other.
+pub(crate) fn running_exe() -> std::io::Result<std::path::PathBuf> {
+    let exe = std::env::current_exe()?;
+    Ok(without_deleted(exe))
+}
+
+fn without_deleted(exe: std::path::PathBuf) -> std::path::PathBuf {
+    let text = exe.to_string_lossy();
+    match text.strip_suffix(" (deleted)") {
+        Some(path) => std::path::PathBuf::from(path),
+        None => exe,
+    }
+}
+
 /// The binary run as root has to be one the user cannot have replaced.
 fn trusted_exe() -> std::result::Result<std::path::PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| format!("can't find itself: {e}"))?;
+    let exe = running_exe().map_err(|e| format!("can't find itself: {e}"))?;
     let meta = fs::metadata(&exe).map_err(|e| format!("can't look at {}: {e}", exe.display()))?;
     if meta.uid() != 0 || meta.mode() & 0o022 != 0 {
         return Err(format!(
@@ -189,8 +206,11 @@ pub fn sync_interactive(json: bool) -> Result<()> {
 /// The paths this emrac program may be audited as.
 pub(crate) fn trusted_exes() -> Vec<String> {
     let mut v = vec!["/usr/bin/emrac".to_string()];
-    if let Ok(p) = std::env::current_exe() {
-        v.push(p.display().to_string());
+    if let Ok(p) = running_exe() {
+        let p = p.display().to_string();
+        if !v.contains(&p) {
+            v.push(p);
+        }
     }
     v
 }
@@ -383,4 +403,27 @@ pub fn watch_install(dry_run: bool) -> Result<()> {
         "make sure auditd is enabled (`systemctl enable --now auditd`); `emrac ledger events` and `emrac doctor` read what it saw."
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod exe_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn a_binary_replaced_while_it_runs_is_the_one_now_at_its_path() {
+        assert_eq!(
+            without_deleted(PathBuf::from("/usr/bin/emrac (deleted)")),
+            PathBuf::from("/usr/bin/emrac")
+        );
+        assert_eq!(
+            without_deleted(PathBuf::from("/usr/bin/emrac")),
+            PathBuf::from("/usr/bin/emrac")
+        );
+        // only the suffix the kernel adds, at the end
+        assert_eq!(
+            without_deleted(PathBuf::from("/opt/emrac (deleted)/bin/emrac")),
+            PathBuf::from("/opt/emrac (deleted)/bin/emrac")
+        );
+    }
 }
