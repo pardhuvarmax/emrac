@@ -5,8 +5,9 @@
 //! when the package is built again (another version or build time) and when the
 //! note says something new: a different missing library, a later library update.
 //!
-//! Only what *may* break can be acknowledged; a package that is broken now is
-//! still listed, because acknowledging does not mend it.
+//! A source package that is broken now cannot be acknowledged: a rebuild mends
+//! it. A binary package can (a rebuild would not: only its vendor, or a package
+//! that provides the library, can).
 
 use std::fs;
 use std::io::Write;

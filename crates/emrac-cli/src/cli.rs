@@ -769,8 +769,9 @@ pub enum Commands {
 
         /// Acknowledge that these packages may need building again and you leave
         /// them: `doctor` and `--check` stop listing them. It lapses when the
-        /// package is built again or its note says something new. Only what
-        /// may break (not what is broken now)
+        /// package is built again or its note says something new. A source package
+        /// that is broken now cannot be acknowledged (rebuild it); a binary
+        /// package can (only its vendor can mend it)
         #[arg(long, conflicts_with_all = ["check", "stale", "unack"], requires = "pkgs")]
         ack: bool,
 

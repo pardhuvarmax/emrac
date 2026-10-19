@@ -2637,24 +2637,24 @@ Tests (2)
 
 Functions (8)
 
-- `pub path()` :35
-- `pub read_from()` :40
-- `pub read()` :47
-- `write()` :51
-- `pub add_to()` :66
-- `pub remove_from()` :90
-- `pub applies()` :102
-- `pub covers()` :108
+- `pub path()` :36
+- `pub read_from()` :41
+- `pub read()` :48
+- `write()` :52
+- `pub add_to()` :67
+- `pub remove_from()` :91
+- `pub applies()` :103
+- `pub covers()` :109
 
 Tests (3)
 
-- `an_acknowledgement_is_kept_replaced_and_removed()` :129
-- `it_applies_to_that_build_and_lapses_when_the_package_is_built_again()` :158
-- `it_covers_what_was_said_and_not_something_new()` :174
+- `an_acknowledgement_is_kept_replaced_and_removed()` :130
+- `it_applies_to_that_build_and_lapses_when_the_package_is_built_again()` :159
+- `it_covers_what_was_said_and_not_something_new()` :175
 
 Test helpers (1)
 
-- `pkg()` :118
+- `pkg()` :119
 
 ### `crates/emrac-core/src/recommend.rs`
 
@@ -3440,7 +3440,7 @@ Functions (129)
 - `Sources::dependency_children()` :3249
 - `pub Sources::stale_builds()` :3270
 - `pub Sources::stale_builds_split()` :3276
-- `pub Sources::rebuild_ack()` :3314
+- `pub Sources::rebuild_ack()` :3316
 - `pub Sources::upgrade_facts()` :3365
 - `pub Sources::failed_units_now()` :3428
 - `pub Sources::plan_rebuild()` :3434

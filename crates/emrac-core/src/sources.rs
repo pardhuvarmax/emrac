@@ -3298,8 +3298,10 @@ impl Sources {
             if all.broken.is_empty() && all.maybe.is_empty() {
                 continue;
             }
-            let says: Vec<String> = all.maybe.clone();
-            if all.broken.is_empty() && crate::rebuild_ack::covers(&acks, &pkg, &says) {
+            let says: Vec<String> = all.broken.iter().chain(&all.maybe).cloned().collect();
+            if (all.broken.is_empty() || all.binary)
+                && crate::rebuild_ack::covers(&acks, &pkg, &says)
+            {
                 hidden.push(all);
             } else {
                 shown.push(all);
@@ -3333,18 +3335,16 @@ impl Sources {
                 .iter()
                 .find(|f| &f.name == name)
                 .ok_or_else(|| Error::Rebuild(format!("{name} is not an installed AUR package")))?;
-            if shown
-                .iter()
-                .any(|s| &s.name == name && !s.broken.is_empty())
-            {
+            let note = shown.iter().find(|s| &s.name == name);
+            if note.is_some_and(|s| !s.broken.is_empty() && !s.binary) {
                 return Err(Error::Rebuild(format!(
                     "{name} is broken now (`emrac rebuild --check` says how); acknowledging would not mend it: `emrac rebuild {name}` does"
                 )));
             }
-            let says = shown
-                .iter()
-                .find(|s| &s.name == name)
-                .map(|s| s.maybe.clone())
+            // a binary package that is broken can be acknowledged: a rebuild would
+            // not mend it, only the vendor or a package that provides the library can
+            let says: Vec<String> = note
+                .map(|s| s.broken.iter().chain(&s.maybe).cloned().collect())
                 .unwrap_or_default();
             if says.is_empty() {
                 return Err(Error::Rebuild(format!(
