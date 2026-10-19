@@ -341,7 +341,7 @@ impl Sources {
         }
         if !by_source.is_empty() {
             warnings.push(format!(
-                "built from source here, from Arch's packaging source at the tag of the repository's version: {}. The build runs in the sandbox, `makepkg` installs what it needs to build, and the next upgrade replaces the result with the repository's binary unless you pin it",
+                "built from source here, from Arch's packaging source at the tag of the repository's version: {}. The build runs in the sandbox and `makepkg` installs what it needs to build. It has the repository's version, so it stays until the repository gets a newer one; the upgrade that would replace it with the binary says so first (`emrac pin` keeps it, but holds the package back from every upgrade, which is a partial upgrade for what depends on it)",
                 by_source.join(", ")
             ));
         }
@@ -372,6 +372,33 @@ impl Sources {
             );
         }
         Ok((plan, by_source))
+    }
+
+    /// Notes that `name` was built here at `version` (`install --source`).
+    pub fn record_source_built(&self, name: &str, version: &str) -> Result<()> {
+        crate::source_built::record_to(&crate::source_built::path()?, name, version, now())
+    }
+
+    /// The packages you built from source here that this upgrade would replace
+    /// with the repository's binary.
+    pub fn source_builds_replaced_by(&self, plan: &Plan) -> Vec<crate::source_built::Change> {
+        let changes: Vec<crate::source_built::Change> = plan
+            .packages
+            .iter()
+            .map(|p| crate::source_built::Change {
+                name: p.name.clone(),
+                from: p.previous_version.clone(),
+                to: p.version.clone(),
+            })
+            .collect();
+        crate::source_built::replaced_by(&crate::source_built::read(), &changes)
+    }
+
+    /// Forgets source builds that were replaced.
+    pub fn forget_source_built(&self, names: &[String]) {
+        if let Ok(path) = crate::source_built::path() {
+            let _ = crate::source_built::forget_from(&path, names);
+        }
     }
 
     /// Where an official package's source is: its package base and the

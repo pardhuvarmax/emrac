@@ -106,6 +106,7 @@ pub fn build_and_install(sources: &Sources, name: &str, choice: BuildChoice) -> 
     }
 
     sources.install_built(&files)?;
+    let _ = sources.record_source_built(name, &src.version);
     note_build(name, before, choice);
     Ok(())
 }

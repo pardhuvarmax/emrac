@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 713
+     - 715
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **806**
+     - **808**
 
-emrac-core library (713)
+emrac-core library (715)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -905,6 +905,12 @@ emrac-core library (713)
 * ``names_are_validated``
 * ``prune_keeps_the_newest_with_the_prefix_and_spares_the_rest``
 
+``source_built::tests`` (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``an_upgrade_replaces_a_source_build_only_when_it_is_what_is_installed``
+* ``what_was_built_here_is_kept_replaced_and_forgotten``
+
 ``sources::freshness_tests`` (2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1445,7 +1451,7 @@ End-to-end: source or binary on install (dev/e2e/sourceinstall.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 An official package built from Arch packaging source here, --binary refusing to compile,
-the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after u23, 12 of 12 passed.
+the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after u23, 13 of 13 passed.
 
 * the plan says an official package is built here and what that means
 * --binary on an AUR package refuses and names the prebuilt one
@@ -1456,11 +1462,12 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * --source builds sl here in the sandbox and installs the result
 * the packaging source it used is the repository's version
 * what was installed was built here, not downloaded
+* it is remembered as built here, so an upgrade that would replace it can say so
 * the transaction is in the history
 * a binary install of the same package is the repository's file
 * install.prefer recommend uses the verdict of recommend, --binary still wins
 
-(12 checks.)
+(13 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

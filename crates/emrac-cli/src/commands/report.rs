@@ -36,6 +36,40 @@ pub fn print_risk(
     }
 }
 
+/// Before an upgrade that would replace what you built from source here.
+pub fn print_source_builds_replaced(replaced: &[emrac_core::source_built::Change]) {
+    let list = replaced
+        .iter()
+        .map(|c| {
+            format!(
+                "{} {} \u{2192} {}",
+                c.name,
+                c.from.as_deref().unwrap_or("?"),
+                c.to
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    say!(
+        Voice::Warns,
+        "this upgrade replaces {} you built from source here with the repository's binary: {list}.",
+        if replaced.len() == 1 {
+            "a package"
+        } else {
+            "packages"
+        }
+    );
+    say!(
+        Voice::Suggests,
+        "to build the new version from source again afterwards: emrac install --source {}",
+        replaced
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+}
+
 /// What the high-risk line says about a snapshot.
 pub fn snapshot_hint(snapshot_first: bool) -> &'static str {
     if snapshot_first {

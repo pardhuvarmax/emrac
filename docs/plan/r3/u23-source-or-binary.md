@@ -15,7 +15,7 @@ Until now the choice was made by the name: an official package was the repositor
 
 - Arch's packaging repositories are fetched over https only, one tag, shallow, a clean checkout every time; the name that goes into the address is checked.
 - The default does not change: a build is never started because of a score unless you set `install.prefer = recommend`.
-- `upgrade` is unchanged: it replaces a source-built package with the repository's binary at the next upgrade, as the plan says. Keeping it built from source is what a pin is for (or `install --source` again).
+- A source build has the repository's version, so nothing replaces it until the repository gets a **newer** one; then `upgrade` replaces it with the binary. It says so first: emrac remembers what it built here (`~/.local/share/emrac/source-built.json`), and the plan of an upgrade that would replace one prints which, with the command to build the new version from source again. A pin keeps the build but holds the package back from every upgrade, which is a partial upgrade for what depends on it: use it only for a package that is safe to hold.
 
 ## Not covered
 
@@ -23,4 +23,4 @@ Until now the choice was made by the name: an official package was the repositor
 
 ## Verification
 
-Unit tests of the choice (flag, setting, verdict, confidence), of the plan entry, of the built file's package name (split packages), of the tag for an epoch and of the name allowed in an address; `dev/e2e/sourceinstall.sh` (12 checks, in the container, with a real build of `sl` from the packaging source in the sandbox, the installed package shown to be built here and not the repository's file).
+Unit tests of the choice (flag, setting, verdict, confidence), of the plan entry, of the built file's package name (split packages), of the tag for an epoch and of the name allowed in an address; `dev/e2e/sourceinstall.sh` (13 checks, in the container, with a real build of `sl` from the packaging source in the sandbox, the installed package shown to be built here and not the repository's file).

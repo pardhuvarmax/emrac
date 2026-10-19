@@ -73,6 +73,12 @@ pub fn run(
             snapshot_first,
         );
     }
+    if !upgrade.plan.is_empty() && !json {
+        let replaced = sources.source_builds_replaced_by(&upgrade.plan);
+        if !replaced.is_empty() {
+            crate::commands::report::print_source_builds_replaced(&replaced);
+        }
+    }
     if !upgrade.plan.is_empty() {
         crate::commands::preflight::run(
             sources,
@@ -173,6 +179,15 @@ pub fn run(
         Ok(())
     })();
     history::record(&upgrade.plan, &result);
+    if result.is_ok() {
+        // what was built here and has been replaced is no longer ours
+        let replaced: Vec<String> = sources
+            .source_builds_replaced_by(&upgrade.plan)
+            .into_iter()
+            .map(|c| c.name)
+            .collect();
+        sources.forget_source_built(&replaced);
+    }
     if let (Ok(()), Some(gate)) = (&result, &news_gate) {
         gate.done();
     }

@@ -5,7 +5,7 @@
 # pacman -U), `--binary` compiles nothing, and `install.prefer` decides when you
 # do not. Needs the network (the packaging source and the package's own source).
 #
-# last full run: after u23, 12 of 12 passed
+# last full run: after u23, 13 of 13 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -22,6 +22,7 @@ ck "a tag that does not exist is an error that says what was asked" "EMRAC_ARCH_
 ck "--source builds sl here in the sandbox and installs the result" "$e install --source sl --yes --skip-pkgbuild > /tmp/s2.out 2>&1; pacman -Q sl"
 ck "the packaging source it used is the repository's version" "grep -q '^pkgver=5.05' ~/.cache/emrac/build/arch-sl/PKGBUILD && [ \"\$(pacman -Q sl | cut -d' ' -f2)\" = \"\$(pacman -Si sl | awk '/^Version/{print \$3}')\" ]"
 ck "what was installed was built here, not downloaded" "pacman -Qi sl | grep -q 'Unknown Packager'"
+ck "it is remembered as built here, so an upgrade that would replace it can say so" "grep -q \"\\\"name\\\": \\\"sl\\\"\" ~/.local/share/emrac/source-built.json"
 ck "the transaction is in the history" "$e history 2>&1 | head -3 | grep -q 'sl'"
 sudo pacman -R --noconfirm sl >/dev/null 2>&1
 ck "a binary install of the same package is the repository's file" "$e install --binary sl --yes >/tmp/s3.out 2>&1; pacman -Q sl && ! pacman -Qi sl | grep -q 'Unknown Packager'"
