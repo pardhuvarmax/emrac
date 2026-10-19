@@ -23,6 +23,28 @@ pub fn run(
     allow_partial: bool,
     expect_plan: Option<&str>,
 ) -> Result<()> {
+    // package files on this machine: installed the way `pacman -U` does
+    let files = pkgs
+        .iter()
+        .filter(|p| emrac_core::is_package_file_name(p))
+        .count();
+    if files > 0 {
+        if files != pkgs.len() {
+            return Err(emrac_core::Error::Help(
+                "name package files or package names, not both in one command".into(),
+            ));
+        }
+        return crate::commands::install_file::run(
+            sources,
+            pkgs,
+            dry_run,
+            yes,
+            choice.accept_risks,
+            json,
+            allow_partial,
+            expect_plan,
+        );
+    }
     let activity = Activity::spinner("working out the plan");
     let planned = sources.plan_install(pkgs, offline);
     let preview = planned.as_ref().ok().map(|p| sources.preview(p));

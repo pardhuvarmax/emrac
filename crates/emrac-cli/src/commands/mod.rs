@@ -16,6 +16,7 @@ pub mod helppages;
 pub mod history;
 pub mod info;
 pub mod install;
+pub mod install_file;
 pub mod ledger;
 pub mod mirrors;
 pub mod news;

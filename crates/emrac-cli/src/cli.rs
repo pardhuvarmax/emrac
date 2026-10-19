@@ -211,8 +211,11 @@ pub enum Commands {
     /// Show detailed metadata for a package, official repos or the AUR
     Info { pkg: String },
 
-    /// Install one or more packages from official repositories or the AUR
+    /// Install one or more packages from official repositories or the AUR, or
+    /// package files on this machine (`emrac install ./foo-1.0-1-x86_64.pkg.tar.zst`,
+    /// what `pacman -U` does, with the same plan, audit and history)
     Install {
+        /// Package names, or paths of package files (`*.pkg.tar.zst`): not both
         #[arg(required = true)]
         pkgs: Vec<String>,
 

@@ -5,7 +5,7 @@
 # phases with a live line, the compiler's lines folded away, errors at once and the
 # whole output in a log. Both the sandboxed and the unsandboxed path.
 #
-# last full run: after the review views, 13 of 13 passed
+# last full run: after the package files, 18 of 18 passed
 e=/usr/local/bin/emrac
 export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 n=0; bad=0
@@ -53,6 +53,15 @@ ck "on a terminal the PKGBUILD changes are a summary and a numbered diff" "ptyp 
 ck "a change of sources is marked and says what to check" "grep -qE '⚠ +source +added https://example.net' /tmp/r1.out && grep -q 'the sources or their checksums changed' /tmp/r1.out"
 ck "the audit's finding is a badge, the rule, the place and the line it found" "grep -qE '(warning|HIGH) +checksum-skipped +PKGBUILD:[0-9]+' /tmp/r1.out && grep -q 'Audit · pfetch' /tmp/r1.out"
 ck "piped, the review is the plain text it always was" "(cd /tmp/w && git reset -q --hard HEAD~1 && git push -q -f /tmp/up.git master) ; $e install pfetch --yes --skip-diff >/dev/null 2>&1; (cd /tmp/w && git cherry-pick -q ORIG_HEAD 2>/dev/null || true); $e rebuild pfetch --yes > /tmp/r2.out 2>&1; ! grep -q '▼ PKGBUILD changes' /tmp/r2.out"
+
+# --- a package file on this machine: emrac install ./x.pkg.tar.zst (what pacman -U does)
+sudo pacman -R --noconfirm sl >/dev/null 2>&1; sudo pacman -Sw --noconfirm sl >/dev/null 2>&1
+PF=$(ls /var/cache/pacman/pkg/sl-*.pkg.tar.zst | head -1); cp "$PF" /tmp/sl-local.pkg.tar.zst
+ck "a package file's plan says what it is: a local file, an install, no signature" "$e install /tmp/sl-local.pkg.tar.zst --dry-run > /tmp/f1.out 2>&1; grep -q 'local file/sl' /tmp/f1.out && grep -q 'has no signature next to it' /tmp/f1.out && ! pacman -Q sl"
+ck "installing it works, shown in emrac's style on a terminal, and it is in the history" "ptyp \"$T $e install /tmp/sl-local.pkg.tar.zst --yes\" > /tmp/f2.out; grep -q '✔ installing sl' /tmp/f2.out && pacman -Q sl && $e history 2>&1 | grep -q 'sl'"
+ck "the same file again is a reinstall" "$e install /tmp/sl-local.pkg.tar.zst --dry-run 2>&1 | grep -qi 'reinstall'"
+ck "package names and files cannot be mixed" "! $e install sl /tmp/sl-local.pkg.tar.zst --yes 2>&1 | grep -q 'installing' && $e install sl /tmp/sl-local.pkg.tar.zst --dry-run 2>&1 | grep -q 'not both'"
+ck "a missing file or a file that is not a package is refused with a reason" "$e install /tmp/no-such-file.pkg.tar.zst --yes 2>&1 | grep -q 'No such file' && echo x > /tmp/fake.pkg.tar.zst && ! $e install /tmp/fake.pkg.tar.zst --yes >/dev/null 2>&1"
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]

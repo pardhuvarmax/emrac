@@ -598,6 +598,96 @@ impl Sources {
             .any(|f| f.file == "PKGBUILD" && f.rule.starts_with("network-in-"))
     }
 
+    /// The plan to install local package files (`*.pkg.tar.*`), what `pacman -U`
+    /// would do: an install, an upgrade, a reinstall or a downgrade by the version
+    /// that is installed now, the packages libalpm would remove on the side, and
+    /// the size change. Nothing is extracted or run. `args` are paths.
+    pub fn plan_install_files(&self, args: &[String]) -> Result<LocalInstall> {
+        if args.is_empty() {
+            return Err(Error::Help("name a package file".into()));
+        }
+        let mut files: Vec<PathBuf> = Vec::new();
+        for a in args {
+            let path = std::fs::canonicalize(a).map_err(|e| Error::Help(format!("{a}: {e}")))?;
+            if !path.is_file() || !is_package_file_name(&path.to_string_lossy()) {
+                return Err(Error::Help(format!(
+                    "{a} is not a package file (*.pkg.tar.zst, *.pkg.tar.xz, ...)"
+                )));
+            }
+            if !files.contains(&path) {
+                files.push(path);
+            }
+        }
+        let mut packages: Vec<PlannedPackage> = Vec::new();
+        let mut delta: i64 = 0;
+        let mut warnings: Vec<String> = Vec::new();
+        let mut actions: Vec<PlanAction> = Vec::new();
+        for path in &files {
+            let m = inspect_package(path)?;
+            let installed = self.alpm.installed_version(&m.package);
+            let action = match &installed {
+                None => PlanAction::Install,
+                Some(old) if version_is_newer(old, &m.version) => PlanAction::Upgrade,
+                Some(old) if old == &m.version => PlanAction::Reinstall,
+                Some(_) => PlanAction::Downgrade,
+            };
+            actions.push(action);
+            delta += m.installed_size as i64
+                - installed
+                    .as_ref()
+                    .and_then(|_| self.alpm.installed_size(&m.package))
+                    .unwrap_or(0) as i64;
+            let mut sig = path.clone().into_os_string();
+            sig.push(".sig");
+            if !std::path::Path::new(&sig).exists() {
+                warnings.push(format!(
+                    "{} has no signature next to it (a .sig file): pacman accepts it only because LocalFileSigLevel allows an unsigned local file; it is as trustworthy as where you got it",
+                    path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+                ));
+            }
+            packages.push(PlannedPackage {
+                name: m.package.clone(),
+                version: m.version.clone(),
+                repo: "local file".to_string(),
+                explicit: true,
+                previous_version: installed,
+            });
+        }
+        let action = if actions.iter().all(|a| *a == actions[0]) {
+            actions[0]
+        } else {
+            PlanAction::Install
+        };
+        let mut removals: Vec<PlannedRemoval> = Vec::new();
+        match AlpmBackend::simulate(None, SimOp::Files(&files)) {
+            Ok(sim) => {
+                for r in sim.removals {
+                    delta -= r.installed_size as i64;
+                    removals.push(PlannedRemoval {
+                        name: r.name,
+                        version: r.version,
+                        reason: r.reason,
+                    });
+                }
+            }
+            Err(err) => warnings.push(format!(
+                "couldn't work out what installing this would remove or pull in: {err}"
+            )),
+        }
+        Ok(LocalInstall {
+            plan: Plan {
+                action,
+                packages,
+                total_download_size: 0,
+                total_installed_size_delta: delta,
+                removals,
+                provider_choices: Vec::new(),
+                warnings,
+            },
+            files,
+        })
+    }
+
     /// Installs built package files with `sudo pacman -U`.
     pub fn install_built(&self, files: &[PathBuf]) -> Result<()> {
         self.pacman.execute_install_files(files)
@@ -3902,6 +3992,31 @@ fn collect_extras(dir: &std::path::Path, max_depth: usize) -> Vec<audit::ExtraFi
     out
 }
 
+/// A plan to install local package files, and the files.
+#[derive(Debug, Clone)]
+pub struct LocalInstall {
+    pub plan: Plan,
+    pub files: Vec<PathBuf>,
+}
+
+/// Whether a path names a package file: `*.pkg.tar` with a compression suffix.
+pub fn is_package_file_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    [
+        ".pkg.tar",
+        ".pkg.tar.zst",
+        ".pkg.tar.xz",
+        ".pkg.tar.gz",
+        ".pkg.tar.bz2",
+        ".pkg.tar.lz4",
+        ".pkg.tar.lrz",
+        ".pkg.tar.lzo",
+        ".pkg.tar.z",
+    ]
+    .iter()
+    .any(|e| lower.ends_with(e))
+}
+
 /// Reads a built package file (`*.pkg.tar.*`) and reports what it would
 /// change on a system. Nothing is extracted or run. Needs no `Sources`.
 pub fn inspect_package(path: &std::path::Path) -> Result<Manifest> {
@@ -4326,4 +4441,32 @@ pub struct BenchmarkTargets {
     pub version: String,
     pub installed_size: u64,
     pub executables: Vec<std::path::PathBuf>,
+}
+
+#[cfg(test)]
+mod local_file_tests {
+    use super::*;
+
+    #[test]
+    fn package_files_are_told_from_package_names() {
+        for f in [
+            "a-1-1-x86_64.pkg.tar.zst",
+            "/x/y/b-2-1-any.pkg.tar.xz",
+            "c.pkg.tar",
+            "D-1.PKG.TAR.GZ",
+            "./e.pkg.tar.lz4",
+        ] {
+            assert!(is_package_file_name(f), "{f}");
+        }
+        for n in [
+            "vim",
+            "pkg.tar",
+            "a.pkg.tar.zst.sig",
+            "foo.tar.gz",
+            "lib32-pkg",
+            "pkg.tar.zst.txt",
+        ] {
+            assert!(!is_package_file_name(n), "{n}");
+        }
+    }
 }

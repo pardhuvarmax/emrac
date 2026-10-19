@@ -111,8 +111,9 @@ pub use snapshot::{
     SnapshotStore,
 };
 pub use sources::{
-    audit_path, inspect_package, package_list_state, BenchmarkTargets, OfficialInspection,
-    PackageList, SearchResults, SearchScope, Sources, UpgradePlan,
+    audit_path, inspect_package, is_package_file_name, package_list_state, BenchmarkTargets,
+    LocalInstall, OfficialInspection, PackageList, SearchResults, SearchScope, Sources,
+    UpgradePlan,
 };
 pub use verify::{EntryKind, Issue, IssueKind, PackageReport, VerifyReport};
 pub use voice::Voice;

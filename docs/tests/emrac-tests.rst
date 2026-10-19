@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 700
+     - 701
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 59
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **791**
+     - **792**
 
-emrac-core library (700)
+emrac-core library (701)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -891,6 +891,11 @@ emrac-core library (700)
 * ``a_list_refreshed_today_or_yesterday_is_fresh``
 * ``anything_older_or_of_unknown_age_is_stale_and_keeps_the_reason``
 
+``sources::local_file_tests`` (1)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``package_files_are_told_from_package_names``
+
 ``sources::removal_tests`` (5)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1411,7 +1416,7 @@ End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 
 A local checkout posing as an AUR package: the phases of makepkg with a clock, the
 compiler lines folded into a live line, errors at once, the log, sandboxed and not:
-``dev/e2e/run.sh buildui``. Last full run: after the review views, 13 of 13 passed.
+``dev/e2e/run.sh buildui``. Last full run: after the package files, 18 of 18 passed.
 
 * unsandboxed, on a terminal: phases, a clock and a summary; the compiler lines are folded away
 * the summary counts the files and the warning
@@ -1426,8 +1431,13 @@ compiler lines folded into a live line, errors at once, the log, sandboxed and n
 * a change of sources is marked and says what to check
 * the audit's finding is a badge, the rule, the place and the line it found
 * piped, the review is the plain text it always was
+* a package file's plan says what it is: a local file, an install, no signature
+* installing it works, shown in emrac's style on a terminal, and it is in the history
+* the same file again is a reinstall
+* package names and files cannot be mixed
+* a missing file or a file that is not a package is refused with a reason
 
-(13 checks.)
+(18 checks.)
 
 End-to-end: how emrac looks (dev/e2e/clui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1562,7 +1572,7 @@ End-to-end: offline bundles (dev/e2e/bundle.sh)
 
 ``emrac bundle create | verify | apply`` with real packages, including a bundle
 whose signature is bad and whose manifest was edited to match: ``dev/e2e/run.sh bundle``.
-Last full run: after the review views, 13 of 13 passed.
+Last full run: after the package files, 18 of 18 passed.
 
 * unsandboxed, on a terminal: phases, a clock and a summary; the compiler lines are folded away
 * the summary counts the files and the warning
@@ -1577,8 +1587,13 @@ Last full run: after the review views, 13 of 13 passed.
 * a change of sources is marked and says what to check
 * the audit's finding is a badge, the rule, the place and the line it found
 * piped, the review is the plain text it always was
+* a package file's plan says what it is: a local file, an install, no signature
+* installing it works, shown in emrac's style on a terminal, and it is in the history
+* the same file again is a reinstall
+* package names and files cannot be mixed
+* a missing file or a file that is not a package is refused with a reason
 
-(13 checks.)
+(18 checks.)
 
 End-to-end: help pages and the bug report (dev/e2e/helppages.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
