@@ -426,6 +426,7 @@ pub fn record_step(plan: &Plan, outcome: &Result<()>) {
 fn log(plan: &Plan, outcome: &Result<()>, rollback_of: Option<&str>) {
     log_step(plan, outcome, rollback_of);
     journal::finish();
+    emrac_core::fault::point("after-journal-finish");
     verify_database();
 }
 
@@ -491,8 +492,13 @@ fn log_step(plan: &Plan, outcome: &Result<()>, rollback_of: Option<&str>) {
     if matches!(outcome, Err(Error::PacmanDeclined)) {
         return;
     }
+    emrac_core::fault::point("before-history-record");
     match History::record(plan, outcome, rollback_of) {
-        Ok(_) => super::ledger::sync_after(),
+        Ok(_) => {
+            emrac_core::fault::point("after-history-record");
+            super::ledger::sync_after();
+            emrac_core::fault::point("after-ledger-sync");
+        }
         Err(err) => say!(Voice::Warns, "couldn't record this in your history — {err}"),
     }
     if outcome.is_err() {
@@ -537,6 +543,7 @@ pub fn begin(plan: &Plan) -> Result<()> {
             "couldn't write the transaction journal ({err}); if this run is cut off, emrac won't know what it did."
         );
     }
+    emrac_core::fault::point("after-journal-begin");
     Ok(())
 }
 
@@ -566,6 +573,21 @@ pub fn recover(dry_run: bool, json: bool) -> Result<()> {
     }
 }
 
+/// The id of the history record this journal entry's run already wrote, if any: a
+/// record numbered above the newest one when the run began, for the same plan.
+fn already_recorded(entry: &journal::Entry) -> Option<String> {
+    let number = |id: &str| id.strip_prefix("tx-")?.parse::<u64>().ok();
+    let digest = entry.plan_digest.as_deref()?;
+    History::all()
+        .ok()?
+        .into_iter()
+        .find(|r| {
+            number(&r.id).is_some_and(|n| n > entry.last_tx)
+                && r.plan_digest.as_deref() == Some(digest)
+        })
+        .map(|r| r.id)
+}
+
 fn recover_found(found: journal::Interrupted, dry_run: bool, json: bool) -> Result<()> {
     let Some(entry) = found.entry.clone() else {
         if dry_run {
@@ -581,6 +603,21 @@ fn recover_found(found: journal::Interrupted, dry_run: bool, json: bool) -> Resu
         );
         return found.clear();
     };
+    // Cut off after the history record was written but before the journal was
+    // cleared: the transaction is already on record, and recording it again as
+    // "interrupted" would put it there twice, once as done and once as failed.
+    if let Some(done) = already_recorded(&entry) {
+        if !json {
+            say!(
+                Voice::Notes,
+                "a transaction was cut off after it had been written to your history as {done}; nothing is missing, and nothing more is recorded."
+            );
+        }
+        if dry_run {
+            return Ok(());
+        }
+        return found.clear();
+    }
     let range = found.log_range();
     let sources = emrac_core::Sources::init()?;
     let assessment = journal::assess(&entry, &range, &|n| sources.installed_version(n));

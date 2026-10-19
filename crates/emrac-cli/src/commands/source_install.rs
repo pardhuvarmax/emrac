@@ -125,7 +125,9 @@ pub fn build_and_install_at(
 
     emrac_core::fault::point("after-build");
     sources.install_built(&files)?;
+    emrac_core::fault::point("after-install");
     let _ = sources.record_source_built(name, &src.version, &key);
+    emrac_core::fault::point("after-policy-record");
     note_build(name, before, choice);
     Ok(())
 }

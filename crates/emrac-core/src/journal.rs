@@ -32,6 +32,13 @@ pub struct Entry {
     /// after this point belongs to this run.
     pub pacman_log_offset: u64,
     pub emrac_version: String,
+    /// The number of the newest history record when the transaction began: a
+    /// record numbered above it, for this plan, is this run's own.
+    #[serde(default)]
+    pub last_tx: u64,
+    /// The digest of the plan (`Plan::digest`).
+    #[serde(default)]
+    pub plan_digest: Option<String>,
 }
 
 impl Entry {
@@ -43,6 +50,8 @@ impl Entry {
             removals: plan.removals.clone(),
             pacman_log_offset,
             emrac_version: env!("CARGO_PKG_VERSION").to_string(),
+            last_tx: 0,
+            plan_digest: Some(plan.digest()),
         }
     }
 
@@ -325,7 +334,8 @@ fn begin_at(path: &Path, plan: &Plan, now: u64, offset: u64) -> Result<File> {
         }
         Err(TryLockError::Error(e)) => return Err(io_err(path, e)),
     }
-    let entry = Entry::new(plan, now, offset);
+    let mut entry = Entry::new(plan, now, offset);
+    entry.last_tx = newest_record();
     let json = serde_json::to_string(&entry).expect("Entry is serializable");
     file.set_len(0).map_err(|e| io_err(path, e))?;
     file.seek(SeekFrom::Start(0)).map_err(|e| io_err(path, e))?;
@@ -333,6 +343,16 @@ fn begin_at(path: &Path, plan: &Plan, now: u64, offset: u64) -> Result<File> {
         .and_then(|()| file.sync_all())
         .map_err(|e| io_err(path, e))?;
     Ok(file)
+}
+
+/// The number of the newest history record, live or archived (0 when there is none).
+fn newest_record() -> u64 {
+    crate::history::History::all_with_archive()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|r| r.id.strip_prefix("tx-")?.parse::<u64>().ok())
+        .max()
+        .unwrap_or(0)
 }
 
 /// The transaction ended and has been recorded: remove the journal. Does

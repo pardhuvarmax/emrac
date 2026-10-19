@@ -12,7 +12,7 @@
 # off at that point, as a kill or a power cut would, and EMRAC_FAULT_TAMPER='<point>:<command>'
 # changes files there (between a review and a build). A normal build has no such code.
 #
-# last full run: after the review-to-build checks, 62 of 62 passed
+# last full run: after the concurrency and crash checks, 78 of 78 passed
 e=/usr/local/bin/emrac
 n=0; bad=0
 ck() { n=$((n+1)); if eval "$2" >/tmp/ck.out 2>&1; then echo "PASS  $1"; else bad=$((bad+1)); echo "FAIL  $1"; head -8 /tmp/ck.out | sed 's/^/        /'; fi; }
@@ -189,6 +189,86 @@ package() { :; }
 PB
 ck "RV-04 a PKGBUILD that rewrites itself while the host step sources it is caught before the sandboxed build" "! $e build /tmp/selfmod --yes --accept-risks >/tmp/r4.out 2>&1; grep -q 'changed after you reviewed them (PKGBUILD changed)' /tmp/r4.out"
 ck "RV-05 an unchanged recipe builds as before" "mkdir -p /tmp/clean && printf 'pkgname=clean\npkgver=1\npkgrel=1\npkgdesc=x\narch=(any)\nlicense=(GPL)\npackage() { :; }\n' > /tmp/clean/PKGBUILD && $e build /tmp/clean --yes --accept-risks >/tmp/r5.out 2>&1; ls /tmp/clean/*.pkg.tar.zst"
+
+# --- concurrency: two emrac processes, and pacman running at the same time
+sudo pacman -S --noconfirm --needed sl cowsay bc ed jq less >/dev/null 2>&1
+rm -f ~/.local/share/emrac/source-built.json ~/.local/share/emrac/source-built.seal
+for p in sl cowsay bc ed jq less; do $e from-source add $p >/dev/null 2>&1 & done; wait
+ck "CC-01 six emrac processes adding policies at the same moment: none is lost, the record is valid" "[ \$($e from-source 2>&1 | grep -cE '^(sl|cowsay|bc|ed|jq|less) ') -eq 6 ] && ! $e from-source 2>&1 | grep -q 'can.t be read'"
+for p in sl cowsay bc ed jq less; do $e from-source drop $p >/dev/null 2>&1 & done; wait
+ck "CC-01 and six ending them at the same moment leave an empty, valid record" "$e from-source 2>&1 | grep -q 'no package is set'"
+$e from-source add sl >/dev/null 2>&1
+
+EMRAC_FAULT_TAMPER='before-build:sleep 40' $e from-source rebuild sl --accept-risks --yes >/tmp/cc1.out 2>&1 &
+first=$!
+for i in $(seq 1 120); do grep -q "running a command at 'before-build'" /tmp/cc1.out 2>/dev/null && break; sleep 0.5; done
+$e install --binary cowsay --yes >/tmp/cc2.out 2>&1; rc=$?
+ck "CC-02 a second emrac is refused while the first is in a transaction, and says why" "[ $rc -ne 0 ] && grep -q 'another emrac is changing packages' /tmp/cc2.out"
+ck "CC-02 the refused one changed nothing, the first is untouched" "pacman -Q cowsay >/dev/null && kill -0 $first"
+wait $first; rc1=$?
+ck "CC-02 the first finishes its transaction normally afterwards" "[ $rc1 -eq 0 ] && $e from-source 2>&1 | grep -q 'source verified'"
+
+mkdir -p /tmp/slowhook && cd /tmp/slowhook
+cat > PKGBUILD <<'PB'
+pkgname=slowhook
+pkgver=1
+pkgrel=1
+pkgdesc=x
+arch=(any)
+license=(GPL)
+package() {
+  install -Dm644 /dev/stdin "$pkgdir/usr/share/libalpm/hooks/zz-slowhook.hook" <<'H'
+[Trigger]
+Operation = Install
+Type = Package
+Target = *
+[Action]
+When = PostTransaction
+Exec = /usr/bin/sleep 15
+H
+}
+PB
+makepkg -f --noconfirm >/dev/null 2>&1
+sudo pacman -U --noconfirm slowhook-1-1-any.pkg.tar.zst >/dev/null 2>&1
+cd ~
+sudo pacman -R --noconfirm cowsay >/dev/null 2>&1
+sudo pacman -S --noconfirm cowsay >/tmp/cc3p.out 2>&1 &
+slow=$!
+for i in $(seq 1 60); do [ -e /var/lib/pacman/db.lck ] && break; sleep 0.25; done
+$e install --binary less --yes >/tmp/cc3.out 2>&1; rc=$?
+ck "CC-03 while pacman is running a transaction, emrac refuses to start another and says so" "[ $rc -ne 0 ] && grep -qi 'pacman is running\|pacman' /tmp/cc3.out && grep -q 'two package managers must not change the system at once\|pacman' /tmp/cc3.out"
+wait $slow
+ck "CC-03 pacman's own transaction finished, and emrac works again afterwards" "pacman -Q cowsay >/dev/null && $e install --binary less --dry-run >/dev/null 2>&1"
+sudo pacman -R --noconfirm slowhook >/dev/null 2>&1
+sudo pacman -S --noconfirm sl >/dev/null 2>&1
+
+# --- crash at every transition: the same rebuild is cut off at each durable boundary in turn;
+# afterwards the installed package, the policy record, the journal, the history and the ledger
+# must agree with what really happened, and the next run must finish the job.
+crash_case() {
+  local P=$1
+  sudo pacman -S --noconfirm sl >/dev/null 2>&1
+  $e from-source add sl >/dev/null 2>&1
+  local before after
+  before=$($e history 2>/dev/null | grep -c '^tx-')
+  EMRAC_FAULT=$P $e from-source rebuild sl --accept-risks --yes >/tmp/cr.out 2>&1; local rc=$?
+  { [ $rc -ne 0 ] && grep -q "cut off at '$P'" /tmp/cr.out; } || { echo "not cut off at $P (rc=$rc)"; tail -3 /tmp/cr.out; return 1; }
+  local out; out=$($e from-source 2>&1) || { echo "the record can not be read after the cut: $out"; return 1; }
+  echo "$out" | grep -q '^sl ' || { echo "the policy was lost"; return 1; }
+  local built=no; pacman -Qi sl | grep -q 'Unknown Packager' && built=yes
+  if echo "$out" | grep -q 'source verified' && [ $built = no ]; then echo "a binary is called source verified"; return 1; fi
+  $e from-source rebuild sl --accept-risks --yes >/tmp/cr2.out 2>&1 || { echo "the run after the cut failed"; tail -5 /tmp/cr2.out; return 1; }
+  $e from-source 2>&1 | grep -q 'source verified' || { echo "not verified after the next run"; return 1; }
+  pacman -Qi sl | grep -q 'Unknown Packager' || { echo "not built here after the next run"; return 1; }
+  $e doctor 2>&1 | grep -qi 'cut off\|interrupted' && { echo "an interrupted transaction is still pending"; return 1; }
+  $e history verify >/tmp/hv.out 2>&1 || { echo "history verify fails: $(tail -3 /tmp/hv.out)"; return 1; }
+  after=$($e history 2>/dev/null | grep -c '^tx-')
+  [ $((after-before)) -eq 2 ] || { echo "the history has $((after-before)) new records, not 2 (one for the cut-off run, one for the next)"; return 1; }
+  return 0
+}
+for P in after-journal-begin before-build after-build after-install after-policy-record before-history-record after-history-record after-ledger-sync after-journal-finish; do
+  ck "CR cut off at '$P': the four views agree, the next run finishes the job" "crash_case $P"
+done
 
 echo; echo "$((n-bad)) of $n passed"
 [ "$bad" -eq 0 ]

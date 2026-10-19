@@ -167,6 +167,40 @@ fn sealed_names(path: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Holds the record's lock while `f` reads, changes and writes it: two emrac
+/// processes changing it at once would otherwise lose one of the updates. The
+/// lock is a file beside the record (`flock`, released when the process ends, so
+/// a cut-off run leaves nothing to clean up). Waiting is bounded: after a few
+/// seconds the change is refused rather than made without it.
+fn locked<T>(path: &Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    use std::os::fd::AsRawFd;
+    let io = |context: String, source| Error::Io { context, source };
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| io(format!("couldn't create {}", dir.display()), e))?;
+    }
+    let lock_path = path.with_extension("lock");
+    let lock = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .map_err(|e| io(format!("couldn't open {}", lock_path.display()), e))?;
+    let started = std::time::Instant::now();
+    loop {
+        if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+            break;
+        }
+        if started.elapsed() > std::time::Duration::from_secs(10) {
+            return Err(Error::SourcePolicy(format!(
+                "another emrac is changing the record of what you build from source ({} is locked). Nothing was changed; try again when it has finished.",
+                lock_path.display()
+            )));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    f()
+}
+
 /// Notes that `name` was built here at `version` (from packaging revision `recipe`).
 pub fn record_to(
     path: &Path,
@@ -176,48 +210,54 @@ pub fn record_to(
     evidence: Option<&Installed>,
     now: u64,
 ) -> Result<()> {
-    let mut list = read_from(path)?;
-    list.retain(|e| e.name != name);
-    list.push(Entry {
-        name: name.to_string(),
-        version: version.to_string(),
-        at: now,
-        recipe: recipe.map(str::to_string),
-        pending: false,
-        build_date: evidence.map(|i| i.build_date),
-        packager: evidence.map(|i| i.packager.clone()),
-    });
-    list.sort_by(|a, b| a.name.cmp(&b.name));
-    write(path, &list)
+    locked(path, || {
+        let mut list = read_from(path)?;
+        list.retain(|e| e.name != name);
+        list.push(Entry {
+            name: name.to_string(),
+            version: version.to_string(),
+            at: now,
+            recipe: recipe.map(str::to_string),
+            pending: false,
+            build_date: evidence.map(|i| i.build_date),
+            packager: evidence.map(|i| i.packager.clone()),
+        });
+        list.sort_by(|a, b| a.name.cmp(&b.name));
+        write(path, &list)
+    })
 }
 
 /// A rebuild is waiting for these packages (the policy stays).
 pub fn mark_pending(path: &Path, names: &[String]) -> Result<()> {
-    let mut list = read_from(path)?;
-    let mut changed = false;
-    for e in list
-        .iter_mut()
-        .filter(|e| names.contains(&e.name) && !e.pending)
-    {
-        e.pending = true;
-        changed = true;
-    }
-    if changed {
-        write(path, &list)?;
-    }
-    Ok(())
+    locked(path, || {
+        let mut list = read_from(path)?;
+        let mut changed = false;
+        for e in list
+            .iter_mut()
+            .filter(|e| names.contains(&e.name) && !e.pending)
+        {
+            e.pending = true;
+            changed = true;
+        }
+        if changed {
+            write(path, &list)?;
+        }
+        Ok(())
+    })
 }
 
 /// Ends the policy for these packages: they follow the repository's binary.
 pub fn forget_from(path: &Path, names: &[String]) -> Result<bool> {
-    let mut list = read_from(path)?;
-    let before = list.len();
-    list.retain(|e| !names.contains(&e.name));
-    let changed = list.len() != before;
-    if changed {
-        write(path, &list)?;
-    }
-    Ok(changed)
+    locked(path, || {
+        let mut list = read_from(path)?;
+        let before = list.len();
+        list.retain(|e| !names.contains(&e.name));
+        let changed = list.len() != before;
+        if changed {
+            write(path, &list)?;
+        }
+        Ok(changed)
+    })
 }
 
 /// What is known about the installed package against the recorded policy. The
@@ -521,5 +561,37 @@ mod tests {
             classify(&stale(&["x"], &[]), false),
             Risk::Broken(_)
         ));
+    }
+
+    #[test]
+    fn changes_made_at_the_same_time_are_all_kept() {
+        let dir = std::env::temp_dir().join(format!("emrac-sbc-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("sb.json");
+        let names: Vec<String> = (0..40).map(|i| format!("pkg{i:02}")).collect();
+        std::thread::scope(|scope| {
+            for n in &names {
+                let file = file.clone();
+                scope.spawn(move || {
+                    record_to(&file, n, "1-1", None, None, 1).unwrap();
+                    mark_pending(&file, std::slice::from_ref(n)).unwrap();
+                });
+            }
+        });
+        let list = read_from(&file).unwrap();
+        assert_eq!(list.len(), 40, "an update was lost");
+        assert!(list.iter().all(|e| e.pending));
+        // and ending them all, at the same time, leaves nothing behind
+        std::thread::scope(|scope| {
+            for n in &names {
+                let file = file.clone();
+                scope.spawn(move || {
+                    forget_from(&file, std::slice::from_ref(n)).unwrap();
+                });
+            }
+        });
+        assert!(read_from(&file).unwrap().is_empty());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 748
+     - 749
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 61
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **841**
+     - **842**
 
-emrac-core library (748)
+emrac-core library (749)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -948,7 +948,7 @@ emrac-core library (748)
 * ``names_are_validated``
 * ``prune_keeps_the_newest_with_the_prefix_and_spares_the_rest``
 
-``source_built::tests`` (8)
+``source_built::tests`` (9)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_damaged_record_is_an_error_and_is_never_written_over``
@@ -956,6 +956,7 @@ emrac-core library (748)
 * ``a_policy_package_is_judged_broken_at_risk_unknown_or_low``
 * ``an_old_record_without_the_new_fields_still_reads``
 * ``an_upgrade_follows_the_policy_of_the_packages_it_contains``
+* ``changes_made_at_the_same_time_are_all_kept``
 * ``it_says_what_is_known_about_the_installed_package``
 * ``the_package_database_is_read_for_the_build_date_and_packager``
 * ``the_policy_is_kept_marked_pending_and_ended``
@@ -1504,7 +1505,7 @@ End-to-end: source or binary on install (dev/e2e/sourceinstall.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 An official package built from Arch packaging source here, --binary refusing to compile,
-the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the review-to-build checks, 62 of 62 passed.
+the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last full run: after the concurrency and crash checks, 78 of 78 passed.
 
 * the plan says an official package is built here and what that means
 * --binary on an AUR package refuses and names the prebuilt one
@@ -1568,8 +1569,16 @@ the setting that decides when you do not: ``dev/e2e/run.sh sourceinstall``. Last
 * RV-03 a deleted PKGBUILD is a change too, and nothing is built
 * RV-04 a PKGBUILD that rewrites itself while the host step sources it is caught before the sandboxed build
 * RV-05 an unchanged recipe builds as before
+* CC-01 six emrac processes adding policies at the same moment: none is lost, the record is valid
+* CC-01 and six ending them at the same moment leave an empty, valid record
+* CC-02 a second emrac is refused while the first is in a transaction, and says why
+* CC-02 the refused one changed nothing, the first is untouched
+* CC-02 the first finishes its transaction normally afterwards
+* CC-03 while pacman is running a transaction, emrac refuses to start another and says so
+* CC-03 pacman's own transaction finished, and emrac works again afterwards
+* CR cut off at '$P': the four views agree, the next run finishes the job
 
-(62 checks.)
+(70 checks.)
 
 End-to-end: bisect (dev/e2e/bisect.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
