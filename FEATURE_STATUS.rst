@@ -594,9 +594,9 @@ Ideas A1-A22, B1-B9 and the critical features C1-C8.
      - ``doctor --rollback-test``: prove a restore would work before you need it.
      - ``docs/feats/additions.md``
    * - A9 Stray file scanner
-     - Idea
-     - Files under ``/usr`` and ``/opt`` no package owns, with who put them there.
-     - ``docs/feats/additions.md``
+     - Done
+     - ``emrac strays``: files under ``/usr`` and ``/opt`` that no package owns (pacman's own file lists), directories collapsed, each group with a clue to where it came from (pip, npm, gem, a package's directory, ``/usr/local``), generated files left out. Read only.
+     - ``docs/feats/additions.md``; ``docs/plan/r3/u25-strays-linkcheck.md``
    * - A10 Config drift report
      - Partial
      - ``.pacnew`` handling and previews exist; a report of how ``/etc`` differs from package defaults does not.
@@ -678,9 +678,9 @@ Ideas A1-A22, B1-B9 and the critical features C1-C8.
      - ``downgrade`` finds versions in the cache and the Archive; working out which dependents must move too is not built.
      - ``docs/feats/additions.md``; ``docs/plan/r1/u6-downgrade.md``
    * - B8 Link-check for software built outside the manager
-     - Partial
-     - Installed AUR packages broken by a library update are found; unpackaged binaries under ``~/.local``, ``/opt``, ``/usr/local`` are not scanned.
-     - ``docs/feats/additions.md``; ``docs/plan/r2/u19-rebuild.md``
+     - Done
+     - ``emrac linkcheck`` and a line under every upgrade and removal plan: programs nobody packaged (``/usr/local``, ``~/.local``, unowned files under ``/opt``) that need a soname the change takes away (from the packages' ``provides``), with the package change that causes it.
+     - ``docs/feats/additions.md``; ``docs/plan/r3/u25-strays-linkcheck.md``
    * - B9 Metered and flaky-network mode
      - Idea
      - Resumable downloads, mirror fallback, bandwidth cap, deferred large packages.
@@ -1174,7 +1174,7 @@ Self-management service (self-service-feat.md)
      - Phase 5: explicit target, compatibility check.
      - ``docs/feats/self-service-feat.md``; ``docs/plan/r2/u12-self-service.md``; ``docs/design/release-index.md``; ``docs/design/self-upgrade.md``
 
-Extended scope: 139 tracked: 33 done, 23 partial, 83 idea.
+Extended scope: 139 tracked: 35 done, 22 partial, 82 idea.
 
 Future scope
 --------------
@@ -1596,10 +1596,10 @@ Totals
      - 0
      - 59
    * - Extended
-     - 33
-     - 23
+     - 35
+     - 22
      - 0
-     - 83
+     - 82
      - 139
    * - Future
      - 2
@@ -1608,10 +1608,10 @@ Totals
      - 62
      - 77
    * - **All**
-     - **45**
-     - **62**
+     - **47**
+     - **61**
      - **23**
-     - **145**
+     - **144**
      - **275**
 
 Some features appear in more than one scope's list (soak time, the offline

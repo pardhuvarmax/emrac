@@ -941,6 +941,34 @@ impl AlpmBackend {
             .is_ok()
     }
 
+    /// What the installed `name` provides (`libfoo.so=1-64`, `foo=1.0`).
+    pub fn installed_provides(&self, name: &str) -> Vec<String> {
+        self.handle
+            .localdb()
+            .pkg(name)
+            .map(|p| p.provides().iter().map(|d| d.to_string()).collect())
+            .unwrap_or_default()
+    }
+
+    /// What `name` provides in the synced databases, if a repository has it.
+    pub fn sync_provides(&self, name: &str) -> Option<Vec<String>> {
+        self.handle.syncdbs().iter().find_map(|db| {
+            db.pkg(name)
+                .ok()
+                .map(|p| p.provides().iter().map(|d| d.to_string()).collect())
+        })
+    }
+
+    /// Whether an installed package other than `excluded` provides `provide`.
+    pub fn provided_by_other(&self, provide: &str, excluded: &HashSet<String>) -> bool {
+        self.handle
+            .localdb()
+            .pkgs()
+            .iter()
+            .filter(|p| !excluded.contains(p.name()))
+            .any(|p| p.provides().iter().any(|d| d.to_string() == provide))
+    }
+
     /// The currently installed version of `name`, if it is installed.
     pub fn installed_version(&self, name: &str) -> Option<String> {
         self.handle

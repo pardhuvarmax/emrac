@@ -18,6 +18,7 @@ podman build -t emrac-test -f dev/container/Containerfile dev/container
 # dev/e2e/run.sh preflight  a pending upgrade and a fake kernel: the partial-upgrade gate and the kernel checks
 # dev/e2e/run.sh preview  what emrac says a plan will do (config files, hooks) against what pacman does
 # dev/e2e/run.sh recovery pacman fails mid-install (injected): what emrac finds and how it mends it
+# dev/e2e/run.sh strays  emrac strays and emrac linkcheck: files no package owns, programs that would lose a library
 # dev/e2e/run.sh crash   install and upgrade cut off at each boundary; a power cut in pacman -U; pacman between plan and commit
 # dev/e2e/run.sh bisect  emrac bisect over real transactions: the culprit found, the system put back
 # dev/e2e/run.sh buildtools an AUR build with a build-only dependency: what emrac offers to remove
@@ -84,6 +85,13 @@ recovery)
     podman run --rm --user root --security-opt 'unmask=/proc/*' \
         -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
         -v "$repo_root/dev/e2e/recovery.sh:/t.sh:ro" \
+        emrac-test bash /t.sh
+    ;;
+strays)
+    echo "==> Running the stray-file and link-check checks (a real program linked against a fixture library)"
+    podman run --rm --user root --security-opt 'unmask=/proc/*' \
+        -v "$repo_root/target/release/emrac:/usr/local/bin/emrac:ro" \
+        -v "$repo_root/dev/e2e/strays.sh:/t.sh:ro" \
         emrac-test bash /t.sh
     ;;
 crash)

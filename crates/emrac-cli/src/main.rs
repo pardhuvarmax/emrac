@@ -595,6 +595,15 @@ fn run(cli: &Cli) -> Result<()> {
         Commands::Snapshot { command } => {
             commands::snapshot::create(&sources, command.as_ref(), json)
         }
+        Commands::Strays { local, all, path } => commands::strays::run(&commands::strays::Args {
+            local: *local,
+            generated: *all,
+            path: path.as_deref(),
+            json,
+        }),
+        Commands::Linkcheck { upgrade } => {
+            commands::linkcheck::run(&sources, *upgrade, offline, json)
+        }
         Commands::Bisect {
             good,
             bad,

@@ -845,6 +845,72 @@ impl Sources {
         }
     }
 
+    /// The programs and libraries nobody packaged: `/usr/local`, `~/.local`, and
+    /// what no package owns under `/opt`.
+    pub fn unpackaged_binaries(&self) -> Vec<crate::linkcheck::Binary> {
+        let base = Path::new("/");
+        let mut roots: Vec<PathBuf> = ["bin", "sbin", "lib", "lib64", "libexec"]
+            .iter()
+            .map(|d| PathBuf::from("/usr/local").join(d))
+            .collect();
+        if let Ok(home) = std::env::var("HOME") {
+            for d in ["bin", "lib", "lib64"] {
+                roots.push(PathBuf::from(&home).join(".local").join(d));
+            }
+        }
+        roots.push(PathBuf::from("/opt"));
+        let owned = crate::strays::read_owned_where(Path::new("/var/lib/pacman/local"), &|p| {
+            p.starts_with("opt/")
+        });
+        crate::linkcheck::candidates(base, &roots, &|rel| owned.paths.contains(rel))
+    }
+
+    /// Programs outside the package manager that this plan would leave without a
+    /// library: one line each, for the plan's warnings. `sync` is the view of the
+    /// repositories the plan was made from.
+    pub(crate) fn linkcheck_warnings(&self, plan: &Plan, sync: &AlpmBackend) -> Vec<String> {
+        use std::collections::HashSet;
+        if !matches!(
+            plan.action,
+            PlanAction::Upgrade | PlanAction::Downgrade | PlanAction::Remove | PlanAction::Purge
+        ) {
+            return Vec::new();
+        }
+        let removing = matches!(plan.action, PlanAction::Remove | PlanAction::Purge);
+        let mut changes = Vec::new();
+        for p in plan.packages.iter().filter(|p| p.repo != "aur") {
+            let old = self.alpm.installed_provides(&p.name);
+            let from = self.alpm.installed_version(&p.name).unwrap_or_default();
+            let (new, to) = if removing {
+                (Vec::new(), None)
+            } else {
+                match sync.sync_provides(&p.name) {
+                    Some(n) => (n, Some(p.version.as_str())),
+                    None => continue,
+                }
+            };
+            changes.extend(crate::linkcheck::lost(&p.name, &from, to, &old, &new));
+        }
+        for r in &plan.removals {
+            let old = self.alpm.installed_provides(&r.name);
+            changes.extend(crate::linkcheck::lost(&r.name, &r.version, None, &old, &[]));
+        }
+        if changes.is_empty() {
+            return Vec::new();
+        }
+        let binaries = self.unpackaged_binaries();
+        let leaving: HashSet<String> = plan
+            .packages
+            .iter()
+            .map(|p| p.name.clone())
+            .chain(plan.removals.iter().map(|r| r.name.clone()))
+            .collect();
+        let hits = crate::linkcheck::hits(&binaries, &changes, &|provide| {
+            self.alpm.provided_by_other(provide, &leaving)
+        });
+        crate::linkcheck::warning_lines(&hits, 5)
+    }
+
     /// What building `name` will make `makepkg -s` install on the host first, from
     /// its `.SRCINFO` (read, never run): new packages, and installed packages that
     /// must be upgraded to take them (a partial upgrade). `None` when there is no
@@ -1534,6 +1600,9 @@ impl Sources {
                 plan.warnings.push(conflict.plan_warning(name));
             }
         }
+        // programs nobody packaged that this upgrade would leave without a library
+        let linked = self.linkcheck_warnings(&plan, sync_view);
+        plan.warnings.extend(linked);
         Ok(UpgradePlan {
             plan,
             aur_warning,
@@ -1644,6 +1713,8 @@ impl Sources {
                 AlpmBackend::simulate(None, SimOp::Install(&official)),
             );
         }
+        let linked = self.linkcheck_warnings(&plan, &self.alpm);
+        plan.warnings.extend(linked);
         Ok(UpgradePlan {
             plan,
             aur_warning: None,
@@ -1709,7 +1780,10 @@ impl Sources {
     pub fn plan_remove(&self, pkgs: &[String], cascade: bool, recursive: bool) -> Result<Plan> {
         let names = self.pacman.resolve_remove(pkgs, cascade, recursive)?;
         let resolved = self.alpm.local_resolved(&names);
-        Ok(build_plan(PlanAction::Remove, pkgs, resolved, -1))
+        let mut plan = build_plan(PlanAction::Remove, pkgs, resolved, -1);
+        let linked = self.linkcheck_warnings(&plan, &self.alpm);
+        plan.warnings.extend(linked);
+        Ok(plan)
     }
 
     /// The names of everything installed right now, read fresh (a handle opened

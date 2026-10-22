@@ -749,6 +749,33 @@ pub enum Commands {
         command: Option<SnapshotCommand>,
     },
 
+    /// Files under /usr and /opt that no package owns (left by `make install`,
+    /// `pip` as root, a script that copied something in), grouped by what they
+    /// look like they came from. Read only: nothing is changed or removed
+    Strays {
+        /// Also look in /usr/local (where manual installs belong)
+        #[arg(long)]
+        local: bool,
+
+        /// Also list the files tools generate under package directories
+        /// (caches, byte-compiled Python, kernel module indexes)
+        #[arg(long)]
+        all: bool,
+
+        /// Look in this directory instead of /usr and /opt
+        #[arg(long, value_name = "DIR")]
+        path: Option<String>,
+    },
+
+    /// Programs nobody packaged (/usr/local, ~/.local, unowned files under /opt)
+    /// and the libraries they need: which cannot find one now, or with --upgrade
+    /// which would lose one to the upgrade that is waiting
+    Linkcheck {
+        /// Check against the upgrade that is waiting instead of the system now
+        #[arg(long)]
+        upgrade: bool,
+    },
+
     /// Find the transaction that broke something: put the system back into states
     /// it really had, halve the range each time, and ask (or run your test) in
     /// each. Whatever happens, it ends by putting the system back as it was

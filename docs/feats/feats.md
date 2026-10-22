@@ -19,9 +19,9 @@ State of the tree: release `r3` plus the update slices `u1` to `u22` after it (c
 
 | Section | Built | Partial | Specified | Idea | Research | Not planned | Total |
 |---|---|---|---|---|---|---|---|
-| 1. Built: what works today | 74 | 0 | 0 | 0 | 0 | 0 | 74 |
+| 1. Built: what works today | 75 | 0 | 0 | 0 | 0 | 0 | 75 |
 | 2. The specification (SPEC.md): catalogue and signature features | 5 | 33 | 18 | 0 | 0 | 0 | 56 |
-| 3. Ideas from additions.md (A, B, C) | 13 | 8 | 0 | 18 | 0 | 0 | 39 |
+| 3. Ideas from additions.md (A, B, C) | 15 | 7 | 0 | 17 | 0 | 0 | 39 |
 | 4. Ideas from ideas.md | 11 | 11 | 1 | 33 | 0 | 0 | 56 |
 | 5. Wandrover: cross-distribution package resolution | 0 | 0 | 0 | 9 | 0 | 0 | 9 |
 | 6. Self-management service (Emrac-SMS) | 5 | 0 | 0 | 0 | 0 | 0 | 5 |
@@ -31,7 +31,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u22` after it (c
 | 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
 | 11. Newer ideas (not yet in the other documents) | 4 | 2 | 0 | 25 | 0 | 0 | 31 |
 | 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **114** | **61** | **20** | **133** | **9** | **3** | **340** |
+| **All** | **117** | **60** | **20** | **132** | **9** | **3** | **341** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -128,6 +128,7 @@ Everything below runs in the current tree (r3 plus the updates after it). Slice 
 | AUR builds and reviews in emrac's style | Built | Build phases with a clock, a live compiler line, errors at once, a log (`clui.builds`); the PKGBUILD, its diff, the audit and the trust signals laid out to be read. | r3 u22; `docs/plan/r3/u22-builds-and-reviews.md` |
 | install a package file | Built | `emrac install ./x.pkg.tar.zst`: what `pacman -U` does, through the plan, the audit of what is inside, pre-flight, confirmation, journal and history. | r3 u22 |
 | Source-build policy (`from-source`) | Built | What you asked to be built from source is a recorded policy, apart from pins: the upgrade plan marks it, `pacman -Syu` installs the binaries first, then each package is rebuilt from the new packaging source; a failed or skipped rebuild keeps the binary, keeps the policy and says so; `install --binary` ends it; `emrac from-source list \| add \| drop \| rebuild`. | r3 u23b; `docs/plan/r3/u23-source-or-binary.md` |
+| strays / linkcheck | Built | `emrac strays` lists what no package owns with a clue to its origin; `emrac linkcheck` and the upgrade and removal plans name programs outside the package manager that would lose a shared library. | r3 u25; `docs/plan/r3/u25-strays-linkcheck.md` |
 | bisect | Built | `emrac bisect --good <tx\|date\|7d> [--bad ...] [--test <cmd>] [--dry-run]`: the first transaction after which something is broken, found by restoring real states (the machinery of `restore --prune`), with a snapshot first, every package file checked to exist before anything changes, and the system put back at the end. | r3 u24; `docs/plan/r3/u24-bisect.md` |
 | install --source / --binary | Built | `emrac install --source <pkg>` builds an official package from Arch's packaging source (audited, sandboxed, inspected, installed with `pacman -U`); `--binary` compiles nothing and refuses a package that exists only as source, naming its `-bin` one; `install.prefer = recommend` lets the verdict of `recommend` choose. | r3 u23; `docs/plan/r3/u23-source-or-binary.md` |
 | rebuild --ack | Built | Acknowledge a "may need building again" note (or a broken binary package); it lapses when the package is built again or the note says something new. | r3 u22 |
@@ -209,7 +210,7 @@ Numbers are the ones in `additions.md`. Part C items are the ones a package mana
 | A6 Staged upgrades | Idea | Split a big upgrade into ordered groups so a failure stops early. | `additions.md` |
 | A7 Restart and reboot advisor | Built | After a transaction: reboot needed, services to restart. | r2 u20 (`report`) |
 | A8 Rollback rehearsal | Idea | `doctor --rollback-test`: prove a restore would work before you need it. |  |
-| A9 Stray file scanner | Idea | Files under `/usr` and `/opt` no package owns, with who put them there. |  |
+| A9 Stray file scanner | Built | `emrac strays`: files under `/usr` and `/opt` that no package owns (pacman's own file lists), directories collapsed, each group with a clue to where it came from (pip, npm, gem, a package's directory, `/usr/local`), generated files left out. Read only. | r3 u25; `docs/plan/r3/u25-strays-linkcheck.md` |
 | A10 Config drift report | Partial | `.pacnew` handling and previews exist; a report of how `/etc` differs from package defaults does not. | u27, r3 u5 |
 | A11 Orphan lifecycle | Idea | Grace period, recorded reason and restore instead of immediate delete (`orphans` lists today). |  |
 | A12 Install reasons ledger | Idea | Record why each package is installed (explicit, dependency of X, project Y). |  |
@@ -230,7 +231,7 @@ Numbers are the ones in `additions.md`. Part C items are the ones a package mana
 | B5 Driver and firmware doctor | Idea | Detected hardware against installed drivers, DKMS modules and firmware. |  |
 | B6 Machine manifest and bootstrap | Idea | One file describing a machine; `bootstrap` rebuilds it. |  |
 | B7 Downgrade assistant | Partial | `downgrade` finds versions in the cache and the Archive; working out which dependents must move too is not built. | u6 |
-| B8 Link-check for software built outside the manager | Partial | Installed AUR packages broken by a library update are found; unpackaged binaries under `~/.local`, `/opt`, `/usr/local` are not scanned. | r2 u19 |
+| B8 Link-check for software built outside the manager | Built | `emrac linkcheck` and a line under every upgrade and removal plan: programs nobody packaged (`/usr/local`, `~/.local`, unowned files under `/opt`) that need a soname the change takes away (from the packages' `provides`), with the package change that causes it. | r3 u25; `docs/plan/r3/u25-strays-linkcheck.md` |
 | B9 Metered and flaky-network mode | Idea | Resumable downloads, mirror fallback, bandwidth cap, deferred large packages. |  |
 | C1 Crash-safe transaction journal | Built | Write-ahead journal, stale lock check, recover or record. | r2 u10 |
 | C2 Plan integrity | Built | What was previewed is what runs: plan ids, `--expect-plan`, re-plan on drift. | r2 u18 |

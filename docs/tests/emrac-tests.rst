@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 750
+     - 758
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 62
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **844**
+     - **852**
 
-emrac-core library (750)
+emrac-core library (758)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -501,6 +501,15 @@ emrac-core library (750)
 * ``fields_are_read_with_and_without_quotes``
 * ``other_programs_are_named_with_user_and_login_user``
 * ``the_shipped_rules_watch_the_ledger_folder_and_chattr``
+
+``linkcheck::tests`` (5)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``a_program_whose_library_is_missing_now_is_found``
+* ``a_soname_provide_is_the_file_name_of_the_library``
+* ``many_hits_are_cut_and_counted``
+* ``programs_outside_the_package_manager_that_need_a_lost_library_are_named``
+* ``what_a_package_change_takes_away_is_what_the_old_provides_and_the_new_does_not``
 
 ``manifest::tests`` (16)
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1006,6 +1015,13 @@ emrac-core library (750)
 * ``pacman_log_lines_give_upgrades_with_their_times``
 * ``the_elf_reader_agrees_with_readelf_on_a_real_binary_and_a_library``
 * ``transaction_starts_are_found_in_the_log``
+
+``strays::tests`` (3)
+~~~~~~~~~~~~~~~~~~~~~
+
+* ``generated_files_are_recognised``
+* ``the_owned_set_and_the_directory_owners_are_read_from_pacmans_lists``
+* ``what_no_package_owns_is_found_with_a_clue_and_what_is_owned_or_generated_is_not``
 
 ``style::tests`` (37)
 ~~~~~~~~~~~~~~~~~~~~~
@@ -1636,6 +1652,30 @@ between the plan and the commit: ``dev/e2e/run.sh crash``. Last full run: after 
 
 (9 checks.)
 
+End-to-end: stray files and link-check (dev/e2e/strays.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Files no package owns, and programs nobody packaged that would lose a library:
+``dev/e2e/run.sh strays``. Last full run: after u25, 16 of 16 passed.
+
+* the program built outside the package manager runs
+* STRAYS lists what no package owns and changes nothing
+* STRAYS does not list what a package owns
+* STRAYS says a file was put into a directory a package owns, and which package
+* STRAYS leaves out the files tools generate, unless asked
+* STRAYS keeps /usr/local out unless asked
+* STRAYS --path looks only there
+* STRAYS --json is data
+* LINK linkcheck looks at the programs outside the package manager and finds none broken
+* LINK the upgrade plan names the program in /usr/local, the library and the package change
+* LINK it names the unowned program under /opt too
+* LINK the removal plan names them as well
+* LINK linkcheck --upgrade says the same without opening a plan
+* LINK an upgrade of something else says nothing about them
+* LINK after the upgrade the program really fails, and linkcheck says which library is gone
+
+(15 checks.)
+
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1935,28 +1975,25 @@ End-to-end: statistics and benchmark (dev/e2e/stats.sh)
 
 ``emrac stats`` reads a build-times file and the history; ``emrac benchmark``
 runs the programs of an installed package after asking: ``dev/e2e/run.sh stats``.
-Last full run: after u9, 18 of 18 passed.
+Last full run: after u25, 16 of 16 passed.
 
-* stats with nothing recorded says so
-* all time counts 4 builds, 1 failed, 3 packages
-* --since 30d leaves the old build out
-* the average leaves the failed build out
-* the most built package is listed with its count
-* stats --json is valid JSON
-* it says no saved-hours figure is invented
-* a bad period is refused
-* benchmark without an answer runs nothing
-* benchmark lists what it will run before it runs it
-* benchmark --yes measures a program of the package
-* the result is kept and shown by --history
-* benchmark --json gives the record
-* a package with no programs is refused
-* an executable the package does not have is refused
-* a package that is not installed is refused
-* --runs 0 is refused
-* stats still reads the history after these
+* the program built outside the package manager runs
+* STRAYS lists what no package owns and changes nothing
+* STRAYS does not list what a package owns
+* STRAYS says a file was put into a directory a package owns, and which package
+* STRAYS leaves out the files tools generate, unless asked
+* STRAYS keeps /usr/local out unless asked
+* STRAYS --path looks only there
+* STRAYS --json is data
+* LINK linkcheck looks at the programs outside the package manager and finds none broken
+* LINK the upgrade plan names the program in /usr/local, the library and the package change
+* LINK it names the unowned program under /opt too
+* LINK the removal plan names them as well
+* LINK linkcheck --upgrade says the same without opening a plan
+* LINK an upgrade of something else says nothing about them
+* LINK after the upgrade the program really fails, and linkcheck says which library is gone
 
-(18 checks.)
+(15 checks.)
 
 End-to-end: override and divert against pacman (dev/e2e/policy.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
