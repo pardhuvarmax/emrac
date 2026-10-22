@@ -77,7 +77,7 @@ upgrade_case() {
   local next=$((cur+1))
   publish fixa-$next-1-any.pkg.tar.zst fixother-1-1-any.pkg.tar.zst
   local before; before=$(count)
-  EMRAC_FAULT=$P as_tester $e upgrade fixa --yes >/tmp/cu.out 2>&1; local rc=$?
+  EMRAC_FAULT=$P as_tester $e upgrade fixa --yes --ack-news >/tmp/cu.out 2>&1; local rc=$?
   { [ $rc -ne 0 ] && grep -q "cut off at '$P'" /tmp/cu.out; } || { echo "not cut off at $P (rc=$rc)"; tail -3 /tmp/cu.out; return 1; }
   local v; v=$(pacman -Q fixa | cut -d' ' -f2 | cut -d- -f1)
   if [ "$expect" = yes ]; then [ "$v" = $next ] || { echo "fixa is $v, expected the upgrade ($next) at $P"; return 1; }; cur=$next

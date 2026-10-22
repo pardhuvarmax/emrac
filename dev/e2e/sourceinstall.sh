@@ -59,11 +59,11 @@ if [ -n "$old" ]; then
   sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
   ck "an older version is installed, so the policy mismatch is reported as such" "$e from-source 2>&1 | grep -q 'policy mismatch'"
   ck "the upgrade plan names the rebuild from source, not the binary" "$e upgrade sl --dry-run > /tmp/s5.out 2>&1; grep -q 'extra+source/sl' /tmp/s5.out && grep -q 'source-build policy: sl' /tmp/s5.out"
-  ck "upgrade --skip-source-builds installs the binary and leaves the rebuild pending" "$e upgrade sl --yes --skip-source-builds >/tmp/s6.out 2>&1; ! pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'rebuild pending'"
+  ck "upgrade --skip-source-builds installs the binary and leaves the rebuild pending" "$e upgrade sl --yes --ack-news --skip-source-builds >/tmp/s6.out 2>&1; ! pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'rebuild pending'"
   sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
-  ck "the upgrade rebuilds the package from source and clears the pending state" "$e upgrade sl --yes --skip-pkgbuild --accept-risks >/tmp/s7.out 2>&1; pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'built here'"
+  ck "the upgrade rebuilds the package from source and clears the pending state" "$e upgrade sl --yes --ack-news --skip-pkgbuild --accept-risks >/tmp/s7.out 2>&1; pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'built here'"
   sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
-  ck "a rebuild that fails leaves the binary, keeps the policy, says so and exits non-zero" "EMRAC_ARCH_PACKAGING_URL=file:///nonexistent/{base}.git $e upgrade sl --yes >/tmp/s8.out 2>&1; rc=\$?; [ \$rc -ne 0 ] && grep -q 'binary of sl stays installed' /tmp/s8.out && grep -q 'upgrade is done, but sl could not be rebuilt' /tmp/s8.out && pacman -Q sl && $e from-source 2>&1 | grep -q 'rebuild pending'"
+  ck "a rebuild that fails leaves the binary, keeps the policy, says so and exits non-zero" "EMRAC_ARCH_PACKAGING_URL=file:///nonexistent/{base}.git $e upgrade sl --yes --ack-news >/tmp/s8.out 2>&1; rc=\$?; [ \$rc -ne 0 ] && grep -q 'binary of sl stays installed' /tmp/s8.out && grep -q 'upgrade is done, but sl could not be rebuilt' /tmp/s8.out && pacman -Q sl && $e from-source 2>&1 | grep -q 'rebuild pending'"
   ck "a pending rebuild is in the doctor" "$e doctor 2>&1 | grep -q 'not built from source as you asked'"
   ck "a pending rebuild is in the plan of the next upgrade" "$e upgrade --dry-run 2>&1 | grep -q 'source-build policy is not being honoured for sl'"
 fi
@@ -86,7 +86,7 @@ if [ -n "$old" ]; then
   sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
   ck "a plan with the policy has an id; ending the policy changes it" "$e upgrade sl --dry-run 2>&1 | grep -o 'Plan id *: [0-9a-f]*' | head -1 | awk '{print \$NF}' > /tmp/id1; $e from-source drop sl >/dev/null 2>&1; $e upgrade sl --dry-run 2>&1 | grep -o 'Plan id *: [0-9a-f]*' | head -1 | awk '{print \$NF}' > /tmp/id2; [ -s /tmp/id1 ] && [ -s /tmp/id2 ] && ! cmp -s /tmp/id1 /tmp/id2"
   cp /tmp/sb.good ~/.local/share/emrac/source-built.json
-  ck "a plan made before the policy changed is refused by --expect-plan" "$e upgrade sl --dry-run 2>&1 | grep -o 'Plan id *: [0-9a-f]*' | head -1 | awk '{print \$NF}' > /tmp/id3; $e from-source drop sl >/dev/null 2>&1; ! $e upgrade sl --yes --expect-plan \$(cat /tmp/id3 | cut -c1-12) >/tmp/s11.out 2>&1; grep -q 'not the plan you expected' /tmp/s11.out; pacman -Qi sl | grep -q Version"
+  ck "a plan made before the policy changed is refused by --expect-plan" "$e upgrade sl --dry-run 2>&1 | grep -o 'Plan id *: [0-9a-f]*' | head -1 | awk '{print \$NF}' > /tmp/id3; $e from-source drop sl >/dev/null 2>&1; ! $e upgrade sl --yes --ack-news --expect-plan \$(cat /tmp/id3 | cut -c1-12) >/tmp/s11.out 2>&1; grep -q 'not the plan you expected' /tmp/s11.out; pacman -Qi sl | grep -q Version"
   cp /tmp/sb.good ~/.local/share/emrac/source-built.json
   ck "pacman -Syu by hand: emrac sees the policy was not honoured" "sudo pacman -Syu --noconfirm >/dev/null 2>&1; $e from-source 2>&1 | grep -qE 'repository file detected|policy mismatch|rebuild pending' && $e doctor 2>&1 | grep -q 'not built from source as you asked'"
 fi
@@ -104,7 +104,7 @@ if [ -n "$old" ]; then
   sudo pacman -R --noconfirm sl >/dev/null 2>&1; rm -f ~/.local/share/emrac/source-built.json ~/.local/share/emrac/source-built.seal
   $e install --source sl --yes --skip-pkgbuild --accept-risks >/dev/null 2>&1
   sudo pacman -U --noconfirm "https://archive.archlinux.org/packages/s/sl/$old" >/dev/null 2>&1
-  EMRAC_FAULT=after-binary-upgrade $e upgrade sl --yes --skip-pkgbuild --accept-risks >/tmp/t1.out 2>&1; rc=$?
+  EMRAC_FAULT=after-binary-upgrade $e upgrade sl --yes --ack-news --skip-pkgbuild --accept-risks >/tmp/t1.out 2>&1; rc=$?
   ck "TX-01 cut off after the binary upgrade: the binary is installed and the cut-off is real" "[ $rc -ne 0 ] && grep -q 'cut off at' /tmp/t1.out && [ \"\$(pacman -Q sl | cut -d' ' -f2)\" = \"$now\" ] && ! pacman -Qi sl | grep -q 'Unknown Packager'"
   ck "TX-01 the policy survived, and emrac says it is not honoured" "$e from-source 2>&1 | grep -qE 'repository file detected|policy mismatch|rebuild pending' && $e doctor 2>&1 | grep -q 'not built from source as you asked'"
   ck "TX-01 the upgrade is in the history as done (nothing to recover), and the rebuild then completes" "$e history 2>&1 | head -4 | grep -q 'upgrade' && $e from-source rebuild sl --accept-risks --yes >/tmp/t1b.out 2>&1; ! grep -q 'in your history (failed' /tmp/t1b.out && pacman -Qi sl | grep -q 'Unknown Packager' && $e from-source 2>&1 | grep -q 'source verified'"

@@ -749,6 +749,15 @@ pub enum Commands {
         command: Option<SnapshotCommand>,
     },
 
+    /// How long installing these packages (or the upgrade that is waiting) would
+    /// take, and what the estimate is based on: earlier builds of each package
+    /// here, scaled for the cores there are now, and what earlier transactions
+    /// achieved. Says so when it cannot tell
+    Eta {
+        /// Packages to install; omitted = the upgrade that is waiting
+        pkgs: Vec<String>,
+    },
+
     /// Files under /usr and /opt that no package owns (left by `make install`,
     /// `pip` as root, a script that copied something in), grouped by what they
     /// look like they came from. Read only: nothing is changed or removed

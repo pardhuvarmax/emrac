@@ -11,6 +11,7 @@ pub mod config;
 pub mod deps;
 pub mod doctor;
 pub mod downgrade;
+pub mod eta;
 pub mod exchange;
 pub mod explain;
 pub mod from_source;

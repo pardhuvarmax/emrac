@@ -426,6 +426,7 @@ table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb
   <h3>Source or binary <small>since r3</small></h3>
   <table class="box resp">
     <tbody>
+      <tr><td>Time estimates</td><td>Every install and upgrade plan ends with how long it will take, how sure that is and what it rests on; <code>emrac eta</code> says it for packages you name. A build is estimated from earlier builds of the same package here, scaled for the cores; the download from earlier transactions; a first build of something large gets no number, not a guess. The build screen shows the time left beside its clock, and a record of how close estimates came is kept.</td></tr>
       <tr><td><code>strays</code> &middot; <code>linkcheck</code></td><td><code>emrac strays</code> lists the files under <code>/usr</code> and <code>/opt</code> that no package owns and what they look like they came from (pip, npm, a package&rsquo;s directory&hellip;); read only. <code>emrac linkcheck</code>, and a line under every upgrade or removal plan, names the programs nobody packaged (<code>/usr/local</code>, <code>~/.local</code>, <code>/opt</code>) that would lose a shared library to the change, with the package change that causes it.</td></tr>
       <tr><td><code>bisect</code></td><td>Something worked last week and does not now: <code>emrac bisect --good tx-12 --test '&hellip;'</code> restores the states the machine really had, halves the range each time, and names the first transaction after which it is broken. It searches transactions, never packages, so no state is a partial upgrade. It never changes a protected package (the kernel, glibc, systemd, pacman, the shell and base tools, the boot and storage tools) on a live host, and says so when the culprit hides behind one; every package file is checked to exist first, a snapshot is saved, and the end state is checked against the exact list taken at the start.</td></tr>
       <tr><td>Recommend and explain</td><td>Source or binary for a package, from stated rules, with the reasoning input by input and what would change it. Builds are timed, so the estimates improve.</td></tr>
@@ -565,6 +566,7 @@ use_agent = true</pre>
   <table class="box resp">
     <thead><tr><th>Slice</th><th>Date</th><th>Change</th></tr></thead>
     <tbody>
+      <tr><td><b class="k-u">u26</b> <small>since r3</small></td><td>2026-10-22</td><td>Time estimates under every install and upgrade plan, <code>emrac eta</code>, the time left beside the build clock, and a record of how close estimates came.</td></tr>
       <tr><td><b class="k-u">u25</b> <small>since r3</small></td><td>2026-10-22</td><td><code>emrac strays</code> (files no package owns, with a clue to where they came from) and <code>emrac linkcheck</code> (programs outside the package manager that an upgrade or removal would leave without a library, named in the plan).</td></tr>
       <tr><td><b class="k-u">u24</b> <small>since r3</small></td><td>2026-10-20</td><td><code>emrac bisect</code>: the transaction that broke something, found by restoring real states, with a check of every file first and the system put back at the end.</td></tr>
       <tr><td><b class="k-u">u23b</b> <small>since r3</small></td><td>2026-10-19</td><td>A source build is a recorded policy, kept apart from pins: an upgrade marks it, installs the repository&rsquo;s binaries first and rebuilds each such package from the new packaging source. A failed or skipped rebuild keeps the binary and the policy, marks it pending and makes <code>upgrade</code> exit non-zero. <code>emrac from-source</code> lists, adds, drops and rebuilds. After it: an unreadable record is an error and never written over, pending rebuilds appear in <code>doctor</code> and every plan, and origin is checked against pacman&rsquo;s database (source verified, repository file detected, origin unverified, pending, mismatch).</td></tr>
@@ -679,7 +681,7 @@ use_agent = true</pre>
       <li><div class="kv"><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r2">r2</a></b><span>second release</span></div><small>r1 plus u1&ndash;u30, made safe for a real machine</small></li>
       <li><div class="kv"><b class="k-u">u1&ndash;u20</b><span>updates</span></div><small>Checkable history and ledger, a journal for cut-off transactions, pre-flight checks, plan ids, AUR trust and the Arch news, rebuild, emrac updating itself</small></li>
       <li><div class="kv"><b class="k-r"><a href="https://github.com/pardhuvarmax/emrac/releases/tag/r3">r3</a></b><span>third release</span></div><small>r2 plus u1&ndash;u20</small></li>
-      <li><div class="kv"><b class="k-u">u1&ndash;u25</b><span>updates since r3</span></div><small>Recommend and explain, hook and config-file previews, override and divert, timeline, export, import and bundle, the Package Advisor, mirror ranking, the package score, Arch security data, pacman and builds in emrac&rsquo;s style, source or binary on install, a source-build policy. u26&ndash;u30 close r3.</small></li>
+      <li><div class="kv"><b class="k-u">u1&ndash;u26</b><span>updates since r3</span></div><small>Recommend and explain, hook and config-file previews, override and divert, timeline, export, import and bundle, the Package Advisor, mirror ranking, the package score, Arch security data, pacman and builds in emrac&rsquo;s style, source or binary on install, a source-build policy. u27&ndash;u30 close r3.</small></li>
     </ul>
   </div>
 
@@ -710,10 +712,9 @@ use_agent = true</pre>
 
   <div class="devzone" id="planned" role="group" aria-label="Under development">
     <div class="tape" aria-hidden="true"></div>
-    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 57 items, in the order they are planned. Decided against: AI features, telemetry, scripting, committing through libalpm instead of pacman.</span></div>
-    <details open><summary>Next: finishing r3 (u26&ndash;u30) <em>5</em></summary>
+    <div class="devhead"><b>Under development</b><span>Planned, not built yet: 56 items, in the order they are planned. Decided against: AI features, telemetry, scripting, committing through libalpm instead of pacman.</span></div>
+    <details open><summary>Next: finishing r3 (u27&ndash;u30) <em>4</em></summary>
       <ul>
-        <li><b>u26</b> ETA prediction from recorded build times</li>
         <li><b>u27</b> <code>emrac status</code> (a git status for the system); prompt and status-bar output; notifications</li>
         <li><b>u28</b> Build profiles and recipes with inheritance; compiler, linker and optimization flags <small>(LTO, PGO, CPU tuning)</small></li>
         <li><b>u29</b> Safety hardening: fail-closed verification chain, rescue binary <small>(<code>emrac-rescue</code>)</small>, privilege separation</li>

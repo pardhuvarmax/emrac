@@ -595,6 +595,7 @@ fn run(cli: &Cli) -> Result<()> {
         Commands::Snapshot { command } => {
             commands::snapshot::create(&sources, command.as_ref(), json)
         }
+        Commands::Eta { pkgs } => commands::eta::run(&sources, pkgs, offline, json),
         Commands::Strays { local, all, path } => commands::strays::run(&commands::strays::Args {
             local: *local,
             generated: *all,

@@ -135,6 +135,7 @@ pub fn build_options(
             limits: choice.limits,
             interactive: choice.interactive,
             force: choice.force,
+            expected_secs: sources.build_expected_secs(name),
         });
     }
     sources.sandbox_check()?;
@@ -149,6 +150,7 @@ pub fn build_options(
         limits: choice.limits,
         interactive: choice.interactive,
         force: choice.force,
+        expected_secs: sources.build_expected_secs(name),
     })
 }
 

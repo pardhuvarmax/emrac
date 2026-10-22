@@ -22,7 +22,7 @@ Totals
      - Passing
    * - emrac-core library
      - ``crates/emrac-core``
-     - 758
+     - 766
    * - emrac command line, unit tests
      - ``crates/emrac-cli/src``
      - 62
@@ -31,9 +31,9 @@ Totals
      - 32
    * - **Automated total**
      -
-     - **852**
+     - **860**
 
-emrac-core library (758)
+emrac-core library (766)
 ------------------------
 
 ``advisor::tests`` (9)
@@ -220,7 +220,7 @@ emrac-core library (758)
 * ``what_only_a_removed_tool_needed_goes_with_it``
 * ``what_the_built_package_needs_stays_and_so_does_what_hangs_on_it``
 
-``build_ui::tests`` (10)
+``build_ui::tests`` (11)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``a_build_becomes_phases_with_a_live_line_and_a_summary_of_each``
@@ -231,6 +231,7 @@ emrac-core library (758)
 * ``errors_and_warnings_are_told_apart``
 * ``outside_the_compile_phases_everything_passes_and_questions_are_never_held``
 * ``progress_is_read_from_cmake_ninja_cargo_gcc_and_kbuild_lines``
+* ``the_live_line_says_how_long_is_left_and_then_that_it_is_slow``
 * ``the_tail_keeps_the_last_lines_for_a_failure``
 * ``times_are_said_plainly``
 
@@ -368,6 +369,17 @@ emrac-core library (758)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``only_the_no_network_failure_suggests_a_retry_with_network``
+
+``eta::tests`` (7)
+~~~~~~~~~~~~~~~~~~
+
+* ``a_first_build_of_something_large_gets_no_number_but_a_bin_package_gets_a_low_one``
+* ``a_package_built_before_is_estimated_from_those_builds_with_a_range``
+* ``a_transfer_is_estimated_from_earlier_transactions_then_from_the_mirror_then_not_at_all``
+* ``more_cores_shorten_a_build_less_than_proportionally``
+* ``the_accuracy_is_told_only_when_there_is_enough_to_say``
+* ``the_live_note_counts_down_and_then_says_it_is_slow``
+* ``the_total_adds_the_parts_and_takes_the_weakest_confidence``
 
 ``exchange::tests`` (10)
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1675,6 +1687,26 @@ Files no package owns, and programs nobody packaged that would lose a library:
 * LINK after the upgrade the program really fails, and linkcheck says which library is gone
 
 (15 checks.)
+
+End-to-end: time estimates (dev/e2e/eta.sh)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Estimates from seeded build times and transactions, shown under a plan and by emrac eta:
+``dev/e2e/run.sh eta``. Last full run: after u26, 11 of 11 passed.
+
+* ETA with nothing to go on: a tiny install is only overhead, at low confidence
+* ETA a first build is said to be unknown, not guessed
+* ETA a package built here three times: about 42 s, high confidence, the failed build left out
+* ETA the range is the fastest and the slowest of those builds
+* ETA hardware-aware: a build that took 84 s on twice the cores is not 84 s here
+* ETA --json is data, with the basis of every part
+* ETA eta lists each part with its range, confidence and basis
+* ETA the plan shows the estimate before the transaction
+* ETA a finished transaction is noted for the next estimate
+* ETA and compared with the estimate that was shown
+* ETA nothing to do takes no time
+
+(11 checks.)
 
 End-to-end: an AUR build shown by emrac (dev/e2e/buildui.sh)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

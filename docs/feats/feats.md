@@ -19,8 +19,8 @@ State of the tree: release `r3` plus the update slices `u1` to `u22` after it (c
 
 | Section | Built | Partial | Specified | Idea | Research | Not planned | Total |
 |---|---|---|---|---|---|---|---|
-| 1. Built: what works today | 75 | 0 | 0 | 0 | 0 | 0 | 75 |
-| 2. The specification (SPEC.md): catalogue and signature features | 5 | 33 | 18 | 0 | 0 | 0 | 56 |
+| 1. Built: what works today | 76 | 0 | 0 | 0 | 0 | 0 | 76 |
+| 2. The specification (SPEC.md): catalogue and signature features | 5 | 34 | 17 | 0 | 0 | 0 | 56 |
 | 3. Ideas from additions.md (A, B, C) | 15 | 7 | 0 | 17 | 0 | 0 | 39 |
 | 4. Ideas from ideas.md | 11 | 11 | 1 | 33 | 0 | 0 | 56 |
 | 5. Wandrover: cross-distribution package resolution | 0 | 0 | 0 | 9 | 0 | 0 | 9 |
@@ -31,7 +31,7 @@ State of the tree: release `r3` plus the update slices `u1` to `u22` after it (c
 | 10. Research programme (REA, containers, other package managers) | 1 | 1 | 0 | 20 | 9 | 0 | 31 |
 | 11. Newer ideas (not yet in the other documents) | 4 | 2 | 0 | 25 | 0 | 0 | 31 |
 | 12. Decided against, or far future | 0 | 0 | 0 | 0 | 0 | 3 | 3 |
-| **All** | **117** | **60** | **20** | **132** | **9** | **3** | **341** |
+| **All** | **118** | **61** | **19** | **132** | **9** | **3** | **342** |
 
 Some features appear in more than one section (soak time, the offline bundle, Wandrover's migration mode); each section counts its own rows.
 
@@ -129,6 +129,7 @@ Everything below runs in the current tree (r3 plus the updates after it). Slice 
 | install a package file | Built | `emrac install ./x.pkg.tar.zst`: what `pacman -U` does, through the plan, the audit of what is inside, pre-flight, confirmation, journal and history. | r3 u22 |
 | Source-build policy (`from-source`) | Built | What you asked to be built from source is a recorded policy, apart from pins: the upgrade plan marks it, `pacman -Syu` installs the binaries first, then each package is rebuilt from the new packaging source; a failed or skipped rebuild keeps the binary, keeps the policy and says so; `install --binary` ends it; `emrac from-source list \| add \| drop \| rebuild`. | r3 u23b; `docs/plan/r3/u23-source-or-binary.md` |
 | strays / linkcheck | Built | `emrac strays` lists what no package owns with a clue to its origin; `emrac linkcheck` and the upgrade and removal plans name programs outside the package manager that would lose a shared library. | r3 u25; `docs/plan/r3/u25-strays-linkcheck.md` |
+| eta / time estimates | Built | `emrac eta [pkg...]` and an "Estimated time" line under every install and upgrade plan: builds from what the same package took here (scaled for the cores), downloads from earlier transactions, a range and a confidence, "cannot say" for a first build of something large; the usual time and the time left beside the build clock; a record of how close estimates came. | r3 u26; `docs/plan/r3/u26-eta.md` |
 | bisect | Built | `emrac bisect --good <tx\|date\|7d> [--bad ...] [--test <cmd>] [--dry-run]`: the first transaction after which something is broken, found by restoring real states (the machinery of `restore --prune`), with a snapshot first, every package file checked to exist before anything changes, and the system put back at the end. | r3 u24; `docs/plan/r3/u24-bisect.md` |
 | install --source / --binary | Built | `emrac install --source <pkg>` builds an official package from Arch's packaging source (audited, sandboxed, inspected, installed with `pacman -U`); `--binary` compiles nothing and refuses a package that exists only as source, naming its `-bin` one; `install.prefer = recommend` lets the verdict of `recommend` choose. | r3 u23; `docs/plan/r3/u23-source-or-binary.md` |
 | rebuild --ack | Built | Acknowledge a "may need building again" note (or a broken binary package); it lapses when the package is built again or the note says something new. | r3 u22 |
@@ -142,7 +143,7 @@ From `SPEC.md` Parts III to V, with the status from `FEATURE_STATUS.rst`. "Speci
 | III.1 Unified Package Management | Partial | install/upgrade/downgrade/remove/purge/reinstall/verify, dry-run, plans, history and rollback exist; `install` takes package files (what `pacman -U` does) and, since u23, the choice of source or binary: `--source` builds an official package from Arch's packaging source here, `--binary` compiles nothing, `install.prefer` decides when you do not. An upgrade follows the source-build policy of what you built from source (rebuilds it from the new packaging source, never silently installs the binary). Not yet: `reinstall --source`, a binary-vs-source choice by CPU level or flags (Build Profiles). | `SPEC.md` |
 | III.2 Source Build System | Partial | AUR fetch, review, audit, sandboxed two-step build, caches; official packages built from Arch's packaging source (`install --source`, u23). Not yet: incremental/parallel builds, build queue, background builds, pause/resume, replay. | r3 u23 |
 | III.3 Intelligent Recommendation Engine | Partial | `recommend` (score, verdict, confidence, build time) and `explain`. Not yet: performance-gain estimate by measurement, historical learning, personalized recommendations. |  |
-| III.4 ETA Prediction Engine | Specified | Source, download, install and total ETA with live refinement and confidence. |  |
+| III.4 ETA Prediction Engine | Partial | Built (u26): the time of builds from earlier builds of the same package here, scaled for the cores; download and install from earlier transactions or the mirror speed; a total with a range and a confidence; the usual time and the time left beside the build clock; a record of how close estimates came. Not yet: per-phase estimates for the steps of a build with no history, network-aware refinement beyond the measured rates, estimates for reinstall, downgrade and restore. | r3 u26; `docs/plan/r3/u26-eta.md` |
 | III.5 Package Discovery | Partial | Name/description search only. Not yet: fuzzy, regex, file-ownership, maintainer, category, popular and recent searches. |  |
 | III.6 Package Inspection | Partial | `info`, `rdeps`, `why`, `audit`, `verify`, `--inspect` together; not the single aggregated view (see IV.13). |  |
 | III.7 Dependency Intelligence | Partial | Everything except an interactive explorer (needs the TUI). |  |

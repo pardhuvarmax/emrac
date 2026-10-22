@@ -61,6 +61,7 @@ pub fn run(
     }
     let plan = planned?;
     output::print_plan_with_preview(&plan, &preview.unwrap_or_default(), json);
+    crate::commands::eta::print(sources, &plan, json);
     crate::commands::plan_check::expect(&plan, expect_plan)?;
     let shown = crate::commands::plan_check::Shown::new(&plan);
 

@@ -492,6 +492,9 @@ fn log_step(plan: &Plan, outcome: &Result<()>, rollback_of: Option<&str>) {
     if matches!(outcome, Err(Error::PacmanDeclined)) {
         return;
     }
+    if let Some(began) = *BEGAN.lock().unwrap() {
+        super::eta::finished(plan, outcome.is_ok(), began.elapsed().as_secs());
+    }
     emrac_core::fault::point("before-history-record");
     match History::record(plan, outcome, rollback_of) {
         Ok(_) => {
@@ -519,7 +522,11 @@ fn report_damage(plan: &Plan) {
 /// Starts the journal for a transaction that is about to run. A cut-off
 /// transaction left by an earlier run is put on record first; another emrac
 /// changing packages right now is a refusal.
+/// When the transaction under way began (for how long it took).
+static BEGAN: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
 pub fn begin(plan: &Plan) -> Result<()> {
+    *BEGAN.lock().unwrap() = Some(std::time::Instant::now());
     match journal::state()? {
         journal::State::Nothing => {}
         journal::State::Running => {

@@ -21,6 +21,9 @@ pub struct BuildOptions {
     /// Build again even if a package file for this version already exists
     /// (`emrac rebuild`): the old file was made against older libraries.
     pub force: bool,
+    /// How long this build usually takes here (`emrac::eta`), shown beside the
+    /// clock and refined as it runs.
+    pub expected_secs: Option<u64>,
 }
 
 impl Default for BuildOptions {
@@ -31,6 +34,7 @@ impl Default for BuildOptions {
             limits: Limits::default(),
             interactive: false,
             force: false,
+            expected_secs: None,
         }
     }
 }
@@ -367,6 +371,8 @@ impl AurBuildBackend {
 
         unchanged(dir)?;
 
+        let build_started = std::time::Instant::now();
+
         // 2 and 3, sandboxed.
         let spec = self.sandbox_spec(dir, opts.allow_network, &opts.limits);
         // Memory and process limits need a cgroup scope from the user's systemd
@@ -409,6 +415,9 @@ impl AurBuildBackend {
             command.extend(force_arg.iter().map(|a| a.to_string()));
             let look = Look::new(&dir_name(dir), false);
             let mut screen = look.as_ref().map(Look::screen);
+            if let (Some(sc), Some(expected)) = (screen.as_mut(), opts.expected_secs) {
+                sc.set_expected(expected * 1000, build_started.elapsed().as_millis() as u64);
+            }
             let mut logged = match (&look, screen.as_mut()) {
                 (Some(l), Some(sc)) => Some(l.logged(sc)),
                 _ => None,

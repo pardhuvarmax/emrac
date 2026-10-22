@@ -74,7 +74,7 @@ ck "--allow-partial lets one run through" "as_tester $e install fixnew --yes --a
 ck "a pinned package does not count" "as_tester $e pin fixa --reason test >/dev/null && as_tester $e install fixnew2 --yes && pacman -Q fixnew2 && as_tester $e unpin fixa >/dev/null"
 ck "the setting safety.partial_upgrade=warn goes on with a warning" "as_tester $e config set safety.partial_upgrade warn >/dev/null && pacman -R --noconfirm fixnew2 >/dev/null && as_tester $e install fixnew2 --yes >/tmp/o 2>&1; grep -q 'warning' /tmp/o && pacman -Q fixnew2; as_tester $e config unset safety.partial_upgrade >/dev/null"
 ck "removing the only kernel is refused" "! as_tester $e remove fakekernel --yes 2>&1 | tee /tmp/o; grep -q 'only\\|every installed kernel' /tmp/o && pacman -Q fakekernel"
-ck "after a full upgrade the same install passes the partial-upgrade check" "as_tester $e upgrade --yes >/tmp/u 2>&1; pacman -Q fixa | grep -q 2.0 && pacman -R --noconfirm fixnew >/dev/null && as_tester $e install fixnew --dry-run >/tmp/o 2>&1; ! grep -q PROBLEM /tmp/o && (grep -q 'pre-flight passed.*Partial upgrade' /tmp/o || grep -q 'ok  *Partial upgrade' /tmp/o)"
+ck "after a full upgrade the same install passes the partial-upgrade check" "as_tester $e upgrade --yes --ack-news >/tmp/u 2>&1; pacman -Q fixa | grep -q 2.0 && pacman -R --noconfirm fixnew >/dev/null && as_tester $e install fixnew --dry-run >/tmp/o 2>&1; ! grep -q PROBLEM /tmp/o && (grep -q 'pre-flight passed.*Partial upgrade' /tmp/o || grep -q 'ok  *Partial upgrade' /tmp/o)"
 
 # plan integrity (u18): what was previewed is what runs
 newer() { # name version: put a newer version of a fixture package in the repository

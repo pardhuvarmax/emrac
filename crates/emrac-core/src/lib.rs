@@ -18,6 +18,7 @@ mod deps;
 mod doctor;
 mod downgrade;
 mod error;
+pub mod eta;
 pub mod exchange;
 pub mod fault;
 pub mod graph_render;

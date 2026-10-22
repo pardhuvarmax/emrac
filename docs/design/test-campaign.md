@@ -30,3 +30,10 @@ today (unit tests, `dev/e2e/*.sh`), not what is hoped.
    refused.
 
 State corruption comes with 2 (a corruption sweep over every state file) and is cheap once the shared reader exists.
+
+## A fragile spot the campaign found on 2026-10-22
+
+Container suites that run `emrac upgrade --yes` read the **live** Arch news feed. When Arch publishes a critical item
+(on 2026-10-21: ca-certificates-mozilla) the news gate correctly stops the upgrade, and every such check fails
+for a reason that has nothing to do with the code. Those calls now pass `--ack-news`; the check that tests the
+gate itself uses a local feed (`EMRAC_NEWS_FEED`).

@@ -51,6 +51,7 @@ pub fn run(
         }
     }
     output::print_plan_with_preview(&upgrade.plan, &sources.preview(&upgrade.plan), json);
+    crate::commands::eta::print(sources, &upgrade.plan, json);
     if upgrade.plan.is_empty() && !json {
         // an empty plan prints no warnings; a pending rebuild is still said
         for w in &upgrade.plan.warnings {

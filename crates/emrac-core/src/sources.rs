@@ -845,6 +845,53 @@ impl Sources {
         }
     }
 
+    /// How long building `name` usually takes here, if that is known.
+    pub fn build_expected_secs(&self, name: &str) -> Option<u64> {
+        let cores = std::thread::available_parallelism().map_or(1, |n| n.get() as u32);
+        crate::eta::build_part(name, &crate::recommend::read_builds(), cores).map(|p| p.secs)
+    }
+
+    /// How long this plan will take: the builds from what they took before, the
+    /// download and install from what earlier transactions achieved.
+    pub fn estimate(&self, plan: &Plan) -> crate::eta::Estimate {
+        let cores = std::thread::available_parallelism().map_or(1, |n| n.get() as u32);
+        let builds = crate::recommend::read_builds();
+        let mut est = crate::eta::Estimate::default();
+        let mut official = 0usize;
+        for p in &plan.packages {
+            if p.repo == "aur" || crate::install_mode::is_source_repo(&p.repo) {
+                match crate::eta::build_part(&p.name, &builds, cores) {
+                    Some(part) => est.parts.push(part),
+                    None => est
+                        .unknown
+                        .push(format!("build {} (a first build here)", p.name)),
+                }
+            } else {
+                official += 1;
+            }
+        }
+        if official > 0 {
+            let mirror = {
+                let stats = crate::mirrors::summarize(&crate::mirrors::read_history());
+                let mut kib: Vec<u64> = stats.values().filter_map(|s| s.kib_per_s).collect();
+                kib.sort_unstable();
+                kib.get(kib.len() / 2).copied()
+            };
+            match crate::eta::transfer_part(
+                plan.total_download_size,
+                official,
+                &crate::eta::read_ops(),
+                mirror,
+            ) {
+                Some(part) => est.parts.push(part),
+                None => est.unknown.push(
+                    "the download (no earlier transaction or mirror measurement to go on)".into(),
+                ),
+            }
+        }
+        est
+    }
+
     /// The programs and libraries nobody packaged: `/usr/local`, `~/.local`, and
     /// what no package owns under `/opt`.
     pub fn unpackaged_binaries(&self) -> Vec<crate::linkcheck::Binary> {

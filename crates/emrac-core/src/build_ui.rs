@@ -248,6 +248,10 @@ pub struct BuildScreen {
     pub done: Vec<(String, u64, usize, usize)>,
     tail: VecDeque<String>,
     cursor_hidden: bool,
+    /// How long the whole build usually takes here, and how long it had run when
+    /// this screen began (the build has several steps).
+    expected_ms: Option<u64>,
+    before_ms: u64,
 }
 
 impl BuildScreen {
@@ -271,7 +275,15 @@ impl BuildScreen {
             done: Vec::new(),
             tail: VecDeque::new(),
             cursor_hidden: false,
+            expected_ms: None,
+            before_ms: 0,
         }
+    }
+
+    /// The usual time of the whole build, for the estimate beside the clock.
+    pub fn set_expected(&mut self, expected_ms: u64, before_ms: u64) {
+        self.expected_ms = Some(expected_ms);
+        self.before_ms = before_ms;
     }
 
     pub fn warnings(&self) -> usize {
@@ -381,6 +393,15 @@ impl BuildScreen {
                 Role::Size,
             ),
         ];
+        if let Some(expected) = self.expected_ms {
+            let ran = self.before_ms + self.now;
+            if ran > 3_000 {
+                line.push(Seg::new(
+                    format!("  {}", crate::eta::live_note(expected, ran)),
+                    Role::Dim,
+                ));
+            }
+        }
         if let Some(w) = &self.work {
             if let Some(p) = w.pct {
                 line.push(Seg::plain("  "));
@@ -970,5 +991,26 @@ mod tests {
             lines[0].contains("Making package") && lines[1].contains("Retrieving"),
             "{lines:?}"
         );
+    }
+
+    #[test]
+    fn the_live_line_says_how_long_is_left_and_then_that_it_is_slow() {
+        let mut s = BuildScreen::new(st(false));
+        s.set_expected(120_000, 0);
+        feed_all(&mut s, "==> Starting build()...\n");
+        let early = strip_ansi(&String::from_utf8_lossy(&s.tick_at(1_000)));
+        assert!(
+            !early.contains("left"),
+            "nothing is said in the first seconds: {early}"
+        );
+        let mid = strip_ansi(&String::from_utf8_lossy(&s.tick_at(20_000)));
+        assert!(mid.contains("~1 min 40 s left"), "{mid}");
+        let slow = strip_ansi(&String::from_utf8_lossy(&s.tick_at(130_000)));
+        assert!(slow.contains("longer than the usual 2 min 00 s"), "{slow}");
+        // without an expectation the line is as it was
+        let mut plain = BuildScreen::new(st(false));
+        feed_all(&mut plain, "==> Starting build()...\n");
+        let l = strip_ansi(&String::from_utf8_lossy(&plain.tick_at(20_000)));
+        assert!(!l.contains("left") && !l.contains("usual"), "{l}");
     }
 }
