@@ -40,12 +40,13 @@ passed=$(sed -n 's/^test result: ok\. \([0-9][0-9]*\) passed.*/\1/p' "$work/test
 cargo test --workspace -- --list >"$work/list.log" 2>&1
 
 # suite|module|test, one line per test. The suite comes from the
-# "Running ... (target/debug/deps/<binary>-<hash>)" line above its names.
+# "Running ... (.../<binary>-<hash>)" line above its names (the binary sits in
+# target/debug/deps, or in target/debug/build/<crate>/<hash>/out on newer cargo).
 awk '
     /^ *Running / {
         suite = ""
-        if (match($0, /deps\/[A-Za-z0-9_]+-[0-9a-f]+/)) {
-            name = substr($0, RSTART + 5, RLENGTH - 5)
+        if (match($0, /\/[A-Za-z0-9_]+-[0-9a-f]+\)/)) {
+            name = substr($0, RSTART + 1, RLENGTH - 2)
             sub(/-[0-9a-f]+$/, "", name)
             suite = name
         }

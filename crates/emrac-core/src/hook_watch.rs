@@ -69,8 +69,16 @@ pub fn take() -> Vec<String> {
 mod tests {
     use super::*;
 
+    // `SEEN` is shared by the whole process, so these tests take turns.
+    static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+
+    fn alone() -> std::sync::MutexGuard<'static, ()> {
+        ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     #[test]
     fn a_failed_hook_is_named_from_the_line_before_the_error() {
+        let _alone = alone();
         take();
         let mut w = Watch::default();
         w.feed(b":: Running post-transaction hooks...\n(1/2) Arming ConditionNeedsUpdate...\n(2/2) zz-failhook.hook\nerror: command failed to execute correctly\n");
@@ -79,6 +87,7 @@ mod tests {
 
     #[test]
     fn lines_split_across_reads_and_coloured_lines_count() {
+        let _alone = alone();
         take();
         let mut w = Watch::default();
         w.feed(b"(1/1) Updating the font cache");
@@ -89,6 +98,7 @@ mod tests {
 
     #[test]
     fn nothing_failed_means_nothing_reported() {
+        let _alone = alone();
         take();
         let mut w = Watch::default();
         w.feed(b"(1/1) Arming ConditionNeedsUpdate...\nerror: failed to commit transaction (conflicting files)\n");

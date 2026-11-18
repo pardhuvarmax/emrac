@@ -90,14 +90,10 @@ fn review_inner(
             let pkgbuild = sources.read_pkgbuild(name)?;
             output::print_pkgbuild(name, &pkgbuild);
 
-            if !yes
-                && !confirm(&format!(
+            Ok(yes
+                || confirm(&format!(
                     "Reviewed the PKGBUILD for '{name}'? Proceed with building it?"
-                ))
-            {
-                return Ok(false);
-            }
-            Ok(true)
+                )))
         }
 
         AurSyncOutcome::Changed { diff, new_pkgbuild } => {
