@@ -2,7 +2,7 @@
 
 <img align="left" width="250" src="/assets/emrac.png" alt="emrac">
 
-A hybrid next generation package management platform for Arch Linux — an orchestration and UX layer over `pacman`, `makepkg`, `libalpm`, PKGBUILD, and the AUR, unifying official repos, the AUR, and local/custom repos behind one CLI and TUI.
+A hybrid package management platform for Arch Linux that plans, audits and records every change — an orchestration and UX layer over `pacman`, `makepkg`, `libalpm`, PKGBUILD, and the AUR. Today it serves the people who install and upgrade packages, through one CLI over the official repos and the AUR; the platform is meant to grow to the maintainers who build and publish them, with pipelines for checking and publishing a package (planned).
 
 ---
 
@@ -90,13 +90,14 @@ Errors go to stderr as `emrac found: …` (something you can fix) or `emrac says
 - **Caches you can trim safely.** `emrac cache` shows the source, build, binary and pacman caches; `clean` keeps what `undo` needs, and `--lean` keeps one rollback set instead of every file pacman downloaded.
 - **Health checks with a fix for each finding.** `emrac doctor` checks dependencies, databases, pending upgrades against fresh repositories, the running kernel, disk, caches, orphans, `.pacnew` files, failed units, pins and the sandbox, and can write a sanitized bug report.
 - **Holds that remember why.** `pin` holds a package back from `upgrade` with a reason and an expiry date.
-- **Tested against a real pacman.** 271 tests run on every change, and each command that changes the system was also run against a real pacman in a container; the changelog says what was seen for each slice.
+- **Tested against a real pacman.** 860 automated tests run on every change, and each command that changes the system was also run against a real pacman in a container; the changelog says what was seen for each slice.
 - **No telemetry.** emrac talks only to your mirrors, the AUR and the Arch Linux Archive, and only when a command needs them.
-- **Source Suitability Score & ETA engine** *(planned)* — estimates build time, download size, and performance gain per package before you commit, refined by local build history.
+- **Source Suitability Score & ETA engine** — `recommend`, `explain`, `score` and `eta` estimate build time, download size and performance gain per package before you commit, refined by local build history. Still planned: per-phase estimates for builds with no history.
 - **One interface, every source** — official repos and the AUR are searched, inspected, and installed the same way today; local/custom repos and locally built packages *(planned)*.
 - **CLI and TUI parity** *(planned)* — no capability is exclusive to either interface.
 - **Build profiles with inheritance** *(planned)* — reusable compiler/linker/LTO/PGO/march-mtune configurations instead of long flag lists per install.
 - **Transactional and reversible** — dry-run previews, rollback, and snapshots for every mutating operation.
+- **Maintainer pipelines** *(planned)* — for people who publish packages: a pre-submit check (lint, `.SRCINFO`, clean-sandbox build and tests, AUR guideline checks) before any push, an upstream watcher that prepares a version bump for your approval, and a dashboard for out-of-date flags and rebuilds. Ideas so far; see section 4 of [`ideas.md`](./docs/feats/ideas.md).
 - **Integrated modal editor** *(planned)* — edit PKGBUILDs and configs without leaving the TUI, or fall back to `$EDITOR`.
 
 ## Documentation

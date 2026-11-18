@@ -4,7 +4,7 @@ Feature Status
 Every feature emrac has, is specified to have, or has been proposed, in
 three scopes, each row with its status and the document that tracks it.
 Checked against what is actually shipped as of **Slice r3** (release
-``r3``, version 0.3.0) plus the update slices ``u1`` to ``u8`` built after
+``r3``, version 0.3.0) plus the update slices ``u1`` to ``u26`` built after
 it (``r2`` itself included ``u1`` to ``u30`` of the cycle before, since the
 update numbers start again after every release). The same list, one row per
 feature with a short description, is ``docs/feats/feats.md``; this file
@@ -21,7 +21,7 @@ for a transaction that was cut off, trust signals for the AUR and the Arch
 news, source-or-binary recommendations with their reasoning, ``override``
 and ``divert`` for files pacman would reset, and emrac updating itself
 through pacman. ``CHANGELOG.md`` has the detail slice by slice; the TUI,
-build profiles, the build queue and the ETA engine remain unstarted.
+build profiles and the build queue remain unstarted.
 
 Scopes
 --------
@@ -248,12 +248,12 @@ Complete Feature Catalog
    * - 3
      - Intelligent Recommendation Engine
      - Partial
-     - ``recommend [source|binary] <pkg>`` (u2 after r3): a Source Suitability Score from stated rules (makepkg flags against the repository's, CPU level, build time measured here or estimated, update rate from your history, memory and disk), a verdict (binary, source, either, or source as the only option), a confidence and the reasons; builds are timed from now on. Advisory only: ``install`` and ``upgrade`` do not use it yet; no ``explain`` (u3), ``score`` (u4), ETA (u5) or ``benchmark`` (u6)
+     - ``recommend [source|binary] <pkg>`` (u2 after r3): a Source Suitability Score from stated rules (makepkg flags against the repository's, CPU level, build time measured here or estimated, update rate from your history, memory and disk), a verdict (binary, source, either, or source as the only option), a confidence and the reasons; builds are timed from now on. Advisory by default; ``install.prefer = recommend`` lets it choose where it says source with medium or high confidence, and ``install --source`` / ``--binary`` win over it (u23). ``explain`` (u3), ``score`` (u4) and ``benchmark`` (u6) are built; the ETA is the next row
      - ``docs/feats/SPEC.md`` III.3; ``docs/design/recommend.md``; ``docs/plan/r3/u2-recommend.md``
    * - 4
      - ETA Prediction Engine
-     - Not started
-     - Nothing built yet.
+     - Partial
+     - ``emrac eta [pkg...]`` and an estimate under every install and upgrade plan (u26): build time from earlier builds of the same package here, scaled for the cores; download and install from earlier transactions or the mirror speed; a total with a range and a confidence; the usual time and time left on the build clock; a record of how close estimates came. Not yet: per-phase estimates for a build with no history, network-aware refinement, estimates for reinstall, downgrade and restore.
      - ``docs/feats/SPEC.md`` III.4
    * - 5
      - Package Discovery

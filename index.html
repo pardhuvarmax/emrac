@@ -323,14 +323,14 @@ table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb
 <main id="top">
 
   <h2>Emrac</h2>
-  <p class="lead">Emrac is a package manager for Arch Linux that works on top of pacman, libalpm, makepkg, and PKGBUILD. For each package it decides whether a local source build is worth it or the binary is the better choice, shows you the plan, and records the change as a transaction you can roll back.</p>
+  <p class="lead">Emrac is a package management platform for Arch Linux that works on top of pacman, libalpm, makepkg, and PKGBUILD. For each package it decides whether a local source build is worth it or the binary is the better choice, shows you the plan, and records the change as a transaction you can roll back.</p>
   <ul class="pts">
-    <li><b>Hybrid by design.</b> Build from source when it pays off, install the binary when it does not. You can always override with <code>--source</code> or <code>--binary</code>.</li>
+    <li><b>Hybrid by design.</b> Build from source when it pays off, install the binary when it does not. You can always override with <code>--source</code> or <code>--binary</code>. A source build is not a one-off: the repository ships its binary again with the next version, so emrac records the choice as a policy and rebuilds after each upgrade (<a href="#source">how</a>).</li>
     <li><b>One interface.</b> Official repositories, the AUR, and local repositories are searched, inspected, and installed the same way.</li>
     <li><b>Plan first.</b> Every change is previewed with sizes, time estimates, conflicts, and the reasons behind each decision.</li>
     <li><b>Reversible.</b> Builds run in a sandbox, transactions are logged, and rollback is built in.</li>
   </ul>
-  <p><b>Where it stands.</b> The core commands and everything under <a href="#built">Available now</a> work today, including the updates that make up release r3 and the twenty-three that came after it (recommendation and explanation of source or binary, building official packages from Arch&rsquo;s packaging source, a source-build policy that upgrades honour, security data, the package score, mirror ranking, previews of hooks and config files, pacman&rsquo;s transaction in emrac&rsquo;s own style). Build profiles, the build queue, ETA prediction and the terminal interface under <a href="#features">Planned features</a> are design goals, not shipped.</p>
+  <p><b>Where it stands.</b> The core commands and everything under <a href="#built">Available now</a> work today, including the updates that make up release r3 and the twenty-six that came after it (recommendation and explanation of source or binary, time estimates, building official packages from Arch&rsquo;s packaging source, a source-build policy that upgrades honour, security data, the package score, mirror ranking, previews of hooks and config files, pacman&rsquo;s transaction in emrac&rsquo;s own style). Build profiles, the build queue and the terminal interface under <a href="#features">Planned features</a> are design goals, not shipped.</p>
   <p><a class="btn" href="#built">What works today</a> &nbsp; <a class="btn alt" href="#changes">What changed</a></p>
 
   <h3>Try the planner</h3>
@@ -462,15 +462,16 @@ table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb
     <tbody>
       <tr><td>Source builds, end to end</td><td>Build-only for official packages, provenance and an artifact store, clean-chroot builds at the target state, and <code>upgrade --build-first</code>: build everything, then one coordinated transaction. The default upgrade stays two-phase. These are different risk policies, and the docs say so.</td></tr>
       <tr><td>Build profiles</td><td>Reusable profiles for compiler, linker, optimization level, LTO, PGO, and CPU tuning. Profiles can inherit from other profiles; recipes.</td></tr>
-      <tr><td>Build queue and ETA</td><td>Queue, pause, and resume builds, with live progress and an ETA that refines as the build runs.</td></tr>
+      <tr><td>Build queue</td><td>Queue, pause, and resume builds, with live progress. Time estimates already ship (<code>emrac eta</code>).</td></tr>
       <tr><td>Search and inspect</td><td>Fast local index, fuzzy and regex search, file ownership lookup, and changelogs in <code>info</code>.</td></tr>
       <tr><td>Recovery</td><td>Filesystem snapshots, an automatic rollback when a post-upgrade check fails, and resuming a cut-off transaction.</td></tr>
+      <tr><td>Maintainer pipelines</td><td>For people who publish packages, not only install them: a pre-submit check (lint, regenerated <code>.SRCINFO</code>, clean-sandbox build and tests, AUR guideline checks) before any push, an upstream watcher that prepares a version bump for approval, and a dashboard for out-of-date flags and rebuilds. Ideas so far, not designed or built; how they are grouped (<code>emrac maintain</code>) is still open.</td></tr>
       <tr><td>Terminal interface</td><td>A full TUI with a package browser, dependency explorer, build monitor, news reader, and a built-in modal editor for PKGBUILDs. The CLI exposes the same functions.</td></tr>
     </tbody>
   </table>
 
   <h2 id="source">Source or binary, decided per package</h2>
-  <p>Emrac scores each package for local compilation using build cost, expected performance gain, update frequency, and dependency weight. It then shows its reasoning, not just the verdict. <code>recommend</code> and <code>explain</code> work today; the figures below are a sample. Choosing is yours: <code>install --source</code> builds from Arch&rsquo;s packaging source, <code>--binary</code> never compiles, and what you ask to build from source is kept as a policy that upgrades honour.</p>
+  <p>Emrac scores each package for local compilation using build cost, expected performance gain, update frequency, and dependency weight. It then shows its reasoning, not just the verdict. <code>recommend</code> and <code>explain</code> work today; the figures below are a sample. Choosing is yours: <code>install --source</code> builds from Arch&rsquo;s packaging source, <code>--binary</code> never compiles, and what you ask to build from source is kept as a policy that upgrades honour. Without that policy a source build would not last: it has the repository&rsquo;s version, so the next <code>pacman -Syu</code> replaces it with the prebuilt binary. Pinning the package to prevent that holds it back from the rest of the system, which is a partial upgrade and unsupported on Arch. Emrac does neither: it upgrades everything, then rebuilds the package from source.</p>
   <div class="box">
     <table class="resp">
       <thead><tr><th>Criterion</th><th>firefox</th><th>ripgrep</th></tr></thead>
@@ -514,7 +515,7 @@ table.box tr:has(.k-r) td:first-child{box-shadow:inset 3px 0 0 color-mix(in srgb
       <div><dt>Intent<small>recorded</small></dt><dd>What you asked to be built from source is kept in emrac&rsquo;s own state, apart from pins, across upgrades, reboots and emrac updates. A record that cannot be read stops upgrades; it is never read as &ldquo;none&rdquo;.</dd></div>
       <div><dt>Upgrade<small>two phases</small></dt><dd>The binary system upgrade is one pacman transaction; each source-policy package is rebuilt after it against the updated system. Until a rebuild is done the system is not called fully consistent. A failure keeps the binary, keeps the policy and exits non-zero.</dd></div>
       <div><dt>Origin<small>checked</small></dt><dd>Intent is not proof. The installed package&rsquo;s build date and packager are compared with what was recorded, so a repository file of the same version is detected rather than reported as built here.</dd></div>
-      <div><dt>Limits<small>stated</small></dt><dd>A failed pacman commit can still leave changes; emrac reports what it finds and does not claim an untouched system it has not verified. Running <code>pacman -Syu</code> by hand bypasses the policy; emrac detects and reports it. The register of guarantees and gaps is in <code>docs/design/safety-invariants.md</code>.</dd></div>
+      <div><dt>Limits<small>stated</small></dt><dd>A failed pacman commit can still leave changes; emrac reports what it finds and does not claim an untouched system it has not verified. Running <code>pacman -Syu</code> by hand bypasses the policy and installs the repository&rsquo;s binary over the source build; emrac detects and reports it, and <code>from-source rebuild</code> restores it. The register of guarantees and gaps is in <code>docs/design/safety-invariants.md</code>.</dd></div>
     </dl>
   </div>
 

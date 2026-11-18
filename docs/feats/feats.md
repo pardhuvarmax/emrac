@@ -2,7 +2,7 @@
 
 One list of everything emrac has, is specified to have, or has been proposed: what is built, what is partly built, what is specified or only an idea, what is research, and what was decided against. It collects the other documents instead of replacing them; each row says where the detail lives.
 
-State of the tree: release `r3` plus the update slices `u1` to `u22` after it (commit `8c26474`). Built things are checked against the code and `CHANGELOG.md`; the older status tags inside `ideas.md` and `additions.md` are out of date, so this file follows the code.
+State of the tree: release `r3` plus the update slices `u1` to `u26` after it (commit `633c951`). Built things are checked against the code and `CHANGELOG.md`; the older status tags inside `ideas.md` and `additions.md` are out of date, so this file follows the code.
 
 ## Status legend
 
